@@ -158,7 +158,15 @@ class QuadrantWidget(QWidget):
     def handle_control_move(self, event):
         if hasattr(self, 'control_drag_start_pos'):
             delta = event.globalPosition().toPoint() - self.control_drag_start_pos
-            self.control_widget.move(self.control_original_pos + delta)
+            new_pos = self.control_original_pos + delta
+            
+            # 限制控制面板在窗口范围内（保留10px可拖动边距）
+            max_x = self.width() - self.control_widget.width() + 10
+            max_y = self.height() - self.control_widget.height() + 10
+            new_pos.setX(max(-10, min(new_pos.x(), max_x)))
+            new_pos.setY(max(-10, min(new_pos.y(), max_y)))
+        
+            self.control_widget.move(new_pos)
             event.accept()
 
     def handle_control_release(self, event):
@@ -335,6 +343,22 @@ class QuadrantWidget(QWidget):
         painter.setPen(text_color)
         painter.drawText(QRect(v_line_x - 30, height - 30, 60, 20), Qt.AlignmentFlag.AlignCenter, "不重要")
     
+
+    def center_control_panel(self):
+        # 获取控制面板尺寸
+        control_width = self.control_widget.width()
+        control_height = self.control_widget.height()
+        
+        # 计算中心位置并限制在窗口范围内
+        center_x = max(0, (self.width() - control_width) // 2)  # 确保不小于0
+        center_y = max(0, (self.height() - control_height) // 2)
+        
+        # 更新位置并保存到配置
+        self.control_widget.move(center_x, center_y)
+        self.config['control_panel']['x'] = center_x
+        self.config['control_panel']['y'] = center_y
+        self.save_config()
+
     def mouseDoubleClickEvent(self, event):
         """鼠标双击事件"""
         if not self.edit_mode:
@@ -739,7 +763,7 @@ class QuadrantWidget(QWidget):
         )
         
         # 显示对话框
-        dialog.exec_()
+        dialog.exec()
     
     def update_ui_config(self, key, value):
         """更新UI配置"""
@@ -775,6 +799,12 @@ class QuadrantWidget(QWidget):
         """更改窗口大小"""
         self.config['size'][dimension] = value
         self.resize(self.config['size']['width'], self.config['size']['height'])
+        self.save_config()
+
+        # 调整控制面板位置
+        self.control_widget.adjustSize()  # 确保尺寸更新
+        self.center_control_panel()
+        
         self.save_config()
     
     def save_config(self):

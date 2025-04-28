@@ -12,5 +12,47 @@
         "due_date": "2025-04-29",
         "priority": "353w45",
         "notes": "234534534tsdfg"
+    },
+    {
+        "id": "task_1_20250428223526",
+        "text": "57也让他",
+        "color": "#4ecdc4",
+        "position": {
+            "x": 275,
+            "y": 84
+        },
+        "completed": false,
+        "date": "2025-04-28",
+        "due_date": "2025-04-29",
+        "priority": "",
+        "notes": ""
+    },
+    {
+        "id": "task_2_20250428223529",
+        "text": "儿童儿童",
+        "color": "#ffe66d",
+        "position": {
+            "x": 472,
+            "y": 374
+        },
+        "completed": false,
+        "date": "2025-04-28",
+        "due_date": "2025-04-29",
+        "priority": "",
+        "notes": ""
+    },
+    {
+        "id": "task_2_20250428223529",
+        "text": "儿童儿童",
+        "color": "#ffe66d",
+        "position": {
+            "x": 472,
+            "y": 374
+        },
+        "completed": false,
+        "date": "2025-04-28",
+        "due_date": "2025-04-29",
+        "priority": "",
+        "notes": ""
     }
 ]

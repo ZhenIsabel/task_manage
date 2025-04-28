@@ -19,13 +19,13 @@
     },
     "size": {
         "width": 800,
-        "height": 600
+        "height": 599
     },
     "position": {
-        "x": 0,
-        "y": 0
+        "x": 814,
+        "y": 363
     },
-    "edit_mode": true,
+    "edit_mode": false,
     "ui": {
         "border_radius": 15,
         "shadow_effect": true,
@@ -61,7 +61,7 @@
         }
     ],
     "control_panel": {
-        "x": 1179,
-        "y": 394
+        "x": 5,
+        "y": 220
     }
 }
