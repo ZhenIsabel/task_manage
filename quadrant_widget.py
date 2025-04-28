@@ -1,12 +1,13 @@
 import json
 import os
 from datetime import datetime
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QColorDialog, QSlider, 
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QColorDialog, QSlider, 
                              QLabel, QGridLayout, QSizePolicy, QCheckBox, QLineEdit, QInputDialog, 
                              QMessageBox, QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QDialog,
                              QTabWidget, QFormLayout, QSpinBox, QDateEdit)
-from PyQt5.QtCore import Qt, QPoint, QSize, QRect, QPropertyAnimation, QEasingCurve, QTimer, QDate
-from PyQt5.QtGui import QColor, QPainter, QPen, QBrush, QFont, QCursor, QPainterPath, QLinearGradient
+from PyQt6.QtCore import Qt, QPoint, QSize, QRect, QPropertyAnimation, QEasingCurve, QTimer, QDate
+from PyQt6.QtWidgets import QApplication
+from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont, QCursor, QPainterPath, QLinearGradient
 
 from task_label import TaskLabel
 from config_manager import save_config, save_tasks, TASKS_FILE
@@ -25,18 +26,18 @@ class QuadrantWidget(QWidget):
         # 设置窗口属性 - 增强桌面融合效果
         if self.config.get('ui', {}).get('desktop_mode', True):
             # 设置为无边框、保持在底层且作为桌面级窗口
-            self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnBottomHint | Qt.Tool)
+            self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnBottomHint | Qt.WindowType.Tool)
             # 设置窗口为透明背景
-            self.setAttribute(Qt.WA_TranslucentBackground)
+            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
             # 允许鼠标事件穿透到桌面
             if hasattr(Qt, 'WA_TransparentForMouseEvents'):
-                self.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+                self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
             # 设置窗口不在显示桌面时隐藏
-            self.setAttribute(Qt.WA_ShowWithoutActivating)
+            self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         else:
             # 普通窗口模式
-            self.setWindowFlags(Qt.FramelessWindowHint)
-            self.setAttribute(Qt.WA_TranslucentBackground)
+            self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         
         # 设置大小和位置
         self.resize(config['size']['width'], config['size']['height'])
@@ -81,25 +82,25 @@ class QuadrantWidget(QWidget):
         # 添加按钮
         self.edit_button = QPushButton("编辑模式" if not self.edit_mode else "查看模式", self)
         self.edit_button.clicked.connect(self.toggle_edit_mode)
-        self.edit_button.setCursor(Qt.PointingHandCursor)  # 鼠标悬停时显示手型光标
+        self.edit_button.setCursor(Qt.CursorShape.PointingHandCursor)  # 鼠标悬停时显示手型光标
         
         self.add_task_button = QPushButton("添加任务", self)
         self.add_task_button.clicked.connect(self.add_task)
         self.add_task_button.setVisible(False)  # 初始隐藏
-        self.add_task_button.setCursor(Qt.PointingHandCursor)
+        self.add_task_button.setCursor(Qt.CursorShape.PointingHandCursor)
         
         self.undo_button = QPushButton("撤销", self)
         self.undo_button.clicked.connect(self.undo_action)
         self.undo_button.setVisible(False)  # 初始隐藏
-        self.undo_button.setCursor(Qt.PointingHandCursor)
+        self.undo_button.setCursor(Qt.CursorShape.PointingHandCursor)
         
         self.settings_button = QPushButton("设置", self)
         self.settings_button.clicked.connect(self.show_settings)
-        self.settings_button.setCursor(Qt.PointingHandCursor)
+        self.settings_button.setCursor(Qt.CursorShape.PointingHandCursor)
         
         self.exit_button = QPushButton("退出", self)
         self.exit_button.clicked.connect(self.close)
-        self.exit_button.setCursor(Qt.PointingHandCursor)
+        self.exit_button.setCursor(Qt.CursorShape.PointingHandCursor)
         
         # 添加按钮到布局
         self.control_layout.addWidget(self.edit_button)
@@ -115,25 +116,33 @@ class QuadrantWidget(QWidget):
         control_shadow.setOffset(0, 0)
         self.control_widget.setGraphicsEffect(control_shadow)
         
-        # 添加控制面板到主布局
-        # 先创建一个单独的布局用于控制面板
-        self.control_container = QVBoxLayout()
-        self.control_container.addWidget(self.control_widget)
-        self.control_container.addStretch()
+        # 设置控制面板为悬浮式
+        self.control_widget.setParent(self)
+        control_width = self.control_widget.sizeHint().width()
+        control_height = self.control_widget.sizeHint().height()
+        self.control_widget.setGeometry(20, 20, control_width, control_height)
+        self.control_widget.raise_()
         
         # 创建一个布局用于四象限区域
         self.quadrant_layout = QVBoxLayout()
         self.quadrant_layout.addStretch()
         
         # 将四象限布局添加到主布局
-        self.main_layout.addLayout(self.control_container)
         self.main_layout.addLayout(self.quadrant_layout)
+        
+        # 设置窗口大小为全屏，但保持四象限初始大小不变
+        screen = QApplication.primaryScreen()
+        screen_rect = screen.geometry()
+        self.setGeometry(0, 0, screen_rect.width(), screen_rect.height())
+        
+        # 确保控制面板始终可见
+        self.control_widget.show()
 
     
     def paintEvent(self, event):
         """绘制事件 - 美化版本"""
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)  # 抗锯齿
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)  # 抗锯齿
         
         # 获取窗口尺寸
         width = self.width()
@@ -148,7 +157,7 @@ class QuadrantWidget(QWidget):
         
         # 绘制整体背景 - 半透明
         painter.setBrush(QBrush(QColor(245, 245, 245, 30)))
-        painter.setPen(Qt.NoPen)
+        painter.setPen(Qt.PenStyle.NoPen)
         painter.drawRoundedRect(0, 0, width, height, border_radius, border_radius)
         
         # 计算内部四象限区域（留出边距）
@@ -163,7 +172,7 @@ class QuadrantWidget(QWidget):
         q1_color = QColor(self.config['quadrants']['q1']['color'])
         q1_color.setAlphaF(self.config['quadrants']['q1']['opacity'])
         painter.setBrush(QBrush(q1_color))
-        painter.setPen(Qt.NoPen)
+        painter.setPen(Qt.PenStyle.NoPen)
         q1_path = QPainterPath()
         q1_path.moveTo(inner_v_line_x, margin)
         q1_path.lineTo(width - margin - border_radius, margin)
@@ -246,52 +255,52 @@ class QuadrantWidget(QWidget):
         # 绘制象限标签 - 带阴影效果
         # 重要且紧急
         painter.setPen(shadow_color)
-        painter.drawText(QRect(width - 150 + shadow_offset, 10 + shadow_offset, 140, 30), Qt.AlignRight, "重要且紧急")
+        painter.drawText(QRect(width - 150 + shadow_offset, 10 + shadow_offset, 140, 30), Qt.AlignmentFlag.AlignRight, "重要且紧急")
         painter.setPen(text_color)
-        painter.drawText(QRect(width - 150, 10, 140, 30), Qt.AlignRight, "重要且紧急")
+        painter.drawText(QRect(width - 150, 10, 140, 30), Qt.AlignmentFlag.AlignRight, "重要且紧急")
         
         # 重要不紧急
         painter.setPen(shadow_color)
-        painter.drawText(QRect(10 + shadow_offset, 10 + shadow_offset, 140, 30), Qt.AlignLeft, "重要不紧急")
+        painter.drawText(QRect(10 + shadow_offset, 10 + shadow_offset, 140, 30), Qt.AlignmentFlag.AlignLeft, "重要不紧急")
         painter.setPen(text_color)
-        painter.drawText(QRect(10, 10, 140, 30), Qt.AlignLeft, "重要不紧急")
+        painter.drawText(QRect(10, 10, 140, 30), Qt.AlignmentFlag.AlignLeft, "重要不紧急")
         
         # 不重要但紧急
         painter.setPen(shadow_color)
-        painter.drawText(QRect(width - 150 + shadow_offset, height - 40 + shadow_offset, 140, 30), Qt.AlignRight, "不重要但紧急")
+        painter.drawText(QRect(width - 150 + shadow_offset, height - 40 + shadow_offset, 140, 30), Qt.AlignmentFlag.AlignRight, "不重要但紧急")
         painter.setPen(text_color)
-        painter.drawText(QRect(width - 150, height - 40, 140, 30), Qt.AlignRight, "不重要但紧急")
+        painter.drawText(QRect(width - 150, height - 40, 140, 30), Qt.AlignmentFlag.AlignRight, "不重要但紧急")
         
         # 不重要不紧急
         painter.setPen(shadow_color)
-        painter.drawText(QRect(10 + shadow_offset, height - 40 + shadow_offset, 140, 30), Qt.AlignLeft, "不重要不紧急")
+        painter.drawText(QRect(10 + shadow_offset, height - 40 + shadow_offset, 140, 30), Qt.AlignmentFlag.AlignLeft, "不重要不紧急")
         painter.setPen(text_color)
-        painter.drawText(QRect(10, height - 40, 140, 30), Qt.AlignLeft, "不重要不紧急")
+        painter.drawText(QRect(10, height - 40, 140, 30), Qt.AlignmentFlag.AlignLeft, "不重要不紧急")
         
         # 绘制坐标轴标签 - 带阴影效果
         # 紧急
         painter.setPen(shadow_color)
-        painter.drawText(QRect(width - 60 + shadow_offset, h_line_y - 25 + shadow_offset, 50, 20), Qt.AlignCenter, "紧急")
+        painter.drawText(QRect(width - 60 + shadow_offset, h_line_y - 25 + shadow_offset, 50, 20), Qt.AlignmentFlag.AlignCenter, "紧急")
         painter.setPen(text_color)
-        painter.drawText(QRect(width - 60, h_line_y - 25, 50, 20), Qt.AlignCenter, "紧急")
+        painter.drawText(QRect(width - 60, h_line_y - 25, 50, 20), Qt.AlignmentFlag.AlignCenter, "紧急")
         
         # 不紧急
         painter.setPen(shadow_color)
-        painter.drawText(QRect(10 + shadow_offset, h_line_y - 25 + shadow_offset, 50, 20), Qt.AlignCenter, "不紧急")
+        painter.drawText(QRect(10 + shadow_offset, h_line_y - 25 + shadow_offset, 50, 20), Qt.AlignmentFlag.AlignCenter, "不紧急")
         painter.setPen(text_color)
-        painter.drawText(QRect(10, h_line_y - 25, 50, 20), Qt.AlignCenter, "不紧急")
+        painter.drawText(QRect(10, h_line_y - 25, 50, 20), Qt.AlignmentFlag.AlignCenter, "不紧急")
         
         # 重要
         painter.setPen(shadow_color)
-        painter.drawText(QRect(v_line_x - 30 + shadow_offset, 10 + shadow_offset, 60, 20), Qt.AlignCenter, "重要")
+        painter.drawText(QRect(v_line_x - 30 + shadow_offset, 10 + shadow_offset, 60, 20), Qt.AlignmentFlag.AlignCenter, "重要")
         painter.setPen(text_color)
-        painter.drawText(QRect(v_line_x - 30, 10, 60, 20), Qt.AlignCenter, "重要")
+        painter.drawText(QRect(v_line_x - 30, 10, 60, 20), Qt.AlignmentFlag.AlignCenter, "重要")
         
         # 不重要
         painter.setPen(shadow_color)
-        painter.drawText(QRect(v_line_x - 30 + shadow_offset, height - 30 + shadow_offset, 60, 20), Qt.AlignCenter, "不重要")
+        painter.drawText(QRect(v_line_x - 30 + shadow_offset, height - 30 + shadow_offset, 60, 20), Qt.AlignmentFlag.AlignCenter, "不重要")
         painter.setPen(text_color)
-        painter.drawText(QRect(v_line_x - 30, height - 30, 60, 20), Qt.AlignCenter, "不重要")
+        painter.drawText(QRect(v_line_x - 30, height - 30, 60, 20), Qt.AlignmentFlag.AlignCenter, "不重要")
     
     def mouseDoubleClickEvent(self, event):
         """鼠标双击事件"""
@@ -303,14 +312,14 @@ class QuadrantWidget(QWidget):
     
     def mousePressEvent(self, event):
         """鼠标按下事件"""
-        if event.button() == Qt.LeftButton:
-            self.drag_position = event.globalPos() - self.frameGeometry().topLeft()
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.drag_position = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             event.accept()
     
     def mouseMoveEvent(self, event):
         """鼠标移动事件"""
-        if event.buttons() == Qt.LeftButton:
-            self.move(event.globalPos() - self.drag_position)
+        if event.buttons() & Qt.MouseButton.LeftButton:
+            self.move(event.globalPosition().toPoint() - self.drag_position)
             event.accept()
     
     def toggle_edit_mode(self):
@@ -342,7 +351,7 @@ class QuadrantWidget(QWidget):
             ]
         
         dialog = AddTaskDialog(self, task_fields)
-        if dialog.exec_() != QDialog.Accepted:
+        if dialog.exec() != QDialog.DialogCode.Accepted:
             return                          # 点了取消
 
         # 从对话框中获取字段值
@@ -369,13 +378,13 @@ class QuadrantWidget(QWidget):
         # 创建新任务标签
         task = TaskLabel(
             task_id=task_id, 
-            text=task_data.get('text', ''),
             color=color, 
             parent=self,
             completed=False, 
             due_date=task_data.get('due_date'),
             priority=task_data.get('priority'),
-            notes=task_data.get('notes')
+            notes=task_data.get('notes'),
+            text=task_data.get('text', ''),
         )
         
         # 设置任务位置并连接信号
@@ -398,12 +407,11 @@ class QuadrantWidget(QWidget):
             fade_in.setDuration(500)  # 0.5秒淡入
             fade_in.setStartValue(0.0)
             fade_in.setEndValue(1.0)
-            fade_in.setEasingCurve(QEasingCurve.InOutQuad)
-            # 保存动画对象的引用，防止被垃圾回收
+            fade_in.setEasingCurve(QEasingCurve.Type.InOutQuad)  # Updated to use Type enum
             task.fade_animation = fade_in
-            # 确保任务立即可见
             task.update()
             fade_in.start()
+            
         
         # 添加到任务列表
         self.tasks.append(task)
@@ -466,12 +474,20 @@ class QuadrantWidget(QWidget):
             
             # 恢复上一个状态的任务
             for task_data in previous_state:
+                # 创建任务标签 - 支持所有自定义字段
+                # 动态收集所有可编辑字段
+                fields = {
+                    meta['name']: task_data.get(meta['name'])
+                    for meta in TaskLabel.EDITABLE_FIELDS
+                }
+                
+                # 创建任务标签
                 task = TaskLabel(
-                    task_data['id'],
-                    task_data['text'],
-                    task_data['color'],
-                    self,
-                    task_data['completed']
+                    task_id=task_data['id'],
+                    color=task_data['color'],
+                    parent=self,
+                    completed=task_data['completed'],
+                    **fields  # 其他字段通过字典解包传递
                 )
                 task.move(task_data['position']['x'], task_data['position']['y'])
                 task.deleteRequested.connect(self.delete_task)
@@ -589,12 +605,12 @@ class QuadrantWidget(QWidget):
             color = QColor(self.config['quadrants'][q_id]['color'])
             color_btn.setStyleSheet(f"background-color: {color.name()}; border-radius: 15px;")
             color_btn.setFixedSize(30, 30)
-            color_btn.setCursor(Qt.PointingHandCursor)
+            color_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             color_btn.clicked.connect(lambda checked, qid=q_id: self.change_quadrant_color(qid))
             color_buttons[q_id] = color_btn
             
             # 透明度滑块
-            opacity_slider = QSlider(Qt.Horizontal)
+            opacity_slider = QSlider(Qt.Orientation.Horizontal)
             opacity_slider.setRange(1, 100)
             opacity_slider.setValue(int(self.config['quadrants'][q_id]['opacity'] * 100))
             opacity_slider.valueChanged.connect(lambda value, qid=q_id: self.change_quadrant_opacity(qid, value / 100))
@@ -637,13 +653,16 @@ class QuadrantWidget(QWidget):
         # 动画效果开关
         animation_checkbox = QCheckBox()
         animation_checkbox.setChecked(self.config.get('ui', {}).get('animation_enabled', True))
-        animation_checkbox.stateChanged.connect(lambda state: self.update_ui_config('animation_enabled', state == Qt.Checked))
+        animation_checkbox.stateChanged.connect(
+            lambda state: self.update_ui_config('animation_enabled', state == Qt.CheckState.Checked)
+        )
         
         # 桌面融合模式开关
         desktop_mode_checkbox = QCheckBox()
         desktop_mode_checkbox.setChecked(self.config.get('ui', {}).get('desktop_mode', True))
-        desktop_mode_checkbox.stateChanged.connect(lambda state: self.update_ui_config('desktop_mode', state == Qt.Checked))
-        
+        desktop_mode_checkbox.stateChanged.connect(
+            lambda state: self.update_ui_config('desktop_mode', state == Qt.CheckState.Checked)
+        )
         # 添加到布局
         size_layout.addRow("宽度:", width_spin)
         size_layout.addRow("高度:", height_spin)
@@ -702,7 +721,7 @@ class QuadrantWidget(QWidget):
         color_dialog = QColorDialog(current_color, self)
         color_dialog.setWindowTitle("选择象限颜色")
         
-        if color_dialog.exec_() == QDialog.Accepted:
+        if color_dialog.exec() == QDialog.DialogCode.Accepted: 
             color = color_dialog.selectedColor()
             if color.isValid():
                 self.config['quadrants'][quadrant_id]['color'] = color.name()
@@ -763,13 +782,13 @@ class QuadrantWidget(QWidget):
                 # 创建任务标签 - 支持所有自定义字段
                 task = TaskLabel(
                     task_id=task_data['id'],
-                    text=task_data['text'],
                     color=task_data['color'],
                     parent=self,
                     completed=task_data['completed'],
                     due_date=task_data.get('due_date', None),
                     priority=task_data.get('priority', None),
-                    notes=task_data.get('notes', None)
+                    notes=task_data.get('notes', None),
+                    text=task_data['text'],
                 )
                 
                 # 设置位置
@@ -797,7 +816,7 @@ class QuadrantWidget(QWidget):
         print("程序关闭前的保存操作已完成")
         
         # 添加以下代码确保程序完全退出
-        from PyQt5.QtWidgets import QApplication
+        from PyQt6.QtWidgets import QApplication
         QApplication.instance().quit()
         
         event.accept()

@@ -1,15 +1,15 @@
-from PyQt5.QtCore import Qt,QDate               # PySide6 也是 QtCore.Qt
-from PyQt5.QtWidgets import (QDialog, QWidget, QVBoxLayout,
+from PyQt6.QtCore import Qt,QDate               # PySide6 也是 QtCore.Qt
+from PyQt6.QtWidgets import (QDialog, QWidget, QVBoxLayout,
                              QGraphicsDropShadowEffect, QLabel, QLineEdit,
                              QDateEdit, QPushButton, QHBoxLayout)
-from PyQt5.QtGui import QColor, QMouseEvent
+from PyQt6.QtGui import QColor, QMouseEvent
 
 class AddTaskDialog(QDialog):
     def __init__(self, parent=None, task_fields=None):
         # ❶ 直接把 QDialog 设为「无边框」窗口
-        super().__init__(parent, flags=Qt.FramelessWindowHint | Qt.Dialog)
+        super().__init__(parent, flags=Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         # ❷ 允许窗口背景透明（才能配合圆角 + 阴影）
-        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
         # ------- 外层透明壳，什么都不画 ------- #
 
@@ -120,12 +120,12 @@ class AddTaskDialog(QDialog):
 
     # ---------- 拖动实现 ----------
     def mousePressEvent(self, e: QMouseEvent):
-        if e.button() == Qt.LeftButton:
-            self._drag_pos = e.globalPos() - self.pos()
+        if e.button() == Qt.MouseButton.LeftButton:
+            self._drag_pos = e.globalPosition().toPoint() - self.pos()
 
     def mouseMoveEvent(self, e: QMouseEvent):
-        if self._drag_pos and e.buttons() & Qt.LeftButton:
-            self.move(e.globalPos() - self._drag_pos)
+        if self._drag_pos and e.buttons() & Qt.MouseButton.LeftButton:
+            self.move(e.globalPosition().toPoint() - self._drag_pos)
 
     def mouseReleaseEvent(self, e: QMouseEvent):
         self._drag_pos = None

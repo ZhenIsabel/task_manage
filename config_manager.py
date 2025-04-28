@@ -1,6 +1,6 @@
 import json
 import os
-from PyQt5.QtWidgets import QMessageBox
+from PyQt6.QtWidgets import QMessageBox
 
 # 配置文件路径
 CONFIG_FILE = 'config.json'

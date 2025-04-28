@@ -22,10 +22,10 @@
         "height": 600
     },
     "position": {
-        "x": 965,
-        "y": 275
+        "x": 0,
+        "y": 0
     },
-    "edit_mode": false,
+    "edit_mode": true,
     "ui": {
         "border_radius": 15,
         "shadow_effect": true,

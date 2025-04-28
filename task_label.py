@@ -1,10 +1,9 @@
 from datetime import datetime
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, 
-                             QLabel, QLineEdit, QInputDialog, QGraphicsDropShadowEffect,
-                             QMenu, QAction, QDateEdit, QFrame, QScrollArea, QSizePolicy,QDialog)
-from PyQt5.QtCore import Qt, pyqtSignal, QDate,QPoint
-from PyQt5.QtGui import QColor, QCursor
-from PyQt5.QtWidgets import QColorDialog
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, 
+                           QLabel, QLineEdit, QInputDialog, QGraphicsDropShadowEffect,
+                           QMenu, QFrame, QScrollArea, QSizePolicy, QDialog, QColorDialog, QMessageBox)
+from PyQt6.QtCore import Qt, pyqtSignal, QDate, QPoint
+from PyQt6.QtGui import QColor, QCursor, QAction
 
 from add_task_dialog import AddTaskDialog
 
@@ -19,17 +18,16 @@ class TaskLabel(QWidget):
     {"name": "notes",     "label": "备注",     "type": "text",  "required": False},
 ]
     
-    def __init__(self, task_id, text, color, parent=None, completed=False,  **fields):
+    def __init__(self, task_id, color, parent=None, completed=False,  **fields):
         super().__init__(parent)
         self.task_id = task_id
-        self.text = text
         self.color = QColor(color)
         self.completed = completed
 
         # ---- 自动把 EDITABLE_FIELDS 里声明的 key 赋成属性 ----
         for meta in self.EDITABLE_FIELDS:
             key = meta["name"]
-            setattr(self, key, fields.get(key))   # 没传就是 None
+            setattr(self, key, fields.get(key, ""))  # 添加默认值
 
         # 初始化拖拽状态
         self.dragging = False
@@ -48,24 +46,24 @@ class TaskLabel(QWidget):
         self.checkbox.stateChanged.connect(self.on_status_changed)
         
         # 添加文本标签
-        self.label = QLabel(text)
+        self.label = QLabel(getattr(self, 'text', ''))  # 使用属性获取文本
         self.label.setWordWrap(True)
-        self.label.setAlignment(Qt.AlignCenter)
+        self.label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         
         # 添加到期日期标签（如果有）
         self.due_date_label = None
         if self.due_date:
             self.due_date_label = QLabel(f"到期: {self.due_date}")
-            self.due_date_label.setAlignment(Qt.AlignRight)
+            self.due_date_label.setAlignment(Qt.AlignmentFlag.AlignRight)
             self.due_date_label.setStyleSheet("font-size: 10px;")
         
-        # 将控件添加到布局
-        checkbox_layout = QHBoxLayout()
-        checkbox_layout.addWidget(self.checkbox)
-        checkbox_layout.addStretch()
+        # 将复选框和标签放在同一行
+        title_layout = QHBoxLayout()
+        title_layout.addWidget(self.checkbox)
+        title_layout.addWidget(self.label)
+        title_layout.addStretch()
         
-        layout.addLayout(checkbox_layout)
-        layout.addWidget(self.label)
+        layout.addLayout(title_layout)
         # if self.due_date_label:
         #     layout.addWidget(self.due_date_label)
         
@@ -90,27 +88,42 @@ class TaskLabel(QWidget):
                 background-color: rgba({bg_color.red()}, {bg_color.green()}, {bg_color.blue()}, 0.85);
                 border-radius: 10px;
                 border: none;
-                box-shadow: 3px 3px 5px rgba(0, 0, 0, 0.3);
             }}
             QLabel {{
                 color: rgb({text_color.red()}, {text_color.green()}, {text_color.blue()});
                 font-weight: bold;
                 font-family: '微软雅黑';
                 padding: 2px;
+                background-color: transparent;
             }}
             QCheckBox {{
                 spacing: 5px;
+                background-color: transparent;
             }}
             QCheckBox::indicator {{
                 width: 18px;
                 height: 18px;
                 border-radius: 9px;
                 border: 2px solid gray;
+                background-color: rgba({bg_color.red()}, {bg_color.green()}, {bg_color.blue()}, 0.85);
             }}
             QCheckBox::indicator:checked {{
-                background-color: #4ECDC4;
+                background-color: rgba({bg_color.red()}, {bg_color.green()}, {bg_color.blue()}, 0.85);
                 border: 2px solid #4ECDC4;
                 image: url(check.png);
+            }}
+            QMenu {{
+                background-color: white;
+                border-radius: 8px;
+                padding: 5px;
+            }}
+            QMenu::item {{
+                padding: 5px 20px;
+                border-radius: 4px;
+            }}
+            QMenu::item:selected {{
+                background-color: #4ECDC4;
+                color: white;
             }}
         """)
         
@@ -123,19 +136,19 @@ class TaskLabel(QWidget):
     
     def on_status_changed(self, state):
         """复选框状态改变时的处理"""
-        self.completed = (state == Qt.Checked)
+        self.completed = (state == Qt.CheckState.Checked) 
         self.update_appearance()
         self.statusChanged.emit(self)
     
     def mousePressEvent(self, event):
         """鼠标按下事件"""
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton:
             self.dragging = True
             self.drag_start_position = event.pos()
     
     def mouseMoveEvent(self, event):
         """鼠标移动事件"""
-        if self.dragging and (event.buttons() & Qt.LeftButton):
+        if self.dragging and (event.buttons() & Qt.MouseButton.LeftButton):
             # 计算移动距离
             delta = event.pos() - self.drag_start_position
             new_pos = self.pos() + delta
@@ -144,23 +157,22 @@ class TaskLabel(QWidget):
     
     def mouseReleaseEvent(self, event):
         """鼠标释放事件"""
-        if event.button() == Qt.LeftButton and self.dragging:
+        if event.button() == Qt.MouseButton.LeftButton and self.dragging:
             self.dragging = False
     
     def mouseDoubleClickEvent(self, event):
         """鼠标双击事件"""
-        if event.button() == Qt.LeftButton:
-            # 编辑标签文本 - 使用无边框对话框
+        if event.button() == Qt.MouseButton.LeftButton:
             dialog = QInputDialog(self)
-            dialog.setWindowFlags(Qt.FramelessWindowHint)
-            dialog.setInputMode(QInputDialog.TextInput)
+            dialog.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+            dialog.setInputMode(QInputDialog.InputMode.TextInput)
             dialog.setLabelText("任务内容:")
             dialog.setTextValue(self.text)
             dialog.setWindowTitle("编辑任务")
             
-            if dialog.exec_() == QDialog.Accepted:
-                self.text = dialog.textValue()
-                self.label.setText(self.text)
+            # if dialog.exec() == QDialog.DialogCode.Accepted:
+            #     self.text = dialog.textValue()
+            #     self.label.setText(self.text)
     
     def contextMenuEvent(self, event):
         """右键菜单事件"""
@@ -184,18 +196,15 @@ class TaskLabel(QWidget):
         menu.addAction(delete_action)
         
         # 显示菜单
-        menu.exec_(event.globalPos())
+        menu.exec(QCursor.pos())
     
     def edit_task(self):
         """编辑任务内容"""
         # 获取当前字段配置
         task_fields = []
-        # 1) 动态把元数据转成 task_fields，默认值取自身属性
         for meta in self.EDITABLE_FIELDS:
-            value = getattr(self, meta["name"], "")
-            task_fields.append(
-                dict(meta, default=value)   # 拷贝 meta 并加 default
-            )
+            value = getattr(self, meta["name"], "") or ""  # 双重空值保护
+            task_fields.append(dict(meta, default=value))
 
 
         # 如果没有找到字段配置，使用默认字段
@@ -207,7 +216,7 @@ class TaskLabel(QWidget):
 
         dialog= AddTaskDialog(self, task_fields=task_fields)
             # 3) 如果点击「确定」就取回数据
-        if dialog.exec_() != QDialog.Accepted:
+        if dialog.exec() != QDialog.DialogCode.Accepted:
             return                          # 点了取消
 
         # 从对话框中获取字段值
@@ -220,17 +229,18 @@ class TaskLabel(QWidget):
                 return
 
         # 更新任务数据
-        self.text=task_data.get('text', ''),
-        self.due_date=task_data.get('due_date'),
-        self.priority=task_data.get('priority'),
-        self.notes=task_data.get('notes')
-        
+        for meta in self.EDITABLE_FIELDS:
+            key = meta["name"]
+            if key in task_data:
+                setattr(self, key, task_data[key])
+        # 特殊处理标签文本更新
+        self.label.setText(self.text)
     
     def change_color(self):
         """更改标签颜色"""
         color_dialog = QColorDialog(self.color, self)
         color_dialog.setWindowTitle("选择标签颜色")
-        if color_dialog.exec_() == QDialog.Accepted:
+        if color_dialog.exec() == QDialog.DialogCode.Accepted:
             color = color_dialog.selectedColor()
             if color.isValid():
                 self.color = color
@@ -303,8 +313,8 @@ class TaskLabel(QWidget):
         """创建详情弹出窗口"""
         # 创建一个无边框窗口作为弹出窗口
         self.detail_popup = QFrame(self.parent())
-        self.detail_popup.setWindowFlags(Qt.FramelessWindowHint)
-        self.detail_popup.setAttribute(Qt.WA_TranslucentBackground)
+        self.detail_popup.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        self.detail_popup.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.detail_popup.setStyleSheet("""
             QFrame {
                 background-color: #ECECEC;
@@ -335,7 +345,11 @@ class TaskLabel(QWidget):
         layout.setSpacing(8)
         
         # 标题 - 任务内容
-        title_label = QLabel(self.text)
+        # 确保使用正确的文本内容（字符串而非元组）
+        title_text = self.text
+        if isinstance(self.text, tuple):
+            title_text = self.text[0]
+        title_label = QLabel(title_text)
         title_label.setWordWrap(True)
         title_label.setStyleSheet("font-size: 14px; font-weight: bold; color: black;")
         layout.addWidget(title_label)
@@ -362,7 +376,7 @@ class TaskLabel(QWidget):
             scroll_area.setWidget(notes_label)
             scroll_area.setWidgetResizable(True)
             scroll_area.setMaximumHeight(100)
-            scroll_area.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+            scroll_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
             layout.addWidget(scroll_area)
         
         # 完成状态

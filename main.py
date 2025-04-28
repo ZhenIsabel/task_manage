@@ -1,7 +1,7 @@
 import sys
 import os
-from PyQt5.QtWidgets import QApplication, QMessageBox
-from PyQt5.QtCore import QPropertyAnimation, QEasingCurve
+from PyQt6.QtWidgets import QApplication, QMessageBox
+from PyQt6.QtCore import QPropertyAnimation, QEasingCurve
 
 from config_manager import load_config
 from quadrant_widget import QuadrantWidget
@@ -33,9 +33,9 @@ if __name__ == "__main__":
     fade_in.setDuration(1000)  # 1秒淡入
     fade_in.setStartValue(0.0)
     fade_in.setEndValue(1.0)
-    fade_in.setEasingCurve(QEasingCurve.InOutQuad)
+    fade_in.setEasingCurve(QEasingCurve.Type.InOutQuad)
     fade_in.start()
     
     print("窗口显示完成，进入事件循环")
     
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
