@@ -89,12 +89,20 @@ class AddTaskDialog(QDialog):
             lab = QLabel(f"{f['label']}{' *' if f.get('required') else ''}")
             panel_layout.addWidget(lab)
 
+            # 创建控件时设置默认值
+            default_value = f.get('default', '')
             if f['type'] == 'date':
-                w = QDateEdit(); w.setCalendarPopup(True)
-                w.setDisplayFormat("yyyy-MM-dd")   # 若还没设置
-                w.setDate(QDate.currentDate().addDays(1))     # ← 这里设默认日期
+                w = QDateEdit()
+                w.setCalendarPopup(True)
+                w.setDisplayFormat("yyyy-MM-dd")
+                # 如果有默认值则设置日期，否则保持原逻辑
+                if default_value:
+                    w.setDate(QDate.fromString(default_value, "yyyy-MM-dd"))
+                else:
+                    w.setDate(QDate.currentDate().addDays(1))
             else:
-                w = QLineEdit()
+                w = QLineEdit(str(default_value))  # 设置文本默认值
+                
             panel_layout.addWidget(w)
             self.inputs[f['name']] = w
 

@@ -1,1 +1,16 @@
-[]
+[
+    {
+        "id": "task_0_20250428214441",
+        "text": "test",
+        "color": "#4ecdc4",
+        "position": {
+            "x": 661,
+            "y": 124
+        },
+        "completed": false,
+        "date": "2025-04-28",
+        "due_date": "2025-04-29",
+        "priority": "353w45",
+        "notes": "234534534tsdfg"
+    }
+]
