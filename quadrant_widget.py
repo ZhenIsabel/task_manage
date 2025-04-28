@@ -118,10 +118,19 @@ class QuadrantWidget(QWidget):
         
         # 设置控制面板为悬浮式
         self.control_widget.setParent(self)
-        control_width = self.control_widget.sizeHint().width()
-        control_height = self.control_widget.sizeHint().height()
-        self.control_widget.setGeometry(20, 20, control_width, control_height)
-        self.control_widget.raise_()
+        # 自动计算初始尺寸
+        self.control_widget.adjustSize()  
+        control_width = self.control_widget.width()
+        control_height = self.control_widget.height()
+        # 从配置读取保存的位置（新增代码）
+        control_x = self.config.get('control_panel', {}).get('x', 20)
+        control_y = self.config.get('control_panel', {}).get('y', 20)
+        self.control_widget.setGeometry(control_x, control_y, control_width, control_height)
+        
+        # 新增鼠标事件处理绑定（新增代码）
+        self.control_widget.mousePressEvent = self.handle_control_press
+        self.control_widget.mouseMoveEvent = self.handle_control_move
+        self.control_widget.mouseReleaseEvent = self.handle_control_release
         
         # 创建一个布局用于四象限区域
         self.quadrant_layout = QVBoxLayout()
@@ -137,6 +146,30 @@ class QuadrantWidget(QWidget):
         
         # 确保控制面板始终可见
         self.control_widget.show()
+
+
+    # 三个控制面板拖动处理方法（新增代码）
+    def handle_control_press(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.control_drag_start_pos = event.globalPosition().toPoint()
+            self.control_original_pos = self.control_widget.pos()
+            event.accept()
+
+    def handle_control_move(self, event):
+        if hasattr(self, 'control_drag_start_pos'):
+            delta = event.globalPosition().toPoint() - self.control_drag_start_pos
+            self.control_widget.move(self.control_original_pos + delta)
+            event.accept()
+
+    def handle_control_release(self, event):
+        if hasattr(self, 'control_drag_start_pos'):
+            # 保存位置到配置文件（新增代码）
+            self.config.setdefault('control_panel', {})
+            self.config['control_panel']['x'] = self.control_widget.x()
+            self.config['control_panel']['y'] = self.control_widget.y()
+            self.save_config()
+            del self.control_drag_start_pos
+        event.accept()
 
     
     def paintEvent(self, event):
@@ -329,6 +362,10 @@ class QuadrantWidget(QWidget):
         self.add_task_button.setVisible(self.edit_mode)
         self.undo_button.setVisible(self.edit_mode)
         
+        # 更新控制面板尺寸
+        self.control_widget.adjustSize()
+        self.control_widget.updateGeometry()
+
         # 保存当前状态到配置
         self.config['edit_mode'] = self.edit_mode
         self.save_config()

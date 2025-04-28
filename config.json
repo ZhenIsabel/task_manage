@@ -59,5 +59,9 @@
             "type": "text",
             "required": false
         }
-    ]
+    ],
+    "control_panel": {
+        "x": 1179,
+        "y": 394
+    }
 }
