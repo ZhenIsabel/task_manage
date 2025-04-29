@@ -23,21 +23,15 @@ class QuadrantWidget(QWidget):
         self.tasks = []
         self.undo_stack = []
         
-        # 设置窗口属性 - 增强桌面融合效果
-        if self.config.get('ui', {}).get('desktop_mode', True):
-            # 设置为无边框、保持在底层且作为桌面级窗口
-            self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnBottomHint | Qt.WindowType.Tool)
-            # 设置窗口为透明背景
-            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-            # 允许鼠标事件穿透到桌面
-            if hasattr(Qt, 'WA_TransparentForMouseEvents'):
-                self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
-            # 设置窗口不在显示桌面时隐藏
-            self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
-        else:
-            # 普通窗口模式
-            self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
-            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        # 设置为无边框、保持在底层且作为桌面级窗口
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnBottomHint | Qt.WindowType.Tool)
+        # 设置窗口为透明背景
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        # 允许鼠标事件穿透到桌面
+        if hasattr(Qt, 'WA_TransparentForMouseEvents'):
+            self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+        # 设置窗口不在显示桌面时隐藏
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         
         # 设置大小和位置
         self.resize(config['size']['width'], config['size']['height'])
@@ -149,12 +143,7 @@ class QuadrantWidget(QWidget):
         
         # 将四象限布局添加到主布局
         self.main_layout.addLayout(self.quadrant_layout)
-        
-        # 设置窗口大小为全屏，但保持四象限初始大小不变
-        # screen = QApplication.primaryScreen()
-        # screen_rect = screen.geometry()
-        # self.setGeometry(0, 0, screen_rect.width(), screen_rect.height())
-        
+
         # 确保控制面板始终可见
         self.control_widget.show()
 
@@ -219,8 +208,6 @@ class QuadrantWidget(QWidget):
         
         # 计算内部四象限区域（留出边距）
         margin = 10
-        inner_width = width - 2 * margin
-        inner_height = height - 2 * margin
         inner_h_line_y = h_line_y
         inner_v_line_x = v_line_x
         
@@ -399,8 +386,8 @@ class QuadrantWidget(QWidget):
             new_y = click_pos.y() - control_height // 2
             
             # 限制在窗口范围内（避免超出）
-            new_x = max(0, min(new_x, self.width() - control_width))
-            new_y = max(0, min(new_y, self.height() - control_height))
+            new_x = max(0, min(new_x, self.width() - control_width))+20
+            new_y = max(0, min(new_y, self.height() - control_height))+20
             
             self.control_widget.move(new_x, new_y)
             
@@ -497,24 +484,6 @@ class QuadrantWidget(QWidget):
         
         # 先显示任务，确保立即可见
         task.show()
-        
-        # 添加动画效果
-        if self.config.get('ui', {}).get('animation_enabled', True):
-            # 创建并设置透明度效果
-            task_opacity = QGraphicsOpacityEffect(task)
-            task_opacity.setOpacity(0.0)
-            task.setGraphicsEffect(task_opacity)
-            
-            # 创建淡入动画
-            fade_in = QPropertyAnimation(task_opacity, b"opacity")
-            fade_in.setDuration(500)  # 0.5秒淡入
-            fade_in.setStartValue(0.0)
-            fade_in.setEndValue(1.0)
-            fade_in.setEasingCurve(QEasingCurve.Type.InOutQuad)  # Updated to use Type enum
-            task.fade_animation = fade_in
-            task.update()
-            fade_in.start()
-            
         
         # 添加到任务列表
         self.tasks.append(task)
@@ -753,25 +722,10 @@ class QuadrantWidget(QWidget):
         border_radius_spin.setValue(self.config.get('ui', {}).get('border_radius', 15))
         border_radius_spin.valueChanged.connect(lambda value: self.update_ui_config('border_radius', value))
         
-        # 动画效果开关
-        animation_checkbox = QCheckBox()
-        animation_checkbox.setChecked(self.config.get('ui', {}).get('animation_enabled', True))
-        animation_checkbox.stateChanged.connect(
-            lambda state: self.update_ui_config('animation_enabled', state == Qt.CheckState.Checked)
-        )
-        
-        # 桌面融合模式开关
-        desktop_mode_checkbox = QCheckBox()
-        desktop_mode_checkbox.setChecked(self.config.get('ui', {}).get('desktop_mode', True))
-        desktop_mode_checkbox.stateChanged.connect(
-            lambda state: self.update_ui_config('desktop_mode', state == Qt.CheckState.Checked)
-        )
         # 添加到布局
         size_layout.addRow("宽度:", width_spin)
         size_layout.addRow("高度:", height_spin)
         ui_layout.addRow("圆角半径:", border_radius_spin)
-        ui_layout.addRow("启用动画效果:", animation_checkbox)
-        ui_layout.addRow("桌面融合模式:", desktop_mode_checkbox)
         
         # 添加标签页
         tab_widget.addTab(color_widget, "颜色设置")

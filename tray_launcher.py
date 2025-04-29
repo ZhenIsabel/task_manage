@@ -18,17 +18,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("TaskManagerTray")
 
-# 尝试导入win32相关模块
-try:
-    import win32gui
-    import win32con
-    import win32process
-    HAS_WIN32 = True
-except ImportError:
-    HAS_WIN32 = False
-    logger.warning("未安装pywin32模块，部分功能可能受限")
-    logger.warning("可以通过运行 'pip install pywin32' 安装该模块")
-
 class TaskManagerTray(QSystemTrayIcon):
     def __init__(self, app):
         super().__init__()
@@ -55,7 +44,6 @@ class TaskManagerTray(QSystemTrayIcon):
         exit_action = QAction("退出", self)
         exit_action.triggered.connect(self.exit_app)
         menu.addAction(exit_action)
-        
         # 设置右键菜单
         self.setContextMenu(menu)
         
