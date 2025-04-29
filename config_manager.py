@@ -33,6 +33,8 @@ DEFAULT_CONFIG = {
     ]
 }
 
+logger = logging.getLogger(__name__)
+
 def load_config():
     """从文件加载配置"""
     if not os.path.exists(CONFIG_FILE):
@@ -45,19 +47,19 @@ def load_config():
             # 合并默认配置确保完整性
             return {**DEFAULT_CONFIG, **config}
     except Exception as e:
-        print(f"加载配置失败: {str(e)}")
+        logger.error(f"加载配置失败: {str(e)}")
         return DEFAULT_CONFIG
 
 def save_config(config, parent=None):
     """保存配置到文件"""
-    print("正在保存配置到文件...")
+    logger.debug("正在保存配置到文件...")
     try:
         with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=4, ensure_ascii=False)
-        print("配置保存成功")
+        logger.info("配置保存成功")
         return True
     except Exception as e:
-        print(f"保存配置失败: {str(e)}")
+        logger.error(f"保存配置失败: {str(e)}")
         if parent:
             QMessageBox.warning(parent, "保存失败", f"保存配置失败: {str(e)}")
         return False
@@ -65,7 +67,7 @@ def save_config(config, parent=None):
 
 def save_tasks(tasks, parent=None):
     """保存任务到文件"""
-    print("正在保存任务到文件...")
+    logger.debug("正在保存任务到文件...")
     try:
         # 获取所有任务字段定义
         config = load_config()
@@ -84,10 +86,10 @@ def save_tasks(tasks, parent=None):
         # 保存到文件，使用UTF-8编码并确保中文直接保存
         with open(TASKS_FILE, 'w', encoding='utf-8') as f:
             json.dump(tasks_data, f, indent=4, ensure_ascii=False)
-        print(f"成功保存了 {len(tasks_data)} 个任务")
+        logger.info(f"成功保存了 {len(tasks_data)} 个任务")
         return True
     except Exception as e:
-        print(f"保存任务失败: {str(e)}")
+        logger.error(f"保存任务失败: {str(e)}")
         if parent:
             QMessageBox.warning(parent, "保存失败", f"保存任务失败: {str(e)}")
         return False

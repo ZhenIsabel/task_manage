@@ -1,21 +1,12 @@
 import sys
 import os
 import subprocess
-import logging
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
 from PyQt6.QtGui import QIcon, QAction
 from PyQt6.QtCore import QCoreApplication
 
 # 配置日志系统
-log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tray_launcher.log")
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_file, encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
+log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "/logs/tray_launcher.log")
 logger = logging.getLogger("TaskManagerTray")
 
 class TaskManagerTray(QSystemTrayIcon):

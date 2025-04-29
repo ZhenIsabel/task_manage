@@ -1,8 +1,8 @@
 from datetime import datetime
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, 
-                           QLabel, QLineEdit, QInputDialog, QGraphicsDropShadowEffect,
-                           QMenu, QFrame, QScrollArea, QSizePolicy, QDialog, QColorDialog, QMessageBox,
-                           QLayout,QPushButton)
+                            QLabel, QLineEdit, QInputDialog, QGraphicsDropShadowEffect,
+                            QMenu, QFrame, QScrollArea, QSizePolicy, QDialog, QColorDialog, QMessageBox,
+                            QLayout,QPushButton)
 from PyQt6.QtCore import Qt, pyqtSignal, QDate, QPoint, QEvent, QUrl
 from PyQt6.QtGui import QColor, QCursor, QAction, QDesktopServices
 import os

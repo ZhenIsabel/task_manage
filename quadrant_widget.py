@@ -2,9 +2,9 @@ import json
 import os
 from datetime import datetime
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QColorDialog, QSlider, 
-                             QLabel, QGridLayout, QSizePolicy, QCheckBox, QLineEdit, QInputDialog, 
-                             QMessageBox, QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QDialog,
-                             QTabWidget, QFormLayout, QSpinBox, QDateEdit)
+                            QLabel, QGridLayout, QSizePolicy, QCheckBox, QLineEdit, QInputDialog, 
+                            QMessageBox, QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QDialog,
+                            QTabWidget, QFormLayout, QSpinBox, QDateEdit)
 from PyQt6.QtCore import Qt, QPoint, QSize, QRect, QPropertyAnimation, QEasingCurve, QTimer, QDate
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont, QCursor, QPainterPath, QLinearGradient
