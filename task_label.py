@@ -20,11 +20,10 @@ class TaskLabel(QWidget):
     {"name": "notes",     "label": "备注",     "type": "text",  "required": False},
 ]
     
-    def __init__(self, task_id, color, parent=None, completed=False,  **fields):
+    def __init__(self, task_id, color,completed=False, parent=None,  **fields):
         super().__init__(parent)
         self.task_id = task_id
         self.color = QColor(color)
-        self.completed = completed
 
         # ---- 自动把 EDITABLE_FIELDS 里声明的 key 赋成属性 ----
         for meta in self.EDITABLE_FIELDS:
@@ -47,7 +46,7 @@ class TaskLabel(QWidget):
         
         # 添加复选框
         self.checkbox = QCheckBox()
-        self.checkbox.setChecked(completed)
+        self.checkbox.setChecked(completed) # 默认不勾选
         self.checkbox.stateChanged.connect(self.on_status_changed)
         
         # 添加文本标签
@@ -92,7 +91,7 @@ class TaskLabel(QWidget):
     
     def update_appearance(self):
         """更新标签外观"""
-        if self.completed:
+        if self.checkbox.isChecked(): # 🔥🔥🔥用真实勾选状态
             bg_color = QColor(200, 200, 200)  # 灰色背景
             text_color = QColor(100, 100, 100)  # 深灰色文字
         else:
@@ -155,9 +154,12 @@ class TaskLabel(QWidget):
     
     def on_status_changed(self, state):
         """复选框状态改变时的处理"""
-        self.completed = (state == Qt.CheckState.Checked) 
         self.update_appearance()
         self.statusChanged.emit(self)
+
+        # 🔥 如果detail_popup存在，刷新里面的状态文字
+        if hasattr(self, 'status_label') and self.status_label:
+            self.update_status_label()
     
     def mousePressEvent(self, event):
         """鼠标按下事件"""
@@ -262,7 +264,7 @@ class TaskLabel(QWidget):
             'text': self.text,
             'color': self.color.name(),
             'position': {'x': self.pos().x(), 'y': self.pos().y()},
-            'completed': self.completed,
+            'completed': self.checkbox.isChecked(),   # 🔥🔥🔥用真实勾选状态
             'date': datetime.now().strftime('%Y-%m-%d'),
             'due_date': self.due_date,
             'priority': self.priority,
@@ -453,10 +455,9 @@ class TaskLabel(QWidget):
             layout.addWidget(scroll_area)
         
         # 完成状态
-        status_text = "已完成" if self.completed else "未完成"
-        status_color = "#4ECDC4" if self.completed else "#FF6B6B"
-        status_label = QLabel(f"<b>状态:</b> <font color='{status_color}'>{status_text}</font>")
-        layout.addWidget(status_label)
+        self.status_label = QLabel()
+        self.update_status_label()  # 单独用一个方法来设置文字
+        layout.addWidget(self.status_label)
         
         # 创建日期
         date_label = QLabel(f"<b>创建于:</b> {datetime.now().strftime('%Y-%m-%d')}")
@@ -496,3 +497,11 @@ class TaskLabel(QWidget):
             self.detail_popup = None
 
         self.deleteRequested.emit(self)  # 再发出删除自己的信号
+
+    def update_status_label(self):
+        """刷新状态文字"""
+        if not hasattr(self, 'status_label') or self.status_label is None:
+            return
+        status_text = "已完成" if self.checkbox.isChecked() else "未完成"
+        status_color = "#4ECDC4" if self.checkbox.isChecked() else "#FF6B6B"
+        self.status_label.setText(f"<b>状态:</b> <font color='{status_color}'>{status_text}</font>")

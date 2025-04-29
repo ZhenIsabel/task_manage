@@ -1,44 +1,30 @@
 [
     {
-        "id": "task_0_20250429091020",
-        "text": "艾丝妲阿第三方阿斯蒂芬暗室逢灯",
-        "color": "#ffe66d",
+        "id": "task_0_20250429105816",
+        "text": "test",
+        "color": "#ff6b6b",
         "position": {
-            "x": 1508,
-            "y": 219
+            "x": 582,
+            "y": 108
         },
-        "completed": false,
+        "completed": true,
         "date": "2025-04-29",
-        "due_date": "2025-04-30",
+        "due_date": "2025-04-10",
         "priority": "",
         "notes": ""
     },
     {
-        "id": "task_1_20250429091033",
-        "text": "阿斯蒂芬阿斯蒂芬阿斯蒂芬",
+        "id": "task_1_20250429105932",
+        "text": "test_undone",
         "color": "#6d8ea0",
         "position": {
-            "x": 1286,
-            "y": 636
+            "x": 153,
+            "y": 368
         },
-        "completed": false,
+        "completed": true,
         "date": "2025-04-29",
         "due_date": "2025-04-30",
-        "priority": "阿斯蒂芬阿斯蒂芬",
-        "notes": "很高兴分工表奋斗改变多大改变房管部"
-    },
-    {
-        "id": "task_2_20250429102759",
-        "text": "的士大",
-        "color": "#7cff54",
-        "position": {
-            "x": 204,
-            "y": 170
-        },
-        "completed": false,
-        "date": "2025-04-29",
-        "due_date": "2025-04-30",
-        "priority": "士大夫士大夫",
-        "notes": "士大夫士大夫"
+        "priority": "",
+        "notes": ""
     }
 ]
