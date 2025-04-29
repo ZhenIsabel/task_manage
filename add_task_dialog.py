@@ -1,8 +1,10 @@
-from PyQt6.QtCore import Qt,QDate               # PySide6 也是 QtCore.Qt
+from PyQt6.QtCore import Qt,QDate
 from PyQt6.QtWidgets import (QDialog, QWidget, QVBoxLayout,
                              QGraphicsDropShadowEffect, QLabel, QLineEdit,
-                             QDateEdit, QPushButton, QHBoxLayout)
+                             QDateEdit, QPushButton, QHBoxLayout, QComboBox, QTextEdit)
 from PyQt6.QtGui import QColor, QMouseEvent
+
+from utils import ICON_PATH
 
 class AddTaskDialog(QDialog):
     def __init__(self, parent=None, task_fields=None):
@@ -27,19 +29,19 @@ class AddTaskDialog(QDialog):
         panel_layout.setSpacing(15)
 
         # 样式
-        panel.setStyleSheet("""
-        QWidget#panel {
+        panel.setStyleSheet(f"""
+        QWidget#panel {{
             background-color: white;
             border-radius: 15px;
-        }
+        }}
         /* 把你之前放在 QDialog 上的整段 QSS 原封不动贴进来 */
-        QLabel {
+        QLabel {{
             color: #333333;
             font-family: '微软雅黑';
             font-weight: bold;
             font-size: 14px;
-        }
-        QLineEdit, QTextEdit {
+        }}
+        QLineEdit, QTextEdit {{
             background-color: #f5f5f5;
             color: #333333;
             border: 1px solid #dddddd;
@@ -47,8 +49,8 @@ class AddTaskDialog(QDialog):
             padding: 12px;
             font-family: '微软雅黑';
             font-size: 13px;
-        }
-        QDateEdit {
+        }}
+        QDateEdit {{
             background-color: #f5f5f5;
             color: #333333;
             border: 1px solid #dddddd;
@@ -57,8 +59,8 @@ class AddTaskDialog(QDialog):
             font-family: '微软雅黑';
             font-size: 13px;
             min-height: 20px;
-        }
-        QPushButton {
+        }}
+        QPushButton {{
             background-color: #4ECDC4;
             color: white;
             border: none;
@@ -66,8 +68,40 @@ class AddTaskDialog(QDialog):
             padding: 10px 20px;
             font-family: '微软雅黑';
             font-weight: bold;
-        }
-        QPushButton:hover { background-color: #45B8B0; }
+        }}
+        QPushButton:hover {{background-color: #45B8B0; }}
+        QComboBox {{
+            background-color: #f5f5f5;
+            color: #333333;
+            border: 1px solid #dddddd;
+            border-radius: 8px;
+            padding: 10px;
+            font-family: '微软雅黑';
+            font-size: 13px;
+        }}
+        QComboBox::drop-down {{
+            subcontrol-origin: padding;
+            subcontrol-position: top right;
+            width: 30px;
+            border-left: 1px solid #dddddd;
+            background-color: #f5f5f5;
+        }}
+        QComboBox::down-arrow {{
+            image: url({ICON_PATH}/down_arrow.png); /* 这里可以放一个小箭头图片，或者不加 */
+            width: 20px;
+            height: 20px;
+        }}
+        QComboBox QAbstractItemView {{
+            background-color: #f5f5f5;
+            border: 1px solid #dddddd;
+            selection-background-color: #4ECDC4; /* 选中时的背景色 */
+            selection-color: white;              /* 选中时文字白色 */
+            padding: 5px;
+            outline: 0px;
+            font-family: '微软雅黑';
+            font-size: 13px;
+            border-radius: 8px; /* 下拉列表本身也有圆角 */
+        }}
         """)
 
         # 阴影
@@ -91,6 +125,7 @@ class AddTaskDialog(QDialog):
 
             # 创建控件时设置默认值
             default_value = f.get('default', '')
+            # 根据字段类型创建不同的控件
             if f['type'] == 'date':
                 w = QDateEdit()
                 w.setCalendarPopup(True)
@@ -100,6 +135,22 @@ class AddTaskDialog(QDialog):
                     w.setDate(QDate.fromString(default_value, "yyyy-MM-dd"))
                 else:
                     w.setDate(QDate.currentDate().addDays(1))
+            elif f['type'] == 'select':
+                # 创建下拉选择框
+                w = QComboBox()
+                # 添加选项
+                for option in f.get('options', []):
+                    w.addItem(option)
+                # 设置默认值
+                if default_value and default_value in f.get('options', []):
+                    w.setCurrentText(default_value)
+            elif f['type'] == 'multiline':
+                # 创建多行文本输入框
+                w = QTextEdit()
+                w.setPlaceholderText("请输入备注...")
+                w.setMinimumHeight(100)  # 设置最小高度
+                if default_value:
+                    w.setText(str(default_value))
             else:
                 w = QLineEdit(str(default_value))  # 设置文本默认值
                 
@@ -144,6 +195,10 @@ class AddTaskDialog(QDialog):
         for name, w in self.inputs.items():
             if isinstance(w, QDateEdit):
                 data[name] = w.date().toString("yyyy-MM-dd")
+            elif isinstance(w, QComboBox):
+                data[name] = w.currentText()
+            elif isinstance(w, QTextEdit):
+                data[name] = w.toPlainText()
             else:
                 data[name] = w.text()
         return data

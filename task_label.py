@@ -8,17 +8,28 @@ from PyQt6.QtGui import QColor, QCursor, QAction
 
 from add_task_dialog import AddTaskDialog
 from color_dialog import MyColorDialog
+from config_manager import load_config
+from utils import ICON_PATH
 
 class TaskLabel(QWidget):
     """任务标签类，表示一个工作项"""
     deleteRequested = pyqtSignal(object)
     statusChanged = pyqtSignal(object)
-    EDITABLE_FIELDS = [
-    {"name": "text",      "label": "任务内容", "type": "text",  "required": True},
-    {"name": "due_date",  "label": "到期日期", "type": "date",  "required": False},
-    {"name": "priority",  "label": "优先级",   "type": "text",  "required": False},
-    {"name": "notes",     "label": "备注",     "type": "text",  "required": False},
-]
+
+    @classmethod
+    def get_editable_fields(cls):
+        """从配置中获取可编辑字段"""
+        config = load_config()
+        fields = config.get('task_fields', [])
+        if not fields:
+            # 如果配置中没有字段定义，使用默认字段
+            fields = [
+                {"name": "text",      "label": "任务内容", "type": "text",  "required": True},
+                {"name": "due_date",  "label": "到期日期", "type": "date",  "required": False},
+                {"name": "priority",  "label": "优先级",   "type": "select", "required": False, "options": ["高", "中", "低"]},
+                {"name": "notes",     "label": "备注",     "type": "multiline",  "required": False},
+            ]
+        return fields
     
     def __init__(self, task_id, color,completed=False, parent=None,  **fields):
         super().__init__(parent)
@@ -26,7 +37,7 @@ class TaskLabel(QWidget):
         self.color = QColor(color)
 
         # ---- 自动把 EDITABLE_FIELDS 里声明的 key 赋成属性 ----
-        for meta in self.EDITABLE_FIELDS:
+        for meta in self.get_editable_fields():
             key = meta["name"]
             setattr(self, key, fields.get(key, ""))  # 添加默认值
 
@@ -128,7 +139,7 @@ class TaskLabel(QWidget):
             QCheckBox::indicator:checked {{
                 background-color: rgba({bg_color.red()}, {bg_color.green()}, {bg_color.blue()}, 0.85);
                 border: 2px solid #4ECDC4;
-                image: url(check.png);
+                image:  url({ICON_PATH}/check.png);
             }}
             QMenu {{
                 background-color: white;
@@ -213,7 +224,7 @@ class TaskLabel(QWidget):
         """编辑任务内容"""
         # 获取当前字段配置
         task_fields = []
-        for meta in self.EDITABLE_FIELDS:
+        for meta in self.get_editable_fields():
             value = getattr(self, meta["name"], "") or ""  # 双重空值保护
             task_fields.append(dict(meta, default=value))
 
