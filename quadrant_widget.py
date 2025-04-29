@@ -42,6 +42,18 @@ class QuadrantWidget(QWidget):
         # 设置大小和位置
         self.resize(config['size']['width'], config['size']['height'])
         self.move(config['position']['x'], config['position']['y'])
+
+        # 将窗口居中显示
+        screen = QApplication.primaryScreen()
+        screen_geometry = screen.availableGeometry()
+        center_x = screen_geometry.center().x() - self.width() // 2
+        center_y = screen_geometry.center().y() - self.height() // 2
+        self.move(center_x, center_y)
+
+        # 更新配置文件里的位置
+        self.config['position']['x'] = center_x
+        self.config['position']['y'] = center_y
+        self.save_config()
         
         # 创建布局
         self.main_layout = QVBoxLayout(self)
@@ -140,9 +152,9 @@ class QuadrantWidget(QWidget):
         self.main_layout.addLayout(self.quadrant_layout)
         
         # 设置窗口大小为全屏，但保持四象限初始大小不变
-        screen = QApplication.primaryScreen()
-        screen_rect = screen.geometry()
-        self.setGeometry(0, 0, screen_rect.width(), screen_rect.height())
+        # screen = QApplication.primaryScreen()
+        # screen_rect = screen.geometry()
+        # self.setGeometry(0, 0, screen_rect.width(), screen_rect.height())
         
         # 确保控制面板始终可见
         self.control_widget.show()
@@ -371,6 +383,32 @@ class QuadrantWidget(QWidget):
         """鼠标按下事件"""
         if event.button() == Qt.MouseButton.LeftButton:
             self.drag_position = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+        elif event.button() == Qt.MouseButton.RightButton:
+            # 右键点击空白区域时召唤控制面板
+            click_pos = event.position().toPoint()  # 注意这里是相对于当前窗口的局部位置
+            
+            # 让控制面板居中对齐到鼠标点击位置
+            control_width = self.control_widget.width()
+            control_height = self.control_widget.height()
+            new_x = click_pos.x() - control_width // 2
+            new_y = click_pos.y() - control_height // 2
+            
+            # 限制在窗口范围内（避免超出）
+            new_x = max(0, min(new_x, self.width() - control_width))
+            new_y = max(0, min(new_y, self.height() - control_height))
+            
+            self.control_widget.move(new_x, new_y)
+            
+            # 保存位置
+            self.config.setdefault('control_panel', {})
+            self.config['control_panel']['x'] = new_x
+            self.config['control_panel']['y'] = new_y
+            self.save_config()
+            
+            # 确保控制面板显示
+            self.control_widget.show()
+
             event.accept()
     
     def mouseMoveEvent(self, event):
