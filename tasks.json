@@ -32,8 +32,22 @@
         "text": "阿斯蒂芬阿斯蒂芬啊给对方",
         "color": "#4ecdc4",
         "position": {
-            "x": 255,
-            "y": 75
+            "x": 169,
+            "y": 250
+        },
+        "completed": false,
+        "date": "2025-04-29",
+        "due_date": "2025-04-30",
+        "priority": "",
+        "notes": ""
+    },
+    {
+        "id": "task_3_20250429101558",
+        "text": "test",
+        "color": "#ff6b6b",
+        "position": {
+            "x": 538,
+            "y": 223
         },
         "completed": false,
         "date": "2025-04-29",

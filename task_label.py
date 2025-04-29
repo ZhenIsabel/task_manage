@@ -2,8 +2,8 @@ from datetime import datetime
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, 
                            QLabel, QLineEdit, QInputDialog, QGraphicsDropShadowEffect,
                            QMenu, QFrame, QScrollArea, QSizePolicy, QDialog, QColorDialog, QMessageBox,
-                           QLayout)
-from PyQt6.QtCore import Qt, pyqtSignal, QDate, QPoint
+                           QLayout,QPushButton)
+from PyQt6.QtCore import Qt, pyqtSignal, QDate, QPoint, QEvent
 from PyQt6.QtGui import QColor, QCursor, QAction
 
 from add_task_dialog import AddTaskDialog
@@ -194,27 +194,36 @@ class TaskLabel(QWidget):
     
     def contextMenuEvent(self, event):
         """右键菜单事件"""
-        menu = QMenu(self)
+        # 如果详情窗口不存在，创建一个
+        if not self.detail_popup:
+            self.create_detail_popup()
+        # 调整位置并显示
+        self.position_detail_popup()
+        self.detail_popup.show()
         
-        # 编辑操作
-        edit_action = QAction("编辑", self)
-        edit_action.triggered.connect(self.edit_task)
+        # 确保详情弹出窗口保持在前台
+        self.detail_popup.raise_()
+        # menu = QMenu(self)
         
-        # 更改颜色操作
-        color_action = QAction("更改颜色", self)
-        color_action.triggered.connect(self.change_color)
+        # # 编辑操作
+        # edit_action = QAction("编辑", self)
+        # edit_action.triggered.connect(self.edit_task)
         
-        # 删除操作
-        delete_action = QAction("删除", self)
-        delete_action.triggered.connect(lambda: self.deleteRequested.emit(self))
+        # # 更改颜色操作
+        # color_action = QAction("更改颜色", self)
+        # color_action.triggered.connect(self.change_color)
         
-        # 添加操作到菜单
-        menu.addAction(edit_action)
-        menu.addAction(color_action)
-        menu.addAction(delete_action)
+        # # 删除操作
+        # delete_action = QAction("删除", self)
+        # delete_action.triggered.connect(lambda: self.deleteRequested.emit(self))
         
-        # 显示菜单
-        menu.exec(QCursor.pos())
+        # # 添加操作到菜单
+        # menu.addAction(edit_action)
+        # menu.addAction(color_action)
+        # menu.addAction(delete_action)
+        
+        # # 显示菜单
+        # menu.exec(QCursor.pos())
     
     def edit_task(self):
         """编辑任务内容"""
@@ -309,31 +318,28 @@ class TaskLabel(QWidget):
         # 设置最终位置
         self.detail_popup.move(parent_pos)
 
-    def enterEvent(self, event):
-        """鼠标进入控件区域时显示详情"""
-        # 如果详情窗口不存在，创建一个
-        if not self.detail_popup:
-            self.create_detail_popup()
+    # def enterEvent(self, event):
+    #     """鼠标进入控件区域时显示详情"""
+    #     # 如果详情窗口不存在，创建一个
+    #     if not self.detail_popup:
+    #         self.create_detail_popup()
         
-        # 调整位置并显示
-        self.position_detail_popup()
-        self.detail_popup.show()
+    #     # 调整位置并显示
+    #     self.position_detail_popup()
+    #     self.detail_popup.show()
         
-        # 确保详情弹出窗口保持在前台
-        self.detail_popup.raise_()
+    #     # 确保详情弹出窗口保持在前台
+    #     self.detail_popup.raise_()
     
-    def leaveEvent(self, event):
-        """鼠标离开控件区域时隐藏详情"""
-        if self.detail_popup and self.detail_popup.isVisible():
-            self.detail_popup.hide()
+    # def leaveEvent(self, event):
+    #     """鼠标离开控件区域时隐藏详情"""
+    #     if self.detail_popup and self.detail_popup.isVisible():
+    #         self.detail_popup.hide()
     
     def create_detail_popup(self):
         """创建详情弹出窗口"""
-        # 创建一个无边框窗口作为弹出窗口
-        self.detail_popup = QFrame(self.parent())
-        self.detail_popup.setWindowFlags(Qt.WindowType.FramelessWindowHint)
-        self.detail_popup.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.detail_popup.setStyleSheet("""
+        # 预定义sytlesheet样式
+        stylesheet = """
             QFrame {
                 background-color: #ECECEC;
                 border-radius: 10px;
@@ -348,7 +354,13 @@ class TaskLabel(QWidget):
                 border: none;
                 background-color: transparent;
             }
-        """)
+        """
+
+        # 创建一个无边框窗口作为弹出窗口
+        self.detail_popup = QFrame(self.parent())
+        self.detail_popup.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        self.detail_popup.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.detail_popup.setStyleSheet(stylesheet)
         
         # 设置阴影效果
         shadow = QGraphicsDropShadowEffect(self.detail_popup)
@@ -372,6 +384,28 @@ class TaskLabel(QWidget):
         title_label.setStyleSheet("font-size: 14px; font-weight: bold; color: black;")
         layout.addWidget(title_label)
         
+        # 菜单
+        menu = QMenu(self)
+        menu_button = QPushButton("操作")
+        layout.addWidget(menu_button)
+        
+        # 编辑操作
+        edit_action = QAction("编辑", self)
+        edit_action.triggered.connect(self.edit_task)
+        
+        # 更改颜色操作
+        color_action = QAction("更改颜色", self)
+        color_action.triggered.connect(self.change_color)
+        
+        # 删除操作
+        delete_action = QAction("删除", self)
+        delete_action.triggered.connect(lambda: self.deleteRequested.emit(self))
+        
+        # 添加操作到菜单
+        menu.addAction(edit_action)
+        menu.addAction(color_action)
+        menu.addAction(delete_action)
+
         # 添加所有可用的任务信息
         if self.due_date:
             due_date_label = QLabel(f"<b>到期日期:</b> {self.due_date}")
@@ -409,3 +443,23 @@ class TaskLabel(QWidget):
         
         # 确保初始状态为隐藏
         self.detail_popup.hide()
+        # 安装事件过滤器，以便在详情窗口关闭时隐藏它
+        self.detail_popup.installEventFilter(self)
+        # ✅ 再加一行：在父窗口（通常是QuadrantWidget）上也装上过滤器！
+        self.parent().installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        # 只处理detail_popup的事件
+        if obj == self.detail_popup:
+            if event.type() == QEvent.Type.MouseButtonPress:
+                # 点击了popup的内部，不关
+                return False
+        else:
+            # 如果 detail_popup 存在并且是显示的
+            if self.detail_popup and self.detail_popup.isVisible():
+                if event.type() == QEvent.Type.MouseButtonPress:
+                    # 如果点击位置不在detail_popup上，关闭它
+                    if not self.detail_popup.geometry().contains(event.globalPosition().toPoint()):
+                        self.detail_popup.hide()
+                        return True  # 消耗这个事件
+        return super().eventFilter(obj, event)
