@@ -1,8 +1,8 @@
 from datetime import datetime
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, 
-                           QLabel, QLineEdit, QInputDialog, QGraphicsDropShadowEffect,
-                           QMenu, QFrame, QScrollArea, QSizePolicy, QDialog, QColorDialog, QMessageBox,
-                           QLayout,QPushButton)
+                            QLabel, QLineEdit, QInputDialog, QGraphicsDropShadowEffect,
+                            QMenu, QFrame, QScrollArea, QSizePolicy, QDialog, QColorDialog, QMessageBox,
+                            QLayout,QPushButton)
 from PyQt6.QtCore import Qt, pyqtSignal, QDate, QPoint, QEvent, QUrl
 from PyQt6.QtGui import QColor, QCursor, QAction, QDesktopServices
 import os
@@ -11,6 +11,8 @@ from add_task_dialog import AddTaskDialog
 from styles import MyColorDialog, WarningPopup
 from config_manager import load_config
 from utils import ICON_PATH
+import logging
+logger = logging.getLogger(__name__)  # 自动获取模块名
 
 class TaskLabel(QWidget):
     """任务标签类，表示一个工作项"""
@@ -529,4 +531,5 @@ class TaskLabel(QWidget):
                 self.detail_popup.hide()
             else:
                 popup = WarningPopup(self, "目录不存在！")
+                logger.warning(f"尝试打开不存在的目录：{directory}")
                 popup.exec()

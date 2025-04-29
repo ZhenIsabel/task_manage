@@ -2,9 +2,9 @@ import json
 import os
 from datetime import datetime
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QColorDialog, QSlider, 
-                             QLabel, QGridLayout, QSizePolicy, QCheckBox, QLineEdit, QInputDialog, 
-                             QMessageBox, QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QDialog,
-                             QTabWidget, QFormLayout, QSpinBox, QDateEdit)
+                            QLabel, QGridLayout, QSizePolicy, QCheckBox, QLineEdit, QInputDialog, 
+                            QMessageBox, QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QDialog,
+                            QTabWidget, QFormLayout, QSpinBox, QDateEdit)
 from PyQt6.QtCore import Qt, QPoint, QSize, QRect, QPropertyAnimation, QEasingCurve, QTimer, QDate
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont, QCursor, QPainterPath, QLinearGradient
@@ -12,11 +12,13 @@ from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont, QCursor, QPainter
 from task_label import TaskLabel
 from config_manager import save_config, save_tasks, TASKS_FILE
 from add_task_dialog import AddTaskDialog
+import logging
+logger = logging.getLogger(__name__)  # 自动获取模块名
 
 class QuadrantWidget(QWidget):
     """四象限窗口部件"""
     def __init__(self, config, parent=None):
-        print("正在初始化四象限窗口...")
+        logger.debug("正在初始化四象限窗口...")
         super().__init__(parent)
         self.config = config
         self.edit_mode = False
@@ -798,7 +800,7 @@ class QuadrantWidget(QWidget):
     
     def save_config(self):
         """保存配置到文件"""
-        print("正在保存配置到文件...")
+        logger.info("正在保存配置到文件...")
         # 更新位置信息
         self.config['position']['x'] = self.x()
         self.config['position']['y'] = self.y()
@@ -807,13 +809,13 @@ class QuadrantWidget(QWidget):
     
     def load_tasks(self):
         """从文件加载任务"""
-        print("正在从文件加载任务...")
+        logger.info("正在从文件加载任务...")
         if not os.path.exists(TASKS_FILE):
-            print("任务文件不存在，跳过加载")
+            logger.error("任务文件不存在，跳过加载")
             return
         
         try:
-            print("正在读取任务文件...")
+            logger.debug("正在读取任务文件...")
             with open(TASKS_FILE, 'r', encoding='utf-8') as f:
                 tasks_data = json.load(f)
             
@@ -852,9 +854,9 @@ class QuadrantWidget(QWidget):
                 # 显示任务并添加到列表
                 task.show()
                 self.tasks.append(task)
-            print(f"成功加载了 {len(self.tasks)} 个任务")
+            logger.info(f"成功加载了 {len(self.tasks)} 个任务")
         except Exception as e:
-            print(f"加载任务失败: {str(e)}")
+            logger.error(f"加载任务失败: {str(e)}")
             QMessageBox.warning(self, "加载失败", f"加载任务失败: {str(e)}")
     
     def save_tasks(self, task=None):
@@ -863,11 +865,11 @@ class QuadrantWidget(QWidget):
 
     def closeEvent(self, event):
         """关闭事件"""
-        print("正在关闭程序...")
+        logger.info("正在关闭程序...")
         # 保存配置和任务
         self.save_config()
         self.save_tasks()
-        print("程序关闭前的保存操作已完成")
+        logger.info("程序关闭前的保存操作已完成")
         
         # 添加以下代码确保程序完全退出
         from PyQt6.QtWidgets import QApplication

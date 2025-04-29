@@ -1,22 +1,13 @@
 import sys
 import os
 import subprocess
-import logging
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
 from PyQt6.QtGui import QIcon, QAction
 from PyQt6.QtCore import QCoreApplication
 
 # 配置日志系统
-log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tray_launcher.log")
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_file, encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger("TaskManagerTray")
+import logging
+logger = logging.getLogger(__name__)  # 自动获取模块名
 
 class TaskManagerTray(QSystemTrayIcon):
     def __init__(self, app):
@@ -107,9 +98,11 @@ class TaskManagerTray(QSystemTrayIcon):
                 if sys.platform == 'win32' and HAS_WIN32:
                     process_handle = win32api.OpenProcess(win32con.PROCESS_QUERY_INFORMATION, 0, self.process.pid)
                     if not process_handle:
+                        logger.debug("进程句柄获取失败，重置进程状态")
                         self.process = None
             except Exception:
                 self.process = None
+                logger.error(f"进程状态检查异常：{str(e)}") 
 
 
         if self.process is None or self.process.poll() is not None:

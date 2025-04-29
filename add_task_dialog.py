@@ -5,6 +5,8 @@ from PyQt6.QtWidgets import (QDialog, QWidget, QVBoxLayout,
 from PyQt6.QtGui import QColor, QMouseEvent
 
 from utils import ICON_PATH
+import logging
+logger = logging.getLogger(__name__)  # 自动获取模块名
 
 class AddTaskDialog(QDialog):
     def __init__(self, parent=None, task_fields=None):
