@@ -112,12 +112,6 @@ class AddTaskDialog(QDialog):
         panel.setGraphicsEffect(shadow)
 
         # ------- 下面放你的字段、按钮 ------- #
-        if task_fields is None:
-            task_fields = [
-                {'name': 'text', 'label': '任务内容', 'type': 'text', 'required': True},
-                {'name': 'due_date', 'label': '到期日期', 'type': 'date', 'required': False}
-            ]
-
         self.inputs = {}
         for f in task_fields:
             lab = QLabel(f"{f['label']}{' *' if f.get('required') else ''}")

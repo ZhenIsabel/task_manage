@@ -33,65 +33,6 @@ DEFAULT_CONFIG = {
     ]
 }
 
-
-def load_tasks(self):
-    """从文件加载任务"""
-    print("正在从文件加载任务...")
-    if not os.path.exists(TASKS_FILE):
-        print("任务文件不存在，跳过加载")
-        return
-    
-    try:
-        print("正在读取任务文件...")
-        with open(TASKS_FILE, 'r', encoding='utf-8') as f:
-            tasks_data = json.load(f)
-        
-        # 获取当前日期
-        today = datetime.now().strftime('%Y-%m-%d')
-        
-        # 清除当前所有任务
-        for task in self.tasks:
-            task.deleteLater()
-        self.tasks.clear()
-        
-        # 加载未完成的任务或当天完成的任务
-        for task_data in tasks_data:
-            # 跳过已完成且不是今天完成的任务
-            if task_data.get('completed', False) and task_data.get('date', '') != today:
-                continue
-            
-            # 获取所有可能的字段
-            field_values = {}
-            for meta in TaskLabel.get_editable_fields():
-                field_name = meta['name']
-                # 如果任务数据中有该字段，则使用；否则使用默认值或空字符串
-                field_values[field_name] = task_data.get(field_name, "")
-            
-            # 创建任务标签 - 支持所有自定义字段
-            task = TaskLabel(
-                task_id=task_data.get('id', f"task_{len(self.tasks)}_{datetime.now().strftime('%Y%m%d%H%M%S')}"),
-                color=task_data.get('color', "#4ECDC4"),
-                parent=self,
-                completed=task_data.get('completed', False),
-                **field_values  # 使用字典解包传递所有字段
-            )
-            
-            # 设置位置
-            if 'position' in task_data:
-                task.move(task_data['position']['x'], task_data['position']['y'])
-            
-            # 连接信号
-            task.deleteRequested.connect(self.delete_task)
-            task.statusChanged.connect(self.save_tasks)
-            
-            # 显示任务并添加到列表
-            task.show()
-            self.tasks.append(task)
-        print(f"成功加载了 {len(self.tasks)} 个任务")
-    except Exception as e:
-        print(f"加载任务失败: {str(e)}")
-        QMessageBox.warning(self, "加载失败", f"加载任务失败: {str(e)}")
-
 def load_config():
     """从文件加载配置"""
     if not os.path.exists(CONFIG_FILE):

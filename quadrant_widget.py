@@ -833,15 +833,13 @@ class QuadrantWidget(QWidget):
                 
                 # 创建任务标签 - 支持所有自定义字段
                 task = TaskLabel(
-                    task_id=task_data['id'],
-                    color=task_data['color'],
-                    parent=self,
-                    completed=task_data['completed'],
-                    due_date=task_data.get('due_date', None),
-                    priority=task_data.get('priority', None),
-                    notes=task_data.get('notes', None),
-                    text=task_data['text'],
-                )
+                                task_id=task_data['id'],
+                                color=task_data['color'],
+                                parent=self,
+                                completed=task_data['completed'],
+                                **{field['name']: task_data.get(field['name'], "" if field.get('required') else None) 
+                                for field in self.config.get('task_fields', [])}
+                            )
                 
                 # 设置位置
                 if 'position' in task_data:

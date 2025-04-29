@@ -8,7 +8,7 @@ from PyQt6.QtGui import QColor, QCursor, QAction, QDesktopServices
 import os
 
 from add_task_dialog import AddTaskDialog
-from color_dialog import MyColorDialog
+from styles import MyColorDialog, WarningPopup
 from config_manager import load_config
 from utils import ICON_PATH
 
@@ -168,7 +168,7 @@ class TaskLabel(QWidget):
         self.update_appearance()
         self.statusChanged.emit(self)
 
-        # 🔥 如果detail_popup存在，刷新里面的状态文字
+        # 如果detail_popup存在，刷新里面的状态文字
         if hasattr(self, 'status_label') and self.status_label:
             self.update_status_label()
     
@@ -314,24 +314,6 @@ class TaskLabel(QWidget):
             
         # 设置最终位置
         self.detail_popup.move(parent_pos)
-
-    # def enterEvent(self, event):
-    #     """鼠标进入控件区域时显示详情"""
-    #     # 如果详情窗口不存在，创建一个
-    #     if not self.detail_popup:
-    #         self.create_detail_popup()
-        
-    #     # 调整位置并显示
-    #     self.position_detail_popup()
-    #     self.detail_popup.show()
-        
-    #     # 确保详情弹出窗口保持在前台
-    #     self.detail_popup.raise_()
-    
-    # def leaveEvent(self, event):
-    #     """鼠标离开控件区域时隐藏详情"""
-    #     if self.detail_popup and self.detail_popup.isVisible():
-    #         self.detail_popup.hide()
     
     def create_detail_popup(self):
         """创建详情弹出窗口"""
@@ -502,7 +484,7 @@ class TaskLabel(QWidget):
         self.detail_popup.hide()
         # 安装事件过滤器，以便在详情窗口关闭时隐藏它
         self.detail_popup.installEventFilter(self)
-        # ✅ 再加一行：在父窗口（通常是QuadrantWidget）上也装上过滤器！
+        # 在父窗口（通常是QuadrantWidget）上也装上过滤器
         self.parent().installEventFilter(self)
 
     def eventFilter(self, obj, event):
@@ -546,4 +528,5 @@ class TaskLabel(QWidget):
                 QDesktopServices.openUrl(QUrl.fromLocalFile(directory))
                 self.detail_popup.hide()
             else:
-                QMessageBox.warning(self, "警告", "目录不存在！")
+                popup = WarningPopup(self, "目录不存在！")
+                popup.exec()
