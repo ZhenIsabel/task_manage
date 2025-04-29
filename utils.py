@@ -4,8 +4,6 @@ import os
 
 ICON_PATH = "./icons"
 
-
-
 def init_logging():
     """统一初始化日志配置"""
     log_dir = os.path.abspath("logs")

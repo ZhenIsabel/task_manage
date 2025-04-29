@@ -35,6 +35,8 @@ DEFAULT_CONFIG = {
     ]
 }
 
+logger = logging.getLogger(__name__)
+
 def load_config():
     """从文件加载配置"""
     if not os.path.exists(CONFIG_FILE):
