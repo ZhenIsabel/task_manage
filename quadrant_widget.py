@@ -127,7 +127,6 @@ class QuadrantWidget(QWidget):
         control_shadow.setColor(QColor(0, 0, 0, 100))
         control_shadow.setOffset(0, 0)
         self.control_widget.setGraphicsEffect(control_shadow)
-        
         # 设置控制面板为悬浮式
         self.control_widget.setParent(self)
         # 自动计算初始尺寸
@@ -172,13 +171,18 @@ class QuadrantWidget(QWidget):
             delta = event.globalPosition().toPoint() - self.control_drag_start_pos
             new_pos = self.control_original_pos + delta
             
-            # 限制控制面板在窗口范围内（保留10px可拖动边距）
-            max_x = self.width() - self.control_widget.width() + 10
-            max_y = self.height() - self.control_widget.height() + 10
-            new_pos.setX(max(-10, min(new_pos.x(), max_x)))
-            new_pos.setY(max(-10, min(new_pos.y(), max_y)))
+            # 限制控制面板在窗口范围内
+            max_x = self.width() - self.control_widget.width() 
+            max_y = self.height() - self.control_widget.height()
+            new_pos.setX(max(0, min(new_pos.x(), max_x)))
+            new_pos.setY(max(0, min(new_pos.y(), max_y)))
         
             self.control_widget.move(new_pos)
+            
+            # 强制重绘父窗口区域（新增）
+            self.update()
+            self.control_widget.update() 
+            
             event.accept()
 
     def handle_control_release(self, event):

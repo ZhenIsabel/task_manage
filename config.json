@@ -22,10 +22,10 @@
         "height": 599
     },
     "position": {
-        "x": 701,
-        "y": 252
+        "x": 559,
+        "y": 220
     },
-    "edit_mode": true,
+    "edit_mode": false,
     "ui": {
         "border_radius": 15,
         "shadow_effect": true,
@@ -61,7 +61,7 @@
         }
     ],
     "control_panel": {
-        "x": 457,
-        "y": 217
+        "x": 326,
+        "y": 337
     }
 }
