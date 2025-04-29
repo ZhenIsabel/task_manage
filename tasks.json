@@ -28,31 +28,17 @@
         "notes": "很高兴分工表奋斗改变多大改变房管部"
     },
     {
-        "id": "task_2_20250429091042",
-        "text": "阿斯蒂芬阿斯蒂芬啊给对方",
-        "color": "#4ecdc4",
+        "id": "task_2_20250429102759",
+        "text": "的士大",
+        "color": "#7cff54",
         "position": {
-            "x": 169,
-            "y": 250
+            "x": 204,
+            "y": 170
         },
         "completed": false,
         "date": "2025-04-29",
         "due_date": "2025-04-30",
-        "priority": "",
-        "notes": ""
-    },
-    {
-        "id": "task_3_20250429101558",
-        "text": "test",
-        "color": "#ff6b6b",
-        "position": {
-            "x": 538,
-            "y": 223
-        },
-        "completed": false,
-        "date": "2025-04-29",
-        "due_date": "2025-04-30",
-        "priority": "",
-        "notes": ""
+        "priority": "士大夫士大夫",
+        "notes": "士大夫士大夫"
     }
 ]

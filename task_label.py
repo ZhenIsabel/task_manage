@@ -7,6 +7,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QDate, QPoint, QEvent
 from PyQt6.QtGui import QColor, QCursor, QAction
 
 from add_task_dialog import AddTaskDialog
+from color_dialog import MyColorDialog
 
 class TaskLabel(QWidget):
     """任务标签类，表示一个工作项"""
@@ -194,37 +195,18 @@ class TaskLabel(QWidget):
     
     def contextMenuEvent(self, event):
         """右键菜单事件"""
-        # 如果详情窗口不存在，创建一个
-        if not self.detail_popup:
-            self.create_detail_popup()
-        # 调整位置并显示
+        # 先清除旧的 detail_popup
+        if self.detail_popup:
+            self.detail_popup.hide()
+            self.detail_popup.deleteLater()
+            self.detail_popup = None
+
+        # 创建新的
+        self.create_detail_popup()
         self.position_detail_popup()
         self.detail_popup.show()
-        
-        # 确保详情弹出窗口保持在前台
         self.detail_popup.raise_()
-        # menu = QMenu(self)
-        
-        # # 编辑操作
-        # edit_action = QAction("编辑", self)
-        # edit_action.triggered.connect(self.edit_task)
-        
-        # # 更改颜色操作
-        # color_action = QAction("更改颜色", self)
-        # color_action.triggered.connect(self.change_color)
-        
-        # # 删除操作
-        # delete_action = QAction("删除", self)
-        # delete_action.triggered.connect(lambda: self.deleteRequested.emit(self))
-        
-        # # 添加操作到菜单
-        # menu.addAction(edit_action)
-        # menu.addAction(color_action)
-        # menu.addAction(delete_action)
-        
-        # # 显示菜单
-        # menu.exec(QCursor.pos())
-    
+
     def edit_task(self):
         """编辑任务内容"""
         # 获取当前字段配置
@@ -265,7 +247,7 @@ class TaskLabel(QWidget):
     
     def change_color(self):
         """更改标签颜色"""
-        color_dialog = QColorDialog(self.color, self)
+        color_dialog = MyColorDialog(self.color, self)
         color_dialog.setWindowTitle("选择标签颜色")
         if color_dialog.exec() == QDialog.DialogCode.Accepted:
             color = color_dialog.selectedColor()
@@ -384,27 +366,69 @@ class TaskLabel(QWidget):
         title_label.setStyleSheet("font-size: 14px; font-weight: bold; color: black;")
         layout.addWidget(title_label)
         
-        # 菜单
-        menu = QMenu(self)
-        menu_button = QPushButton("操作")
-        layout.addWidget(menu_button)
-        
-        # 编辑操作
-        edit_action = QAction("编辑", self)
-        edit_action.triggered.connect(self.edit_task)
-        
-        # 更改颜色操作
-        color_action = QAction("更改颜色", self)
-        color_action.triggered.connect(self.change_color)
-        
-        # 删除操作
-        delete_action = QAction("删除", self)
-        delete_action.triggered.connect(lambda: self.deleteRequested.emit(self))
-        
-        # 添加操作到菜单
-        menu.addAction(edit_action)
-        menu.addAction(color_action)
-        menu.addAction(delete_action)
+        # 按钮布局
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(8)
+
+        # 编辑按钮
+        edit_button = QPushButton("编辑")
+        edit_button.clicked.connect(self.edit_task)
+        edit_button.setStyleSheet("""
+            QPushButton {
+                background-color: #ECECEC;
+                border: 1px solid rgba(100, 100, 100, 0.5);
+                border-radius: 6px;
+                padding: 4px 8px;
+                font-family: '微软雅黑';
+                font-size: 12px;
+                color: #333;
+            }
+            QPushButton:hover {
+                background-color: #D6D6D6;
+            }
+        """)
+        button_layout.addWidget(edit_button)
+
+        # 更改颜色按钮
+        color_button = QPushButton("更改颜色")
+        color_button.clicked.connect(self.change_color)
+        color_button.setStyleSheet("""
+            QPushButton {
+                background-color: #ECECEC;
+                border: 1px solid rgba(100, 100, 100, 0.5);
+                border-radius: 6px;
+                padding: 4px 8px;
+                font-family: '微软雅黑';
+                font-size: 12px;
+                color: #333;
+            }
+            QPushButton:hover {
+                background-color: #D6D6D6;
+            }
+        """)
+        button_layout.addWidget(color_button)
+
+        # 删除按钮
+        delete_button = QPushButton("删除")
+        delete_button.clicked.connect(self.handle_delete)
+        delete_button.setStyleSheet("""
+            QPushButton {
+                background-color: #FF6B6B;
+                border: 1px solid rgba(100, 100, 100, 0.5);
+                border-radius: 6px;
+                padding: 4px 8px;
+                font-family: '微软雅黑';
+                font-size: 12px;
+                color: white;
+            }
+            QPushButton:hover {
+                background-color: #FF4C4C;
+            }
+        """)
+        button_layout.addWidget(delete_button)
+
+        # 把按钮布局加到主 layout
+        layout.addLayout(button_layout)
 
         # 添加所有可用的任务信息
         if self.due_date:
@@ -463,3 +487,12 @@ class TaskLabel(QWidget):
                         self.detail_popup.hide()
                         return True  # 消耗这个事件
         return super().eventFilter(obj, event)
+
+    def handle_delete(self):
+        """处理删除任务"""
+        if self.detail_popup:
+            self.detail_popup.hide()   # ✅ 先隐藏掉 detail_popup
+            self.detail_popup.deleteLater()  # （可选）彻底释放内存
+            self.detail_popup = None
+
+        self.deleteRequested.emit(self)  # 再发出删除自己的信号
