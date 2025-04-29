@@ -92,6 +92,20 @@ def load_tasks(self):
         print(f"加载任务失败: {str(e)}")
         QMessageBox.warning(self, "加载失败", f"加载任务失败: {str(e)}")
 
+def load_config():
+    """从文件加载配置"""
+    if not os.path.exists(CONFIG_FILE):
+        save_config(DEFAULT_CONFIG)  # 创建默认配置
+        return DEFAULT_CONFIG
+    
+    try:
+        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+            # 合并默认配置确保完整性
+            return {**DEFAULT_CONFIG, **config}
+    except Exception as e:
+        print(f"加载配置失败: {str(e)}")
+        return DEFAULT_CONFIG
 
 def save_config(config, parent=None):
     """保存配置到文件"""
