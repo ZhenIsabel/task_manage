@@ -228,7 +228,6 @@ class TaskLabel(QWidget):
             value = getattr(self, meta["name"], "") or ""  # 双重空值保护
             task_fields.append(dict(meta, default=value))
 
-
         # 如果没有找到字段配置，使用默认字段
         if not task_fields:
             task_fields = [
@@ -251,7 +250,7 @@ class TaskLabel(QWidget):
                 return
 
         # 更新任务数据
-        for meta in self.EDITABLE_FIELDS:
+        for meta in self.get_editable_fields():
             key = meta["name"]
             if key in task_data:
                 setattr(self, key, task_data[key])
