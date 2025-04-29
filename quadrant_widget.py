@@ -174,8 +174,8 @@ class QuadrantWidget(QWidget):
             # 限制控制面板在窗口范围内
             max_x = self.width() - self.control_widget.width() 
             max_y = self.height() - self.control_widget.height()
-            new_pos.setX(max(0, min(new_pos.x(), max_x)))
-            new_pos.setY(max(0, min(new_pos.y(), max_y)))
+            new_pos.setX(max(20, min(new_pos.x(), max_x)))
+            new_pos.setY(max(20, min(new_pos.y(), max_y)))
         
             self.control_widget.move(new_pos)
             
