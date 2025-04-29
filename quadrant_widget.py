@@ -433,12 +433,6 @@ class QuadrantWidget(QWidget):
         """在指定位置创建新任务"""
         # 从配置中获取任务字段定义
         task_fields = self.config.get('task_fields', [])
-        # 如果没有找到自定义字段配置，使用默认字段
-        if not task_fields:
-            task_fields = [
-                {'name': 'text', 'label': '任务内容', 'type': 'text', 'required': True},
-                {'name': 'due_date', 'label': '到期日期', 'type': 'date', 'required': False}
-            ]
         
         dialog = AddTaskDialog(self, task_fields)
         if dialog.exec() != QDialog.DialogCode.Accepted:
@@ -466,15 +460,14 @@ class QuadrantWidget(QWidget):
         self.save_undo_state()
         
         # 创建新任务标签
+        exclude_keys = {"task_id", "color", "parent", "completed"}
+        field_values = {k: v for k, v in task_data.items() if k not in exclude_keys}
         task = TaskLabel(
-            task_id=task_id, 
-            color=color, 
+            task_id=task_id,
+            color=color,
             parent=self,
-            completed=False, 
-            due_date=task_data.get('due_date'),
-            priority=task_data.get('priority'),
-            notes=task_data.get('notes'),
-            text=task_data.get('text', ''),
+            completed=False,
+            **field_values
         )
         
         # 设置任务位置并连接信号
@@ -812,10 +805,6 @@ class QuadrantWidget(QWidget):
         
         save_config(self.config, self)
     
-    def save_tasks(self, task=None):
-        """保存任务到文件"""
-        save_tasks(self.tasks, self)
-    
     def load_tasks(self):
         """从文件加载任务"""
         print("正在从文件加载任务...")
@@ -870,6 +859,10 @@ class QuadrantWidget(QWidget):
             print(f"加载任务失败: {str(e)}")
             QMessageBox.warning(self, "加载失败", f"加载任务失败: {str(e)}")
     
+    def save_tasks(self, task=None):
+        """保存任务到文件"""
+        save_tasks(self.tasks, self)
+
     def closeEvent(self, event):
         """关闭事件"""
         print("正在关闭程序...")

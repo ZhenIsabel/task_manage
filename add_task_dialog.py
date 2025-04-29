@@ -151,6 +151,23 @@ class AddTaskDialog(QDialog):
                 w.setMinimumHeight(100)  # 设置最小高度
                 if default_value:
                     w.setText(str(default_value))
+            elif f['type'] == 'file':
+                dir_layout = QHBoxLayout()
+                w = QLineEdit()
+                w.setPlaceholderText("请选择文件夹路径...")
+                w.setReadOnly(True)
+                btn = QPushButton("选择")
+                def choose_dir():
+                    from PyQt6.QtWidgets import QFileDialog
+                    path = QFileDialog.getExistingDirectory(self, "选择文件夹")
+                    if path:
+                        w.setText(path)
+                btn.clicked.connect(choose_dir)
+                dir_layout.addWidget(w)
+                dir_layout.addWidget(btn)
+                panel_layout.addLayout(dir_layout)
+                self.inputs[f['name']] = w
+                continue
             else:
                 w = QLineEdit(str(default_value))  # 设置文本默认值
                 

@@ -3,8 +3,9 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QCheckBox,
                            QLabel, QLineEdit, QInputDialog, QGraphicsDropShadowEffect,
                            QMenu, QFrame, QScrollArea, QSizePolicy, QDialog, QColorDialog, QMessageBox,
                            QLayout,QPushButton)
-from PyQt6.QtCore import Qt, pyqtSignal, QDate, QPoint, QEvent
-from PyQt6.QtGui import QColor, QCursor, QAction
+from PyQt6.QtCore import Qt, pyqtSignal, QDate, QPoint, QEvent, QUrl
+from PyQt6.QtGui import QColor, QCursor, QAction, QDesktopServices
+import os
 
 from add_task_dialog import AddTaskDialog
 from color_dialog import MyColorDialog
@@ -28,6 +29,7 @@ class TaskLabel(QWidget):
                 {"name": "due_date",  "label": "到期日期", "type": "date",  "required": False},
                 {"name": "priority",  "label": "优先级",   "type": "select", "required": False, "options": ["高", "中", "低"]},
                 {"name": "notes",     "label": "备注",     "type": "multiline",  "required": False},
+                { "name": "directory","label": "目录","type": "file", "required": False}
             ]
         return fields
     
@@ -67,8 +69,6 @@ class TaskLabel(QWidget):
         self.label.setObjectName("TagText")  # ★ 关键：给 QLabel 起名，这样才能用 setStyleSheet 来设置样式
         # 让文字 pill 根据文本长度扩展宽度，高度跟随文本行高
         self.label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
-
-
 
         # 添加到期日期标签（如果有）
         self.due_date_label = None
@@ -256,6 +256,8 @@ class TaskLabel(QWidget):
                 setattr(self, key, task_data[key])
         # 特殊处理标签文本更新
         self.label.setText(self.text)
+        # 触发保存
+        self.statusChanged.emit(self)
     
     def change_color(self):
         """更改标签颜色"""
@@ -269,17 +271,18 @@ class TaskLabel(QWidget):
     
     def get_data(self):
         """获取标签数据"""
-        return {
-            'id': self.task_id,
-            'text': self.text,
-            'color': self.color.name(),
-            'position': {'x': self.pos().x(), 'y': self.pos().y()},
-            'completed': self.checkbox.isChecked(),   # 🔥🔥🔥用真实勾选状态
-            'date': datetime.now().strftime('%Y-%m-%d'),
-            'due_date': self.due_date,
-            'priority': self.priority,
-            'notes': self.notes
-        }
+        data = {
+                'id': self.task_id,
+                'color': self.color.name(),
+                'position': {'x': self.pos().x(), 'y': self.pos().y()},
+                'completed': self.checkbox.isChecked(),
+                'date': datetime.now().strftime('%Y-%m-%d')
+            }
+        for meta in self.get_editable_fields():
+            key = meta["name"]
+            data[key] = getattr(self, key, "")
+
+        return data
         
     def position_detail_popup(self):
         """调整详情弹出窗口的位置"""
@@ -381,6 +384,25 @@ class TaskLabel(QWidget):
         # 按钮布局
         button_layout = QHBoxLayout()
         button_layout.setSpacing(8)
+
+        # 打开目录按钮
+        open_dir_button = QPushButton("目录")
+        open_dir_button.clicked.connect(self.open_directory)
+        open_dir_button.setStyleSheet("""
+            QPushButton {
+                background-color: #ECECEC;
+                border: 1px solid rgba(100, 100, 100, 0.5);
+                border-radius: 6px;
+                padding: 4px 8px;
+                font-family: '微软雅黑';
+                font-size: 12px;
+                color: #333;
+            }
+            QPushButton:hover {
+                background-color: #D6D6D6;
+            }
+        """)
+        button_layout.addWidget(open_dir_button)
 
         # 编辑按钮
         edit_button = QPushButton("编辑")
@@ -515,3 +537,13 @@ class TaskLabel(QWidget):
         status_text = "已完成" if self.checkbox.isChecked() else "未完成"
         status_color = "#4ECDC4" if self.checkbox.isChecked() else "#FF6B6B"
         self.status_label.setText(f"<b>状态:</b> <font color='{status_color}'>{status_text}</font>")
+
+    def open_directory(self):
+        """打开目录"""
+        if self.task_id:
+            directory = os.path.join(self.directory)
+            if os.path.exists(directory):
+                QDesktopServices.openUrl(QUrl.fromLocalFile(directory))
+                self.detail_popup.hide()
+            else:
+                QMessageBox.warning(self, "警告", "目录不存在！")

@@ -126,8 +126,19 @@ def save_tasks(tasks, parent=None):
     """保存任务到文件"""
     print("正在保存任务到文件...")
     try:
-        # 获取所有任务数据
-        tasks_data = [task.get_data() for task in tasks]
+        # 获取所有任务字段定义
+        config = load_config()
+        editable_fields = config.get('task_fields', [])
+        field_names = [f['name'] for f in editable_fields]
+
+        tasks_data = []
+        for task in tasks:
+            data = task.get_data()
+            # 补全缺失字段
+            for name in field_names:
+                if name not in data:
+                    data[name] = ""
+            tasks_data.append(data)
         
         # 保存到文件，使用UTF-8编码并确保中文直接保存
         with open(TASKS_FILE, 'w', encoding='utf-8') as f:
