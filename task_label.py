@@ -1,7 +1,8 @@
 from datetime import datetime
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, 
                            QLabel, QLineEdit, QInputDialog, QGraphicsDropShadowEffect,
-                           QMenu, QFrame, QScrollArea, QSizePolicy, QDialog, QColorDialog, QMessageBox)
+                           QMenu, QFrame, QScrollArea, QSizePolicy, QDialog, QColorDialog, QMessageBox,
+                           QLayout)
 from PyQt6.QtCore import Qt, pyqtSignal, QDate, QPoint
 from PyQt6.QtGui import QColor, QCursor, QAction
 
@@ -32,7 +33,10 @@ class TaskLabel(QWidget):
         # 初始化拖拽状态
         self.dragging = False
         self.drag_start_position = None
-        self.setFixedSize(150, 80)
+
+
+        # 如果你想限制最小宽度：
+        self.setMinimumWidth(80)
         
         # 详情浮窗
         self.detail_popup = None
@@ -49,7 +53,12 @@ class TaskLabel(QWidget):
         self.label = QLabel(getattr(self, 'text', ''))  # 使用属性获取文本
         self.label.setWordWrap(True)
         self.label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        
+        self.label.setObjectName("TagText")  # ★ 关键：给 QLabel 起名，这样才能用 setStyleSheet 来设置样式
+        # 让文字 pill 根据文本长度扩展宽度，高度跟随文本行高
+        self.label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+
+
+
         # 添加到期日期标签（如果有）
         self.due_date_label = None
         if self.due_date:
@@ -61,15 +70,22 @@ class TaskLabel(QWidget):
         title_layout = QHBoxLayout()
         title_layout.addWidget(self.checkbox)
         title_layout.addWidget(self.label)
-        title_layout.addStretch()
+        # title_layout.addStretch()
+        title_layout.setContentsMargins(0, 0, 0, 0)   # 内边距全部清 0
+        title_layout.setSpacing(4)                    # 复选框 <-> pill 间距 4 px
         
         layout.addLayout(title_layout)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
         # if self.due_date_label:
         #     layout.addWidget(self.due_date_label)
         
         self.setLayout(layout)
         self.update_appearance()
         
+        # 文本可能改动时，随时调整标签尺寸
+        self.label.adjustSize()
+        self.layout().setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
         # 设置鼠标追踪
         self.setMouseTracking(True)
     
@@ -82,27 +98,29 @@ class TaskLabel(QWidget):
             bg_color = self.color
             text_color = QColor(0, 0, 0) if self.color.lightness() > 128 else QColor(255, 255, 255)
         
+        indicator_size = 14  # <= 和字体高度差不多
         # 设置样式表 - 改进外观
+        # 顶层 TaskLabel 保持透明，不再整块涂色
         self.setStyleSheet(f"""
             QWidget {{
-                background-color: rgba({bg_color.red()}, {bg_color.green()}, {bg_color.blue()}, 0.85);
+                background: transparent; 
                 border-radius: 10px;
                 border: none;
             }}
             QLabel {{
+                background-color: rgba({bg_color.red()}, {bg_color.green()}, {bg_color.blue()}, 217);
                 color: rgb({text_color.red()}, {text_color.green()}, {text_color.blue()});
                 font-weight: bold;
-                font-family: '微软雅黑';
-                padding: 2px;
-                background-color: transparent;
+                font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+                padding: 2px 8px;      /* 上下 2px、左右 8px */
             }}
             QCheckBox {{
                 spacing: 5px;
                 background-color: transparent;
             }}
             QCheckBox::indicator {{
-                width: 18px;
-                height: 18px;
+                width: {indicator_size}px;
+                height: {indicator_size}px;
                 border-radius: 9px;
                 border: 2px solid gray;
                 background-color: rgba({bg_color.red()}, {bg_color.green()}, {bg_color.blue()}, 0.85);
@@ -364,12 +382,9 @@ class TaskLabel(QWidget):
             layout.addWidget(priority_label)
         
         if self.notes:
-            notes_title = QLabel("<b>备注:</b>")
-            layout.addWidget(notes_title)
-            
-            notes_label = QLabel(self.notes)
+            notes_label = QLabel(f"<b>备注:</b><br>{self.notes}")
             notes_label.setWordWrap(True)
-            notes_label.setStyleSheet("padding: 5px; background-color: rgba(70, 70, 70, 0.5); border-radius: 5px; color: black;")
+            notes_label.setStyleSheet("padding: 5px; color: black;")
             
             # 使用滚动区域显示长文本
             scroll_area = QScrollArea()
