@@ -62,3 +62,4 @@ $RECYCLE.BIN/
 *.tmp
 *.temp
 tasks.json
+config.json
