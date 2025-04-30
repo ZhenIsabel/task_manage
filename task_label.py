@@ -31,7 +31,8 @@ class TaskLabel(QWidget):
                 {"name": "due_date",  "label": "到期日期", "type": "date",  "required": False},
                 {"name": "priority",  "label": "优先级",   "type": "select", "required": False, "options": ["高", "中", "低"]},
                 {"name": "notes",     "label": "备注",     "type": "multiline",  "required": False},
-                { "name": "directory","label": "目录","type": "file", "required": False}
+                {"name": "directory","label": "目录","type": "file", "required": False},
+                {"name":"date","label":"创建日期","type":"date","required":False}
             ]
         return fields
     
@@ -48,7 +49,7 @@ class TaskLabel(QWidget):
         # 初始化拖拽状态
         self.dragging = False
         self.drag_start_position = None
-
+        self._draggable = False  # 初始化 _draggable 属性，默认为不可拖动
 
         # 如果你想限制最小宽度：
         self.setMinimumWidth(80)
@@ -176,7 +177,7 @@ class TaskLabel(QWidget):
     
     def mousePressEvent(self, event):
         """鼠标按下事件"""
-        if event.button() == Qt.MouseButton.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton and getattr(self, '_draggable', True):
             self.dragging = True
             self.drag_start_position = event.pos()
     
@@ -208,6 +209,12 @@ class TaskLabel(QWidget):
             #     self.text = dialog.textValue()
             #     self.label.setText(self.text)
     
+    def set_draggable(self, draggable):
+        """设置任务标签是否可拖动"""
+        self._draggable = draggable
+        # 可能还需要更新鼠标样式或其他视觉提示
+        self.setCursor(Qt.CursorShape.SizeAllCursor if draggable else Qt.CursorShape.ArrowCursor)
+
     def contextMenuEvent(self, event):
         """右键菜单事件"""
         # 先清除旧的 detail_popup
@@ -476,7 +483,7 @@ class TaskLabel(QWidget):
         layout.addWidget(self.status_label)
         
         # 创建日期
-        date_label = QLabel(f"<b>创建于:</b> {datetime.now().strftime('%Y-%m-%d')}")
+        date_label = QLabel(f"<b>创建于:</b> {self.date}")
         layout.addWidget(date_label)
         
         self.detail_popup.setFixedWidth(250)

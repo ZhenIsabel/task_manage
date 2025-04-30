@@ -88,7 +88,7 @@ class QuadrantWidget(QWidget):
         self.control_widget.setProperty("opacity", 1.0)
 
         # 添加按钮
-        self.edit_button = QPushButton("编辑模式" if not self.edit_mode else "查看模式", self)
+        self.edit_button = QPushButton("正在查看" if not self.edit_mode else "正在编辑", self)
         self.edit_button.clicked.connect(self.toggle_edit_mode)
         self.edit_button.setCursor(Qt.CursorShape.PointingHandCursor)  # 鼠标悬停时显示手型光标
         
@@ -428,10 +428,16 @@ class QuadrantWidget(QWidget):
     
     def toggle_edit_mode(self):
         """切换编辑模式"""
+        # 更新按钮文本
         self.edit_mode = not self.edit_mode
-        self.edit_button.setText("查看模式" if self.edit_mode else "编辑模式")
+        self.edit_button.setText("正在编辑" if self.edit_mode else "正在查看")
+        # 更新任务的可拖动状态
+        for task in self.tasks:
+            task.set_draggable(self.edit_mode)
+        # 显示/隐藏添加任务按钮
         self.add_task_button.setVisible(self.edit_mode)
-        self.undo_button.setVisible(self.edit_mode)
+        # 显示/隐藏撤销按钮（仅当撤销栈非空时显示）
+        self.undo_button.setVisible(self.edit_mode and len(self.undo_stack) > 0)
         
         # 更新控制面板尺寸
         self.control_widget.adjustSize()
@@ -486,6 +492,9 @@ class QuadrantWidget(QWidget):
             completed=False,
             **field_values
         )
+        # 设置可拖动状态
+        if self.edit_mode:
+            task.set_draggable(True)
         
         # 设置任务位置并连接信号
         task.move(local_pos.x() - 75, local_pos.y() - 40)  # 居中放置
@@ -536,52 +545,113 @@ class QuadrantWidget(QWidget):
     
     def save_undo_state(self):
         """保存当前状态到撤销栈"""
-        tasks_data = [task.get_data() for task in self.tasks]
-        self.undo_stack.append(tasks_data)
+        logger.debug("正在保存当前状态到撤销栈...")
         
-        # 限制撤销栈大小
-        if len(self.undo_stack) > 10:
-            self.undo_stack.pop(0)
-    
+        # 收集当前状态
+        current_state = {
+            'tasks': [],  # 任务信息
+            'config': json.loads(json.dumps(self.config)),  # 深拷贝配置
+            'control_panel': {
+                'x': self.control_widget.x(),
+                'y': self.control_widget.y()
+            }
+        }
+        
+        # 保存所有任务的信息和位置
+        for task in self.tasks:
+            task_data = task.get_data()
+            task_data['x'] = task.x()
+            task_data['y'] = task.y()
+            current_state['tasks'].append(task_data)
+        
+        # 添加到撤销栈
+        self.undo_stack.append(current_state)
+        
+        # 限制撤销栈大小为5
+        if len(self.undo_stack) > 5:
+            self.undo_stack.pop(0)  # 移除最旧的状态
+        
+        # 确保撤销按钮在编辑模式下可见
+        if self.edit_mode:
+            self.undo_button.setVisible(True)
+            self.control_widget.adjustSize()
+            self.control_widget.updateGeometry()
+            
+        logger.debug(f"状态已保存，撤销栈大小: {len(self.undo_stack)}")
+
     def undo_action(self):
-        """撤销上一个操作"""
-        if self.undo_stack:
-            # 获取上一个状态
-            previous_state = self.undo_stack.pop()
+        """撤销上一次操作"""
+        if not self.undo_stack:
+            logger.debug("撤销栈为空，无法撤销")
+            return
             
-            # 清除当前所有任务
-            for task in self.tasks:
-                task.deleteLater()
-            self.tasks.clear()
+        logger.debug("正在执行撤销操作...")
+        
+        # 弹出最近的状态
+        previous_state = self.undo_stack.pop()
+        
+        # 恢复配置
+        self.config = previous_state['config']
+        
+        # 恢复控制面板位置
+        control_panel = previous_state.get('control_panel', {})
+        if control_panel:
+            self.control_widget.move(control_panel['x'], control_panel['y'])
+        
+        # 清除当前所有任务
+        for task in self.tasks:
+            task.deleteLater()
+        self.tasks.clear()
+        
+        # 恢复任务
+        for task_data in previous_state['tasks']:
+            # 提取位置信息
+            x = task_data.pop('x', 0)
+            y = task_data.pop('y', 0)
             
-            # 恢复上一个状态的任务
-            for task_data in previous_state:
-                # 创建任务标签 - 支持所有自定义字段
-                # 动态收集所有可编辑字段
-                fields = {
-                    meta['name']: task_data.get(meta['name'])
-                    for meta in TaskLabel.EDITABLE_FIELDS
-                }
-                
-                # 创建任务标签
-                task = TaskLabel(
-                    task_id=task_data['id'],
-                    color=task_data['color'],
-                    parent=self,
-                    completed=task_data['completed'],
-                    **fields  # 其他字段通过字典解包传递
-                )
-                task.move(task_data['position']['x'], task_data['position']['y'])
-                task.deleteRequested.connect(self.delete_task)
-                task.statusChanged.connect(self.save_tasks)
-                task.show()
-                self.tasks.append(task)
+            # 创建任务
+            task_id = task_data.get('task_id', f"task_{len(self.tasks)}_{datetime.now().strftime('%Y%m%d%H%M%S')}")
+            color = task_data.pop('color', '#FFFFFF')
+            completed = task_data.pop('completed', False)
+            
+            # 创建任务标签
+            task = TaskLabel(
+                task_id=task_id,
+                color=color,
+                parent=self,
+                completed=completed,
+                **task_data
+            )
+            
+            # 设置任务位置
+            task.move(x, y)
+            
+            # 连接信号
+            task.deleteRequested.connect(self.delete_task)
+            task.statusChanged.connect(self.save_tasks)
+            
+            # 显示任务
+            task.show()
             
             # 添加到任务列表
             self.tasks.append(task)
+        
+        # 更新界面
+        self.update()
+        
+        # 如果撤销栈为空，隐藏撤销按钮
+        if not self.undo_stack:
+            self.undo_button.setVisible(False)
+            # 更新控制面板尺寸
+            self.control_widget.adjustSize()
+            self.control_widget.updateGeometry()
+        
             
-            # 保存任务
-            self.save_tasks()
+        # 保存当前状态
+        self.save_tasks()
+        # self.save_config()
+        
+        logger.debug(f"撤销完成，剩余撤销栈大小: {len(self.undo_stack)}")
     
     def show_settings(self):
         """显示设置对话框 - 美化版"""
