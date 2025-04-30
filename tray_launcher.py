@@ -20,6 +20,9 @@ class TaskManagerTray(QSystemTrayIcon):
         self.setIcon(QIcon(icon_path))
         self.setToolTip("四象限任务管理工具")
         
+        # 添加托盘点击处理
+        self.activated.connect(self.handle_tray_activate)
+
         # 创建右键菜单
         menu = QMenu()
         
@@ -165,6 +168,11 @@ class TaskManagerTray(QSystemTrayIcon):
         # 退出托盘应用
         logger.info("正在退出托盘应用...")
         QCoreApplication.quit()
+
+    def handle_tray_activate(self, reason):
+        """处理托盘图标交互事件"""
+        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
+            self.open_app()
 
 if __name__ == "__main__":
     logger.info("托盘应用启动中...")
