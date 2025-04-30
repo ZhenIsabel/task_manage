@@ -152,6 +152,8 @@ class AddTaskDialog(QDialog):
                 w = QLineEdit()
                 w.setPlaceholderText("请选择文件夹路径...")
                 w.setReadOnly(True)
+                if default_value:
+                    w.setText(str(default_value))
                 btn = QPushButton("选择")
                 def choose_dir():
                     from PyQt6.QtWidgets import QFileDialog
