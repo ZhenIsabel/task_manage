@@ -32,7 +32,7 @@ class TaskLabel(QWidget):
                 {"name": "priority",  "label": "优先级",   "type": "select", "required": False, "options": ["高", "中", "低"]},
                 {"name": "notes",     "label": "备注",     "type": "multiline",  "required": False},
                 {"name": "directory","label": "目录","type": "file", "required": False},
-                {"name":"date","label":"创建日期","type":"date","required":False}
+                {"name":"create_date","label":"创建日期","type":"date","required":False}
             ]
         return fields
     
@@ -483,7 +483,7 @@ class TaskLabel(QWidget):
         layout.addWidget(self.status_label)
         
         # 创建日期
-        date_label = QLabel(f"<b>创建于:</b> {self.date}")
+        date_label = QLabel(f"<b>创建于:</b> {self.create_date}")
         layout.addWidget(date_label)
         
         self.detail_popup.setFixedWidth(250)

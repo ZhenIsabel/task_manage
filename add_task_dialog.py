@@ -1,7 +1,7 @@
 from PyQt6.QtCore import Qt,QDate
 from PyQt6.QtWidgets import (QDialog, QWidget, QVBoxLayout,
                              QGraphicsDropShadowEffect, QLabel, QLineEdit,
-                             QDateEdit, QPushButton, QHBoxLayout, QComboBox, QTextEdit)
+                             QDateEdit, QPushButton, QHBoxLayout, QComboBox, QTextEdit,QFileDialog)
 from PyQt6.QtGui import QColor, QMouseEvent
 
 from utils import ICON_PATH
@@ -149,22 +149,18 @@ class AddTaskDialog(QDialog):
                     w.setText(str(default_value))
             elif f['type'] == 'file':
                 dir_layout = QHBoxLayout()
-                w = QLineEdit()
-                w.setPlaceholderText("请选择文件夹路径...")
-                w.setReadOnly(True)
+                path_edit = QLineEdit()
+                path_edit.setPlaceholderText("请选择文件夹路径...")
+                path_edit.setReadOnly(True)
                 if default_value:
-                    w.setText(str(default_value))
+                    path_edit.setText(str(default_value))
                 btn = QPushButton("选择")
-                def choose_dir():
-                    from PyQt6.QtWidgets import QFileDialog
-                    path = QFileDialog.getExistingDirectory(self, "选择文件夹")
-                    if path:
-                        w.setText(path)
-                btn.clicked.connect(choose_dir)
-                dir_layout.addWidget(w)
+                # 使用lambda绑定当前path_edit实例
+                btn.clicked.connect(lambda _, we=path_edit: self.choose_dir(we))
+                dir_layout.addWidget(path_edit)
                 dir_layout.addWidget(btn)
                 panel_layout.addLayout(dir_layout)
-                self.inputs[f['name']] = w
+                self.inputs[f['name']] = path_edit  # 存储正确的控件引用
                 continue
             else:
                 w = QLineEdit(str(default_value))  # 设置文本默认值
@@ -203,6 +199,13 @@ class AddTaskDialog(QDialog):
 
     def mouseReleaseEvent(self, e: QMouseEvent):
         self._drag_pos = None
+
+    def choose_dir(self, widget):
+        """Handle directory selection for file fields"""
+        path = QFileDialog.getExistingDirectory(self, "选择文件夹")
+        if path:
+            widget.setText(path)
+
 
     def get_data(self):
         """把表单内容打包成 dict 返回"""
