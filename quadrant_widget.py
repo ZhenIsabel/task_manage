@@ -129,12 +129,12 @@ class QuadrantWidget(QWidget):
         self.control_widget.adjustSize()  
         control_width = self.control_widget.width()
         control_height = self.control_widget.height()
-        # 从配置读取保存的位置（新增代码）
+        # 从配置读取保存的位置
         control_x = self.config.get('control_panel', {}).get('x', 20)
         control_y = self.config.get('control_panel', {}).get('y', 20)
         self.control_widget.setGeometry(control_x, control_y, control_width, control_height)
         
-        # 新增鼠标事件处理绑定（新增代码）
+        # 新增鼠标事件处理绑定
         self.control_widget.mousePressEvent = self.handle_control_press
         self.control_widget.mouseMoveEvent = self.handle_control_move
         self.control_widget.mouseReleaseEvent = self.handle_control_release
@@ -149,6 +149,21 @@ class QuadrantWidget(QWidget):
         # 确保控制面板始终可见
         self.control_widget.show()
 
+        # 新增：定时保存控件位置
+        self.save_timer = QTimer(self)
+        self.save_timer.timeout.connect(self.periodic_save_config)
+        self.save_timer.start(20000)  # 每20秒保存一次
+
+        self._position_dirty = False  # 标记位置是否有变动
+
+    def periodic_save_config(self):
+        """定期保存控件位置"""
+        if self._position_dirty:
+            self.config.setdefault('control_panel', {})
+            self.config['control_panel']['x'] = self.control_widget.x()
+            self.config['control_panel']['y'] = self.control_widget.y()
+            self.save_config()
+            self._position_dirty = False
 
     # 三个控制面板拖动处理方法（新增代码）
     def handle_control_press(self, event):
@@ -169,8 +184,8 @@ class QuadrantWidget(QWidget):
             new_pos.setY(max(20, min(new_pos.y(), max_y)))
         
             self.control_widget.move(new_pos)
-            
-            # 强制重绘父窗口区域（新增）
+            self._position_dirty = True  # 标记有变动
+            # 强制重绘父窗口区域
             self.update()
             self.control_widget.update() 
             
@@ -182,7 +197,8 @@ class QuadrantWidget(QWidget):
             self.config.setdefault('control_panel', {})
             self.config['control_panel']['x'] = self.control_widget.x()
             self.config['control_panel']['y'] = self.control_widget.y()
-            self.save_config()
+            # 不再立即保存，只标记
+            self._position_dirty = True
             del self.control_drag_start_pos
         event.accept()
 
@@ -362,7 +378,7 @@ class QuadrantWidget(QWidget):
         self.control_widget.move(center_x, center_y)
         self.config['control_panel']['x'] = center_x
         self.config['control_panel']['y'] = center_y
-        self.save_config()
+        self._position_dirty = True # 标记控制面板位置有变动
 
     def mouseDoubleClickEvent(self, event):
         """鼠标双击事件"""
@@ -397,7 +413,7 @@ class QuadrantWidget(QWidget):
             self.config.setdefault('control_panel', {})
             self.config['control_panel']['x'] = new_x
             self.config['control_panel']['y'] = new_y
-            self.save_config()
+            self._position_dirty = True  # 标记位置有变动
             
             # 确保控制面板显示
             self.control_widget.show()
@@ -423,7 +439,6 @@ class QuadrantWidget(QWidget):
 
         # 保存当前状态到配置
         self.config['edit_mode'] = self.edit_mode
-        self.save_config()
     
     def add_task(self):
         """添加新任务 - 在窗口中央创建"""
@@ -740,6 +755,7 @@ class QuadrantWidget(QWidget):
         button_layout.addWidget(ok_button)
         dialog_layout.addLayout(button_layout)
         
+        
         # 添加对话框阴影
         dialog_shadow = QGraphicsDropShadowEffect(dialog)
         dialog_shadow.setBlurRadius(20)
@@ -795,8 +811,7 @@ class QuadrantWidget(QWidget):
         # 调整控制面板位置
         self.control_widget.adjustSize()  # 确保尺寸更新
         self.center_control_panel()
-        
-        self.save_config()
+        self._position_dirty = True  # 标记有变动
     
     def save_config(self):
         """保存配置到文件"""
