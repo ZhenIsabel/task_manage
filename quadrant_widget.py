@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QCo
                             QMessageBox, QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QDialog,
                             QTabWidget, QFormLayout, QSpinBox, QDateEdit)
 from PyQt6.QtCore import Qt, QPoint, QSize, QRect, QPropertyAnimation, QEasingCurve, QTimer, QDate
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication,QFileDialog
 from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont, QCursor, QPainterPath, QLinearGradient
 
 from task_label import TaskLabel
@@ -98,6 +98,12 @@ class QuadrantWidget(QWidget):
         self.add_task_button.setVisible(False)  # 初始隐藏
         self.add_task_button.setCursor(Qt.CursorShape.PointingHandCursor)
         
+        # 添加导出未完成任务按钮
+        self.export_tasks_button = QPushButton("导出任务", self)
+        self.export_tasks_button.clicked.connect(self.export_unfinished_tasks)
+        self.export_tasks_button.setVisible(False)  # 初始隐藏
+        self.export_tasks_button.setCursor(Qt.CursorShape.PointingHandCursor)
+
         self.undo_button = QPushButton("撤销", self)
         self.undo_button.clicked.connect(self.undo_action)
         self.undo_button.setVisible(False)  # 初始隐藏
@@ -114,6 +120,7 @@ class QuadrantWidget(QWidget):
         # 添加按钮到布局
         self.control_layout.addWidget(self.edit_button)
         self.control_layout.addWidget(self.add_task_button)
+        self.control_layout.addWidget(self.export_tasks_button)
         self.control_layout.addWidget(self.undo_button)
         self.control_layout.addWidget(self.settings_button)
         self.control_layout.addWidget(self.exit_button)
@@ -437,6 +444,8 @@ class QuadrantWidget(QWidget):
             task.set_draggable(self.edit_mode)
         # 显示/隐藏添加任务按钮
         self.add_task_button.setVisible(self.edit_mode)
+        # 显示/隐藏导出任务按钮
+        self.export_tasks_button.setVisible(self.edit_mode)
         # 显示/隐藏撤销按钮（仅当撤销栈非空时显示）
         self.undo_button.setVisible(self.edit_mode and len(self.undo_stack) > 0)
         
@@ -852,6 +861,61 @@ class QuadrantWidget(QWidget):
         # 显示对话框
         dialog.exec()
     
+
+    def export_unfinished_tasks(self):
+        """导出未完成的任务到文本文件"""
+        # 获取桌面路径作为默认保存位置
+        desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+        default_filename = os.path.join(desktop_path, "未完成任务.txt")
+        
+        # 打开文件保存对话框
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            "保存未完成任务",
+            default_filename,
+            "文本文件 (*.txt);;所有文件 (*)"
+        )
+        
+        if not filename:  # 用户取消了保存
+            logger.info("用户取消了导出任务操作")
+            return
+            
+        # 收集未完成的任务
+        unfinished_tasks = []
+        for i, task in enumerate(self.tasks):
+            if not task.checkbox.isChecked():
+                task_info = []
+                # 添加序号（如果需要）
+                task_info.append(f"{len(unfinished_tasks) + 1}.")
+                
+                # 添加标题
+                if hasattr(task, 'text') and task.text:
+                    task_info.append(f"{task.text}")
+                
+                # 添加备注
+                if hasattr(task, 'notes') and task.notes:
+                    task_info.append(f"\n备注: {task.notes}")
+                
+                if task_info:  # 只有当有内容时才添加
+                    unfinished_tasks.append("".join(task_info))
+        
+        # 如果没有未完成的任务
+        if not unfinished_tasks:
+            logger.info("导出任务失败：没有未完成的任务可导出")
+            QMessageBox.information(self, "导出任务", "没有未完成的任务可导出")
+            return
+            
+        # 写入文件
+        try:
+            with open(filename, 'w', encoding='utf-8') as f:
+                f.write("\n\n".join(unfinished_tasks))
+            logger.info(f"成功导出 {len(unfinished_tasks)} 个未完成任务到: {filename}")
+        except Exception as e:
+            QMessageBox.critical(self, "导出失败", f"导出任务时发生错误:\n{str(e)}")
+            error_msg = f"导出任务时发生错误: {str(e)}"
+            logger.error(error_msg)
+
+
     def update_ui_config(self, key, value):
         """更新UI配置"""
         if 'ui' not in self.config:
