@@ -187,6 +187,13 @@ class TaskLabel(QWidget):
             # 计算移动距离
             delta = event.pos() - self.drag_start_position
             new_pos = self.pos() + delta
+            
+            # 添加边界限制，防止拖动到 x<20, y<20 的位置
+            if new_pos.x() < 20:
+                new_pos.setX(20)
+            if new_pos.y() < 20:
+                new_pos.setY(20)
+                
             self.move(new_pos)
             event.accept()
     
