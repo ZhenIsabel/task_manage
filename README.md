@@ -12,6 +12,9 @@
 - 📅 任务到期日期管理
 - 🖌️ 拖拽式任务管理
 - 💾 自动保存配置和任务状态
+- 📚 **历史记录功能**：每个字段的完整修改历史
+- 👁️ **逻辑删除**：已完成任务保留历史，不物理删除
+- 🔍 **历史查看器**：专门的历史记录查看界面
 
 ### 开发功能
 - 📦 可扩展字段系统（见`task_label.EDITABLE_FIELDS`）
@@ -35,10 +38,12 @@ python main.py
 ### 目录结构
 ```plaintext
 task_manage/
-├── quadrant_widget.py    # 主界面逻辑 <mcsymbol name="QuadrantWidget" filename="quadrant_widget.py" path="d:\solutions\task_manage\quadrant_widget.py" startline="16" type="class"></mcsymbol>
-├── task_label.py          # 任务标签组件 <mcsymbol name="TaskLabel" filename="task_label.py" path="d:\solutions\task_manage\task_label.py" startline="11" type="class"></mcsymbol>
-├── config_manager.py      # 配置持久化管理 <mcsymbol name="load_config" filename="config_manager.py" path="d:\solutions\task_manage\config_manager.py" startline="37" type="function"></mcsymbol>
+├── quadrant_widget.py    # 主界面逻辑
+├── task_label.py          # 任务标签组件
+├── config_manager.py      # 配置持久化管理
 ├── add_task_dialog.py     # 任务添加对话框
+├── history_viewer.py      # 历史记录查看器
+├── migrate_data.py        # 数据迁移工具
 └── main.py                # 程序入口
 ```
 
@@ -50,3 +55,27 @@ task_manage/
 - 数据结构：通过 `get_data` 序列化任务状态
 - 持久化存储：自动保存到 `tasks.json`
 - 字段扩展：修改 `TaskLabel.EDITABLE_FIELDS` 添加新字段
+- 历史记录：每个字段的完整修改历史，支持查看和追溯
+- 逻辑删除：已完成任务标记隐藏，保留完整历史数据
+
+## 历史记录功能
+
+### 新功能特性
+- **字段历史记录**：每个任务字段（text、notes、due_date等）都保存完整的历史记录
+- **逻辑删除**：已完成的任务只是从界面隐藏，不从数据文件中物理删除
+- **不可逆修改**：UI界面的改动不会直接修改历史数据，而是追加新的历史记录
+- **历史查看器**：提供专门的历史记录查看界面
+
+### 使用方法
+1. **查看历史记录**：右键点击任务标签 → 选择"历史记录"
+2. **任务管理**：
+   - 编辑任务：双击任务或右键选择"编辑"
+   - 完成任务：勾选复选框，任务会隐藏但保留历史
+   - 删除任务：右键选择"删除"，任务标记为逻辑删除
+
+### 数据迁移
+- 首次启动时自动检测并迁移旧格式数据
+- 自动创建备份文件（tasks_backup.json）
+- 手动迁移：运行 `python migrate_data.py`
+
+详细说明请参考 [HISTORY_FEATURES.md](HISTORY_FEATURES.md)

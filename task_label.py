@@ -261,6 +261,11 @@ class TaskLabel(QWidget):
                 'completed': self.checkbox.isChecked(),
                 'date': datetime.now().strftime('%Y-%m-%d')
             }
+        
+        # 如果任务刚被标记为完成，记录完成日期
+        if self.checkbox.isChecked():
+            data['completed_date'] = datetime.now().strftime('%Y-%m-%d')
+        
         for meta in self.get_editable_fields():
             key = meta["name"]
             data[key] = getattr(self, key, "")
@@ -320,6 +325,10 @@ class TaskLabel(QWidget):
         layout.setSpacing(8)
         
         # 标题 - 任务内容
+        # 创建标题行布局
+        title_layout = QHBoxLayout()
+        title_layout.setSpacing(8)
+
         # 确保使用正确的文本内容（字符串而非元组）
         title_text = self.text
         if isinstance(self.text, tuple):
@@ -327,8 +336,26 @@ class TaskLabel(QWidget):
         title_label = QLabel(title_text)
         title_label.setWordWrap(True)
         title_label.setStyleSheet("font-size: 14px; font-weight: bold; color: black;")
-        layout.addWidget(title_label)
+        title_layout.addWidget(title_label)
         
+        # 更改颜色按钮
+        color_button = QPushButton()
+        color_button.setFixedSize(24, 24)
+        color_button.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {self.color.name()};
+                border: 2px solid #bbb;
+                border-radius: 6px;
+                margin: 0 2px;
+            }}
+            QPushButton:hover {{
+                border: 2px solid #4ECDC4;
+            }}
+        """)
+        color_button.clicked.connect(self.change_color)
+        title_layout.addWidget(color_button)
+        layout.addLayout(title_layout)
+
         # 按钮布局
         button_layout = QHBoxLayout()
         button_layout.setSpacing(8)
@@ -345,11 +372,11 @@ class TaskLabel(QWidget):
         edit_button.setStyleSheet(style_manager.get_stylesheet("task_label_button").format())
         button_layout.addWidget(edit_button)
 
-        # 更改颜色按钮
-        color_button = QPushButton("更改颜色")
-        color_button.clicked.connect(self.change_color)
-        color_button.setStyleSheet(style_manager.get_stylesheet("task_label_button").format())
-        button_layout.addWidget(color_button)
+        # 查看历史记录按钮
+        history_button = QPushButton("历史记录")
+        history_button.clicked.connect(self.show_history)
+        history_button.setStyleSheet(style_manager.get_stylesheet("task_label_button").format())
+        button_layout.addWidget(history_button)
 
         # 删除按钮
         delete_button = QPushButton("删除")
@@ -434,6 +461,19 @@ class TaskLabel(QWidget):
         status_color = "#4ECDC4" if self.checkbox.isChecked() else "#FF6B6B"
         self.status_label.setText(f"<b>状态:</b> <font color='{status_color}'>{status_text}</font>")
 
+    def show_history(self):
+        """显示历史记录"""
+        if self.detail_popup:
+            self.detail_popup.hide()
+        
+        # 获取当前任务数据
+        task_data = self.get_data()
+        
+        # 显示历史记录查看器
+        from history_viewer import HistoryViewer
+        history_dialog = HistoryViewer(task_data, self.parent())
+        history_dialog.exec()
+    
     def open_directory(self):
         """打开目录"""
         if self.task_id:
@@ -445,3 +485,29 @@ class TaskLabel(QWidget):
                 popup = WarningPopup(self, "目录不存在！")
                 logger.warning(f"尝试打开不存在的目录：{directory}")
                 popup.exec()
+            
+        def change_color(self):
+            """更改标签颜色"""
+            color_dialog = MyColorDialog(self.color, self)
+            color_dialog.setWindowTitle("选择标签颜色")
+            if color_dialog.exec() == QDialog.DialogCode.Accepted:
+                color = color_dialog.selectedColor()
+                if color.isValid():
+                    self.color = color
+                    self.update_appearance()
+                    # 更新色块按钮颜色
+                    if hasattr(self, 'detail_popup') and self.detail_popup:
+                        # 找到色块按钮并更新其样式
+                        for btn in self.detail_popup.findChildren(QPushButton):
+                            if btn.fixedWidth() == 24 and btn.fixedHeight() == 24:
+                                btn.setStyleSheet(f"""
+                                    QPushButton {{
+                                        background-color: {self.color.name()};
+                                        border: 2px solid #bbb;
+                                        border-radius: 6px;
+                                        margin: 0 2px;
+                                    }}
+                                    QPushButton:hover {{
+                                        border: 2px solid #4ECDC4;
+                                    }}
+                                """)

@@ -67,6 +67,40 @@ class StyleManager:
                 border: none;               /* 无边框 */
                 background-color: transparent; /* 透明背景 */
             }}
+            QScrollBar:vertical {{
+                background: transparent;
+                width: 8px;
+                margin: 4px 2px 4px 0;
+                border-radius: 4px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: #D6D6D6;
+                min-height: 30px;
+                border-radius: 4px;
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0px;
+            }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+                background: none;
+            }}
+            QScrollBar:horizontal {{
+                background: transparent;
+                height: 8px;
+                margin: 0 4px 0 4px;
+                border-radius: 4px;
+            }}
+            QScrollBar::handle:horizontal {{
+                background: #D6D6D6;
+                min-width: 30px;
+                border-radius: 4px;
+            }}
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+                width: 0px;
+            }}
+            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{
+                background: none;
+            }}
         """,
         # 任务标签上的按钮样式
         "task_label_button": """  
@@ -198,32 +232,7 @@ class StyleManager:
                 background-color: rgba(100, 100, 100, 1.0);/* 按下时按钮色 */
             }}
             """,
-        # 历史记录查看器样式
-        "history_viewer_panel": """
-            QFrame {{
-                background-color: white;        /* 面板背景色 */
-                border-radius: 15px;            /* 圆角 */
-                border: 1px solid #e0e0e0;      /* 边框 */
-            }}
-        """,
-        "history_viewer_button": """
-            QPushButton {{
-                background-color: #4ECDC4;      /* 按钮背景色 */
-                color: white;                   /* 文字颜色 */
-                border: none;                   /* 无边框 */
-                border-radius: 8px;             /* 圆角 */
-                padding: 8px 20px;              /* 内边距 */
-                font-family: '微软雅黑';          /* 字体 */
-                font-weight: bold;              /* 加粗 */
-                font-size: 13px;                /* 字号 */
-            }}
-            QPushButton:hover {{
-                background-color: #45B8B0;      /* 悬停时按钮色 */
-            }}
-            QPushButton:pressed {{
-                background-color: #3DA89F;      /* 按下时按钮色 */
-            }}
-        """,
+        # 设置面板样式
         "settings_panel": """
             QDialog {{
                 background-color: white;
@@ -293,6 +302,74 @@ class StyleManager:
                 font-family: '微软雅黑';
                 padding: 5px;
             }}
+        """,
+        # 历史记录表格美化样式
+        "history_table": """
+            QTableWidget {
+                background: transparent;
+                border: none;
+                border-radius: 10px;
+                font-family: '微软雅黑', 'Microsoft YaHei', sans-serif;
+                font-size: 13px;
+                color: #333;
+                gridline-color: #F0F0F0;
+            }
+            QTableWidget::item {
+                border: none;
+                padding: 8px 6px;
+                background: transparent;
+            }
+            QHeaderView::section {
+                background: transparent;
+                color: #666;
+                border: none;
+                font-weight: bold;
+                font-size: 13px;
+                padding: 8px 0;
+            }
+            QTableCornerButton::section {
+                background: transparent;
+                border: none;
+            }
+            QScrollBar:vertical {
+                background: transparent;
+                width: 8px;
+                margin: 4px 2px 4px 0;
+                border-radius: 4px;
+                border: none;
+            }
+            QScrollBar::handle:vertical {
+                background: #D6D6D6;
+                min-height: 30px;
+                border-radius: 4px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: none;
+            }
+            QScrollBar:horizontal {
+                background: transparent;
+                height: 8px;
+                margin: 0 4px 0 4px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:horizontal {
+                background: #D6D6D6;
+                min-width: 30px;
+                border-radius: 4px;
+            }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                width: 0px;
+            }
+            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+                background: none;
+            }
+            QScrollArea, QFrame, QWidget {
+                border: none;
+                background: transparent;
+            }
         """
         }
 

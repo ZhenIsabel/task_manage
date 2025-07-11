@@ -414,6 +414,7 @@ class QuadrantWidget(QWidget):
     def mouseMoveEvent(self, event):
         """鼠标移动事件"""
         if event.buttons() & Qt.MouseButton.LeftButton:
+            self.drag_position = event.globalPosition().toPoint() - self.pos()
             self.move(event.globalPosition().toPoint() - self.drag_position)
             event.accept()
     
@@ -672,6 +673,7 @@ class QuadrantWidget(QWidget):
         dialog.setWindowTitle("设置")
         dialog.setMinimumWidth(550)  # 增加宽度
         
+        style_manager = StyleManager()
         # 设置对话框样式 - 白色主题
         dialog.setStyleSheet(style_manager.get_stylesheet("settings_panel").format())
         

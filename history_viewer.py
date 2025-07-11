@@ -1,0 +1,218 @@
+from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
+                            QTableWidget, QTableWidgetItem, QPushButton, 
+                            QHeaderView, QFrame, QScrollArea, QWidget,
+                            QAbstractScrollArea)
+from PyQt6.QtCore import Qt, QDate
+from PyQt6.QtGui import QColor, QFont
+from datetime import datetime
+import json
+import os
+
+from styles import StyleManager
+import logging
+logger = logging.getLogger(__name__)
+
+class HistoryViewer(QDialog):
+    """历史记录查看器"""
+    def __init__(self, task_data, parent=None):
+        super().__init__(parent)
+        self.task_data = task_data
+        self.setup_ui()
+        
+    def setup_ui(self):
+        """设置UI"""
+        self.setWindowTitle("任务历史记录")
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setFixedSize(600, 500)
+        
+        # 主布局
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(15)
+        
+        # 样式管理器
+        style_manager = StyleManager()
+        
+        # 创建主面板
+        panel = QWidget(self)
+        panel.setObjectName("panel")
+        panel.setStyleSheet("""
+            QWidget#panel {
+                background: white;
+                border-radius: 15px;
+            }
+        """)
+        panel_layout = QVBoxLayout(panel)
+        panel_layout.setContentsMargins(30, 30, 30, 30)
+        panel_layout.setSpacing(15)
+        
+        # 样式表
+        panel.setStyleSheet(style_manager.get_stylesheet("add_task_dialog").format())
+        # 添加阴影效果
+        from PyQt6.QtWidgets import QGraphicsDropShadowEffect
+        shadow = QGraphicsDropShadowEffect(panel)
+        shadow.setBlurRadius(20)
+        shadow.setColor(QColor(0, 0, 0, 150))
+        shadow.setOffset(0, 0)
+        panel.setGraphicsEffect(shadow)
+        
+        # 任务基本信息
+        if self.task_data.get('text'):
+            text_label = QLabel(f"任务内容: {self.task_data.get('text', '没有详细内容喵~')}")
+            text_label.setStyleSheet("font-size: 12px; color: #666; border: none; background: transparent;")
+            text_label.setWordWrap(True)
+            panel_layout.addWidget(text_label)
+        
+        # 创建滚动区域
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setSpacing(5)
+        
+        # 加载历史记录
+        self.load_history_records(scroll_layout)
+        
+        scroll_area.setWidget(scroll_content)
+        panel_layout.addWidget(scroll_area)
+        
+        # 关闭按钮
+        close_button = QPushButton("关闭")
+        close_button.clicked.connect(self.close)
+        close_button.setStyleSheet(style_manager.get_stylesheet("history_viewer_button").format())
+        close_button.setFixedHeight(35)
+        
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        button_layout.addWidget(close_button)
+        panel_layout.addLayout(button_layout)
+        
+        main_layout.addWidget(panel)
+        
+        # 居中显示
+        self.center_on_parent()
+        
+    def load_history_records(self, layout):
+        """加载历史记录并合并显示到一个表格"""
+        tasks_file = 'tasks.json'
+        if not os.path.exists(tasks_file):
+            layout.addWidget(QLabel("未找到历史记录数据"))
+            return
+
+        try:
+            with open(tasks_file, 'r', encoding='utf-8') as f:
+                all_tasks = json.load(f)
+
+            # 找到对应的任务
+            task_id = self.task_data.get('id')
+            target_task = None
+            for task in all_tasks:
+                if task.get('id') == task_id:
+                    target_task = task
+                    break
+
+            if not target_task:
+                layout.addWidget(QLabel("未找到该任务的历史记录"))
+                return
+
+            # 合并所有字段的历史记录
+            from config_manager import load_config
+            config = load_config()
+            field_names = [f['name'] for f in config.get('task_fields', [])]
+
+            merged_history = []
+            for field_name in field_names:
+                history_key = f'{field_name}_history'
+                if history_key in target_task and target_task[history_key]:
+                    for record in target_task[history_key]:
+                        merged_history.append({
+                            'field': field_name,
+                            'timestamp': record.get('timestamp', ''),
+                            'action': record.get('action', 'update'),
+                            'value': record.get('value', '')
+                        })
+
+            # 按时间排序（可选）
+            merged_history.sort(key=lambda x: x['timestamp'])
+
+            # 创建合并表格
+            self.create_merged_history_table(layout, merged_history)
+
+        except Exception as e:
+            logger.error(f"加载历史记录失败: {str(e)}")
+            layout.addWidget(QLabel(f"加载历史记录失败: {str(e)}"))
+
+    def create_merged_history_table(self, layout, merged_history):
+        """创建合并后的历史记录表格"""
+        table = QTableWidget()
+        table.setColumnCount(4)
+        table.setHorizontalHeaderLabels(["时间", "字段", "操作", "值"])
+        table.setRowCount(len(merged_history))
+
+        for row, record in enumerate(merged_history):
+            # 时间
+            timestamp = record['timestamp']
+            if timestamp:
+                try:
+                    dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                    time_str = dt.strftime('%Y-%m-%d %H:%M:%S')
+                except:
+                    time_str = timestamp
+            else:
+                time_str = 'N/A'
+            time_item = QTableWidgetItem(time_str)
+            time_item.setFlags(time_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            table.setItem(row, 0, time_item)
+
+            # 字段
+            field_item = QTableWidgetItem(record['field'])
+            field_item.setFlags(field_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            table.setItem(row, 1, field_item)
+
+            # 操作
+            action = record['action']
+            action_text = "创建" if action == 'create' else "更新"
+            action_item = QTableWidgetItem(action_text)
+            action_item.setFlags(action_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            table.setItem(row, 2, action_item)
+
+            # 值
+            value_item = QTableWidgetItem(str(record['value']))
+            value_item.setFlags(value_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            table.setItem(row, 3, value_item)
+
+        # 调整列宽
+        header = table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)  # 关键：不要用 Stretch
+
+        table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        table.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
+
+        table.setMaximumHeight(400)
+        # 应用美化样式
+        style_manager = StyleManager()
+        table.setStyleSheet(style_manager.get_stylesheet("history_table"))
+        layout.addWidget(table)
+    
+    def center_on_parent(self):
+        """居中显示窗口"""
+        if self.parent():
+            parent_rect = self.parent().geometry()
+            x = parent_rect.x() + (parent_rect.width() - self.width()) // 2
+            y = parent_rect.y() + (parent_rect.height() - self.height()) // 2
+            self.move(x, y)
+        else:
+            # 如果没有父窗口，居中到屏幕
+            from PyQt6.QtWidgets import QApplication
+            screen = QApplication.primaryScreen()
+            screen_geometry = screen.availableGeometry()
+            x = screen_geometry.center().x() - self.width() // 2
+            y = screen_geometry.center().y() - self.height() // 2
+            self.move(x, y) 
