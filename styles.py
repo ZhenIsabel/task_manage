@@ -198,6 +198,102 @@ class StyleManager:
                 background-color: rgba(100, 100, 100, 1.0);/* 按下时按钮色 */
             }}
             """,
+        # 历史记录查看器样式
+        "history_viewer_panel": """
+            QFrame {{
+                background-color: white;        /* 面板背景色 */
+                border-radius: 15px;            /* 圆角 */
+                border: 1px solid #e0e0e0;      /* 边框 */
+            }}
+        """,
+        "history_viewer_button": """
+            QPushButton {{
+                background-color: #4ECDC4;      /* 按钮背景色 */
+                color: white;                   /* 文字颜色 */
+                border: none;                   /* 无边框 */
+                border-radius: 8px;             /* 圆角 */
+                padding: 8px 20px;              /* 内边距 */
+                font-family: '微软雅黑';          /* 字体 */
+                font-weight: bold;              /* 加粗 */
+                font-size: 13px;                /* 字号 */
+            }}
+            QPushButton:hover {{
+                background-color: #45B8B0;      /* 悬停时按钮色 */
+            }}
+            QPushButton:pressed {{
+                background-color: #3DA89F;      /* 按下时按钮色 */
+            }}
+        """,
+        "settings_panel": """
+            QDialog {{
+                background-color: white;
+                border-radius: 15px;
+                border: 1px solid #e0e0e0;
+            }}
+            QTabWidget::pane {{
+                border: 1px solid #e0e0e0;
+                background-color: white;
+                border-radius: 8px;
+            }}
+            QTabBar::tab {{
+                background-color: #f5f5f5;
+                color: #505050;
+                border: 1px solid #e0e0e0;
+                border-bottom: none;
+                padding: 10px 20px;
+                margin-right: 2px;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+                font-family: '微软雅黑';
+            }}
+            QTabBar::tab:selected {{
+                background-color: white;
+                color: #4ECDC4;
+                font-weight: bold;
+            }}
+            QLabel {{
+                color: #505050;
+                font-family: '微软雅黑';
+                font-size: 13px;
+            }}
+            QSpinBox {{
+                background-color: #f5f5f5;
+                color: #505050;
+                border: 1px solid #e0e0e0;
+                border-radius: 5px;
+                padding: 8px;
+                min-height: 24px;
+            }}
+            QSlider::groove:horizontal {{
+                height: 8px;
+                background: #e0e0e0;
+                border-radius: 4px;
+            }}
+            QSlider::handle:horizontal {{
+                background: #4ECDC4;
+                width: 16px;
+                height: 16px;
+                margin: -4px 0;
+                border-radius: 8px;
+            }}
+            QPushButton {{
+                background-color: #4ECDC4;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-family: '微软雅黑';
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: #45B8B0;
+            }}
+            QCheckBox {{
+                color: #505050;
+                font-family: '微软雅黑';
+                padding: 5px;
+            }}
+        """
         }
 
     def get_stylesheet(self, component_name):

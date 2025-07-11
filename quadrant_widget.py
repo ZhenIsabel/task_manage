@@ -427,34 +427,20 @@ class QuadrantWidget(QWidget):
         for task in self.tasks:
             task.set_draggable(self.edit_mode)
         
-        # 使用UI管理器管理按钮显示/隐藏
-        if self.ui_manager:
-            # 显示/隐藏添加任务按钮
-            if self.edit_mode:
-                self.ui_manager.show_widget("add_task_button", animate=True)
-            else:
-                self.ui_manager.hide_widget("add_task_button", animate=True)
-            
-            # 显示/隐藏导出任务按钮
-            if self.edit_mode:
-                self.ui_manager.show_widget("export_tasks_button", animate=True)
-            else:
-                self.ui_manager.hide_widget("export_tasks_button", animate=True)
-            
-            # 显示/隐藏撤销按钮（仅当撤销栈非空时显示）
-            if self.edit_mode and len(self.undo_stack) > 0:
-                self.ui_manager.show_widget("undo_button", animate=True)
-            else:
-                self.ui_manager.hide_widget("undo_button", animate=True)
-        else:
-            # 兼容旧版本，直接设置可见性
-            self.add_task_button.setVisible(self.edit_mode)
-            self.export_tasks_button.setVisible(self.edit_mode)
-            self.undo_button.setVisible(self.edit_mode and len(self.undo_stack) > 0)
+        # 使用UI管理器的通用批量操作方法
+        # 定义需要切换的子控件
+        edit_mode_children = ["add_task_button", "export_tasks_button"]
+        if len(self.undo_stack) > 0:
+            edit_mode_children.append("undo_button")
         
-        # 更新控制面板尺寸
-        self.control_widget.adjustSize()
-        self.control_widget.updateGeometry()
+        # 批量切换控件显示状态
+        self.ui_manager.batch_toggle_widgets(edit_mode_children, self.edit_mode, animate=False)
+        
+        # 调整控制面板大小
+        self.ui_manager.adjust_container_size("control_panel")
+        
+        # 确保控制面板在边界内
+        self.ui_manager.ensure_widget_in_bounds("control_panel")
 
         # 保存当前状态到配置
         self.config['edit_mode'] = self.edit_mode
@@ -553,16 +539,16 @@ class QuadrantWidget(QWidget):
             return 'q4', self.config['quadrants']['q4']['color']
     
     def delete_task(self, task):
-        """删除任务"""
+        """逻辑删除任务（从界面隐藏，但保留在数据文件中）"""
         # 保存当前状态到撤销栈
         self.save_undo_state()
         
-        # 从列表中移除任务
+        # 从列表中移除任务（只是从界面隐藏）
         if task in self.tasks:
             self.tasks.remove(task)
             task.deleteLater()
             
-            # 保存任务 - 不需要再添加回列表
+            # 保存任务 - 这会触发逻辑删除，任务会被标记为deleted=True
             self.save_tasks()
     
     def save_undo_state(self):
@@ -596,11 +582,13 @@ class QuadrantWidget(QWidget):
         # 确保撤销按钮在编辑模式下可见
         if self.edit_mode:
             if self.ui_manager:
-                self.ui_manager.show_widget("undo_button", animate=True)
+                self.ui_manager.batch_toggle_widgets(["undo_button"], True, animate=False)
+                self.ui_manager.adjust_container_size("control_panel")
+                self.ui_manager.ensure_widget_in_bounds("control_panel")
             else:
                 self.undo_button.setVisible(True)
-            self.control_widget.adjustSize()
-            self.control_widget.updateGeometry()
+                self.control_widget.adjustSize()
+                self.control_widget.updateGeometry()
             
         logger.debug(f"状态已保存，撤销栈大小: {len(self.undo_stack)}")
 
@@ -685,76 +673,7 @@ class QuadrantWidget(QWidget):
         dialog.setMinimumWidth(550)  # 增加宽度
         
         # 设置对话框样式 - 白色主题
-        dialog.setStyleSheet("""
-            QDialog {
-                background-color: white;
-                border-radius: 15px;
-                border: 1px solid #e0e0e0;
-            }
-            QTabWidget::pane {
-                border: 1px solid #e0e0e0;
-                background-color: white;
-                border-radius: 8px;
-            }
-            QTabBar::tab {
-                background-color: #f5f5f5;
-                color: #505050;
-                border: 1px solid #e0e0e0;
-                border-bottom: none;
-                padding: 10px 20px;
-                margin-right: 2px;
-                border-top-left-radius: 8px;
-                border-top-right-radius: 8px;
-                font-family: '微软雅黑';
-            }
-            QTabBar::tab:selected {
-                background-color: white;
-                color: #4ECDC4;
-                font-weight: bold;
-            }
-            QLabel {
-                color: #505050;
-                font-family: '微软雅黑';
-                font-size: 13px;
-            }
-            QSpinBox {
-                background-color: #f5f5f5;
-                color: #505050;
-                border: 1px solid #e0e0e0;
-                border-radius: 5px;
-                padding: 8px;
-                min-height: 24px;
-            }
-            QSlider::groove:horizontal {
-                height: 8px;
-                background: #e0e0e0;
-                border-radius: 4px;
-            }
-            QSlider::handle:horizontal {
-                background: #4ECDC4;
-                width: 16px;
-                height: 16px;
-                margin: -4px 0;
-                border-radius: 8px;
-            }
-            QPushButton {
-                background-color: #4ECDC4;
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 10px 20px;
-                font-family: '微软雅黑';
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #45B8B0;
-            }
-            QCheckBox {
-                color: #505050;
-                font-family: '微软雅黑';
-                padding: 5px;
-            }
-        """)
+        dialog.setStyleSheet(style_manager.get_stylesheet("settings_panel").format())
         
         # 创建标签页
         tab_widget = QTabWidget()
@@ -973,31 +892,21 @@ class QuadrantWidget(QWidget):
         save_config(self.config, self)
     
     def load_tasks(self):
-        """从文件加载任务"""
+        """从文件加载任务（支持历史记录）"""
         logger.info("正在从文件加载任务...")
-        if not os.path.exists(TASKS_FILE):
-            logger.error("任务文件不存在，跳过加载")
-            return
+        
+        # 清除当前所有任务
+        for task in self.tasks:
+            task.deleteLater()
+        self.tasks.clear()
         
         try:
-            logger.debug("正在读取任务文件...")
-            with open(TASKS_FILE, 'r', encoding='utf-8') as f:
-                tasks_data = json.load(f)
+            # 使用新的历史记录加载函数
+            from config_manager import load_tasks_with_history
+            tasks_data = load_tasks_with_history()
             
-            # 获取当前日期
-            today = datetime.now().strftime('%Y-%m-%d')
-            
-            # 清除当前所有任务
-            for task in self.tasks:
-                task.deleteLater()
-            self.tasks.clear()
-            
-            # 加载未完成的任务或当天完成的任务
+            # 加载可见的任务
             for task_data in tasks_data:
-                # 跳过已完成且不是今天完成的任务
-                if task_data['completed'] and task_data.get('date', '') != today:
-                    continue
-                
                 # 创建任务标签 - 支持所有自定义字段
                 task = TaskLabel(
                                 task_id=task_data['id'],

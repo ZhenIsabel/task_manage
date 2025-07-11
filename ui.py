@@ -1,11 +1,11 @@
 from PyQt6.QtWidgets import QWidget, QApplication
-from PyQt6.QtCore import QPropertyAnimation, QEasingCurve, QTimer, pyqtSignal
+from PyQt6.QtCore import QPropertyAnimation, QEasingCurve, QTimer, pyqtSignal, QObject
 from PyQt6.QtGui import QColor
 import logging
 
 logger = logging.getLogger(__name__)
 
-class UIManager:
+class UIManager(QObject):
     """负责UI控件显示、隐藏、删除、动画和状态管理的类"""
     
     # 定义信号
@@ -13,12 +13,13 @@ class UIManager:
     animation_finished = pyqtSignal(str)  # widget_name
     
     def __init__(self):
+        super().__init__()  # 调用QObject的初始化
         self.visible_widgets = {}
         self.widget_states = {}
         self.widget_animations = {}
         self.widget_properties = {}  # 存储控件的自定义属性
         self.event_handlers = {}  # 存储事件处理器
-        self.auto_save_timer = QTimer()
+        self.auto_save_timer = QTimer(self)  # 将self作为父对象
         self.auto_save_timer.timeout.connect(self._auto_save_states)
         self.auto_save_timer.start(30000)  # 30秒自动保存一次
         
@@ -44,6 +45,9 @@ class UIManager:
                 widget.show()
                 self.widget_states[widget_name] = "visible"
                 self.widget_state_changed.emit(widget_name, "visible")
+                
+                # 不再自动调整父容器大小，由具体组件自己处理
+                # self._adjust_parent_size(widget)
             logger.debug(f"显示控件: {widget_name}")
     
     def hide_widget(self, widget_name, animate=True, duration=300):
@@ -56,6 +60,9 @@ class UIManager:
                 widget.hide()
                 self.widget_states[widget_name] = "hidden"
                 self.widget_state_changed.emit(widget_name, "hidden")
+                
+                # 不再自动调整父容器大小，由具体组件自己处理
+                # self._adjust_parent_size(widget)
             logger.debug(f"隐藏控件: {widget_name}")
     
     def delete_widget(self, widget_name):
@@ -212,6 +219,89 @@ class UIManager:
         if widget_name in self.visible_widgets:
             return self.visible_widgets[widget_name].isEnabled()
         return False
+    
+    def batch_show_widgets(self, widget_names, animate=False, duration=300):
+        """批量显示控件"""
+        for widget_name in widget_names:
+            if widget_name in self.visible_widgets:
+                self.show_widget(widget_name, animate=animate, duration=duration)
+    
+    def batch_hide_widgets(self, widget_names, animate=False, duration=300):
+        """批量隐藏控件"""
+        for widget_name in widget_names:
+            if widget_name in self.visible_widgets:
+                self.hide_widget(widget_name, animate=animate, duration=duration)
+    
+    def batch_toggle_widgets(self, widget_names, show, animate=False, duration=300):
+        """批量切换控件显示状态"""
+        if show:
+            self.batch_show_widgets(widget_names, animate, duration)
+        else:
+            self.batch_hide_widgets(widget_names, animate, duration)
+    
+    def adjust_container_size(self, container_name):
+        """调整容器大小（通用方法）"""
+        if container_name in self.visible_widgets:
+            container = self.visible_widgets[container_name]
+            if hasattr(container, 'adjustSize'):
+                container.adjustSize()
+                container.updateGeometry()
+    
+    def ensure_widget_in_bounds(self, widget_name, min_x=20, min_y=20):
+        """确保控件在父容器边界内（通用方法）"""
+        if widget_name not in self.visible_widgets:
+            return
+        
+        widget = self.visible_widgets[widget_name]
+        try:
+            parent = widget.parent()
+            if not parent:
+                return
+            
+            # 获取控件当前位置和大小
+            widget_x = widget.x()
+            widget_y = widget.y()
+            widget_width = widget.width()
+            widget_height = widget.height()
+            
+            # 获取父容器大小
+            parent_width = parent.width()
+            parent_height = parent.height()
+            
+            # 计算最大允许位置
+            max_x = parent_width - widget_width
+            max_y = parent_height - widget_height
+            
+            # 确保不超出边界
+            new_x = max(min_x, min(widget_x, max_x))
+            new_y = max(min_y, min(widget_y, max_y))
+            
+            # 如果位置需要调整，移动控件
+            if new_x != widget_x or new_y != widget_y:
+                widget.move(new_x, new_y)
+                logger.debug(f"调整控件位置: {widget_name} ({widget_x}, {widget_y}) -> ({new_x}, {new_y})")
+                
+        except Exception as e:
+            logger.debug(f"调整控件位置失败: {e}")
+    
+    def _adjust_parent_size(self, widget):
+        """调整父容器大小，用于控制面板等需要立即调整大小的场景"""
+        try:
+            # 查找父容器（通常是控制面板）
+            parent = widget.parent()
+            if parent and hasattr(parent, 'adjustSize'):
+                # 只调整直接父容器，不调整主窗口
+                parent.adjustSize()
+                parent.updateGeometry()
+                
+                # 不调整主窗口，因为控制面板是悬浮的
+                # 注释掉以下代码，避免影响主窗口大小
+                # grandparent = parent.parent()
+                # if grandparent and hasattr(grandparent, 'adjustSize'):
+                #     grandparent.adjustSize()
+                #     grandparent.updateGeometry()
+        except Exception as e:
+            logger.debug(f"调整父容器大小失败: {e}")
     
     def _auto_save_states(self):
         """自动保存控件状态"""
