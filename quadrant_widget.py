@@ -147,6 +147,9 @@ class QuadrantWidget(QWidget):
 
         self._position_dirty = False  # 标记位置是否有变动
 
+        # 新增：记录当前显示的 detail_popup
+        self.current_detail_popup = None
+
     def periodic_save_config(self):
         """定期保存控件位置"""
         if self._position_dirty:

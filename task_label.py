@@ -191,17 +191,22 @@ class TaskLabel(QWidget):
 
     def contextMenuEvent(self, event):
         """右键菜单事件"""
-        # 先清除旧的 detail_popup
-        if self.detail_popup:
-            self.detail_popup.hide()
-            self.detail_popup.deleteLater()
-            self.detail_popup = None
+        parent = self.parent()
+        # 关闭全局的 popup
+        if hasattr(parent, "current_detail_popup") and parent.current_detail_popup:
+            parent.current_detail_popup.hide()
+            parent.current_detail_popup.deleteLater()
+            parent.current_detail_popup = None
 
         # 创建新的
         self.create_detail_popup()
         self.position_detail_popup()
         self.detail_popup.show()
         self.detail_popup.raise_()
+
+        # 记录到全局
+        if hasattr(parent, "current_detail_popup"):
+            parent.current_detail_popup = self.detail_popup
 
     def edit_task(self):
         """编辑任务内容"""
@@ -429,18 +434,21 @@ class TaskLabel(QWidget):
         self.parent().installEventFilter(self)
 
     def eventFilter(self, obj, event):
-        # 只处理detail_popup的事件
-        if obj == self.detail_popup:
+        parent = self.parent()
+        global_popup = getattr(parent, "current_detail_popup", None)
+
+        # 只处理全局弹窗
+        if obj == global_popup:
             if event.type() == QEvent.Type.MouseButtonPress:
                 # 点击了popup的内部，不关
                 return False
         else:
-            # 如果 detail_popup 存在并且是显示的
-            if self.detail_popup and self.detail_popup.isVisible():
+            # 如果有全局弹窗且显示
+            if global_popup and global_popup.isVisible():
                 if event.type() == QEvent.Type.MouseButtonPress:
-                    # 如果点击位置不在detail_popup上，关闭它
-                    if not self.detail_popup.geometry().contains(event.globalPosition().toPoint()):
-                        self.detail_popup.hide()
+                    # 如果点击位置不在全局弹窗上，关闭它
+                    if not global_popup.geometry().contains(event.globalPosition().toPoint()):
+                        global_popup.hide()
                         return True  # 消耗这个事件
         return super().eventFilter(obj, event)
 
