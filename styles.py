@@ -421,7 +421,6 @@ class StyleManager:
         # 历史记录表格美化样式
         "history_table": """
             QTableWidget {
-                background: transparent;
                 border: none;
                 border-radius: 10px;
                 font-family: '微软雅黑', 'Microsoft YaHei', sans-serif;
@@ -432,10 +431,8 @@ class StyleManager:
             QTableWidget::item {
                 border: none;
                 padding: 8px 6px;
-                background: transparent;
             }
             QHeaderView::section {
-                background: transparent;
                 color: #666;
                 border: none;
                 font-weight: bold;
@@ -443,7 +440,6 @@ class StyleManager:
                 padding: 8px 0;
             }
             QTableCornerButton::section {
-                background: transparent;
                 border: none;
             }
             """ + BASE_SCROLLBAR_STYLE,

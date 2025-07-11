@@ -24,12 +24,12 @@ class HistoryViewer(QDialog):
         self.setWindowTitle("任务历史记录")
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedSize(600, 500)
+        self.adjustSize()
         
         # 主布局
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(15)
+        main_layout.setContentsMargins(0,0,0,0)
+        main_layout.setSpacing(0)
         
         # 样式管理器
         style_manager = StyleManager()
@@ -37,31 +37,18 @@ class HistoryViewer(QDialog):
         # 创建主面板
         panel = QWidget(self)
         panel.setObjectName("panel")
-        panel.setStyleSheet("""
-            QWidget#panel {
-                background: white;
-                border-radius: 15px;
-            }
-        """)
         panel_layout = QVBoxLayout(panel)
-        panel_layout.setContentsMargins(30, 30, 30, 30)
+        panel_layout.setContentsMargins(20,20,20,20)
         panel_layout.setSpacing(15)
         
         # 样式表
         panel.setStyleSheet(style_manager.get_stylesheet("add_task_dialog").format())
-        # 添加阴影效果
-        from PyQt6.QtWidgets import QGraphicsDropShadowEffect
-        shadow = QGraphicsDropShadowEffect(panel)
-        shadow.setBlurRadius(20)
-        shadow.setColor(QColor(0, 0, 0, 150))
-        shadow.setOffset(0, 0)
-        panel.setGraphicsEffect(shadow)
         
         # 任务基本信息
         if self.task_data.get('text'):
-            text_label = QLabel(f"任务内容: {self.task_data.get('text', '没有详细内容喵~')}")
+            text_label = QLabel(f" {self.task_data.get('text', '没有详细内容喵~')}修改记录")
             text_label.setStyleSheet("font-size: 12px; color: #666; border: none; background: transparent;")
-            text_label.setWordWrap(True)
+            text_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             panel_layout.addWidget(text_label)
         
         # 创建滚动区域
@@ -70,6 +57,10 @@ class HistoryViewer(QDialog):
         scroll_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         
         scroll_content = QWidget()
+        scroll_content.setStyleSheet("""
+            background: #F0F0F0;
+            border-radius: 12px;
+        """)
         scroll_layout = QVBoxLayout(scroll_content)
         scroll_layout.setSpacing(5)
         
@@ -93,6 +84,7 @@ class HistoryViewer(QDialog):
         main_layout.addWidget(panel)
         
         # 居中显示
+        self.adjustSize()
         self.center_on_parent()
         
     def load_history_records(self, layout):
