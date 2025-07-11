@@ -21,15 +21,9 @@ class AddTaskDialog(QDialog):
         # ❸ 真正的白色圆角面板
         panel = QWidget(self)
         panel.setObjectName("panel")
-        panel.setStyleSheet("""
-            QWidget#panel {
-                background: white;
-                border-radius: 15px;
-            }
-        """)
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(30, 30, 30, 30)
-        panel_layout.setSpacing(15)
+        panel_layout.setSpacing(5)
 
         # 样式改为用 styles.py 的 StyleManager 管理
         style_manager = StyleManager()
@@ -37,9 +31,9 @@ class AddTaskDialog(QDialog):
         add_task_dialog_stylesheet = style_manager.get_stylesheet("add_task_dialog").format()
         panel.setStyleSheet(add_task_dialog_stylesheet)
 
-        # 阴影
+        # # 阴影
         shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(20)
+        shadow.setBlurRadius(5)
         shadow.setOffset(0, 0)
         shadow.setColor(QColor(0, 0, 0, 150))
         panel.setGraphicsEffect(shadow)
@@ -107,15 +101,15 @@ class AddTaskDialog(QDialog):
         panel_layout.addLayout(btn_row)
 
         # ❹ 自动根据内容调大小，再把“壳”和“面板”都居中放
-        panel.setMinimumWidth(400)          # 或 panel.setFixedWidth(400)
-
-        panel_layout.activate()             # 让布局重新计算
-        panel.adjustSize()                  # 先让 panel 把高度伸展开
-
-        self.resize(panel.size())           # 再把外壳调到同样大小
-        panel.move(0, 0)                    # 面板贴壳左上
-        self.setFixedWidth(self.width())    # 如需锁宽度，可留下这句
-
+        shadow_margin = 60  # 阴影空间
+        # 让 panel 先自适应内容
+        panel.setMinimumWidth(400)
+        panel_layout.activate()
+        panel.adjustSize()
+        # 让壳比面板大一圈
+        self.resize(panel.width() + shadow_margin * 2, panel.height() + shadow_margin * 2)
+        # 把面板居中放到壳里
+        panel.move(shadow_margin, shadow_margin)
         # ❺ 可选：实现拖动窗口（因为没了系统标题栏）
         self._drag_pos = None
 

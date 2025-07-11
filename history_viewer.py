@@ -82,7 +82,7 @@ class HistoryViewer(QDialog):
         # 关闭按钮
         close_button = QPushButton("关闭")
         close_button.clicked.connect(self.close)
-        close_button.setStyleSheet(style_manager.get_stylesheet("history_viewer_button").format())
+        close_button.setStyleSheet(style_manager.get_stylesheet("task_label_button"))
         close_button.setFixedHeight(35)
         
         button_layout = QHBoxLayout()

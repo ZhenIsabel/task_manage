@@ -402,7 +402,9 @@ class TaskLabel(QWidget):
             layout.addWidget(priority_label)
         
         if self.notes:
-            notes_label = QLabel(f"<b>备注:</b><br>{self.notes}")
+            notes_html = self.notes.replace('\n', '<br>')
+            notes_label = QLabel(f"<b>备注:</b><br>{notes_html}")
+            notes_label.setTextFormat(Qt.TextFormat.RichText)
             notes_label.setWordWrap(True)
             notes_label.setStyleSheet("padding: 5px; color: black;")
             

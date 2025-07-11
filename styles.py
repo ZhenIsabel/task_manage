@@ -3,6 +3,47 @@ from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import Qt
 
 
+# ===== 基础样式模板 =====
+BASE_SCROLLBAR_STYLE = """
+QScrollBar:vertical {{
+    background: transparent;
+    width: 6px;
+    margin: 2px 1px 2px 0;
+    border-radius: 3px;
+    border: none;
+}}
+QScrollBar::handle:vertical {{
+    background: #D6D6D6;
+    min-height: 20px;
+    border-radius: 3px;
+}}
+QScrollBar:horizontal {{
+    background: transparent;
+    height: 6px;
+    margin: 0 2px 0 2px;
+    border-radius: 3px;
+    border: none;
+}}
+QScrollBar::handle:horizontal {{
+    background: #D6D6D6;
+    min-width: 20px;
+    border-radius: 3px;
+}}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+    height: 0px;
+}}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+    background: none;
+}}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+    width: 0px;
+}}
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{
+    background: none;
+}}
+"""
+
+
 class StyleManager:
     """负责样式管理的类"""
     def __init__(self):
@@ -124,10 +165,14 @@ class StyleManager:
             border-radius: 15px;            /* 圆角 */
         }}
         QLabel {{
-            color: #333333;                 /* 文字颜色 */
-            font-family: '微软雅黑';          /* 字体 */
-            font-weight: bold;              /* 加粗 */
-            font-size: 14px;                /* 字号 */
+            color: #333;
+            font-family: '微软雅黑';
+            font-size: 13px;
+            font-weight: normal;
+            background: transparent;
+            padding: 2px 0 2px 2px;
+            margin: 0;
+            border: none;
         }}
         QLineEdit, QTextEdit {{
             background-color: #f5f5f5;      /* 输入框背景色 */
@@ -140,13 +185,27 @@ class StyleManager:
         }}
         QDateEdit {{
             background-color: #f5f5f5;      /* 日期编辑背景色 */
-            color: #333333;                 /* 文字颜色 */
-            border: 1px solid #dddddd;      /* 边框 */
-            border-radius: 8px;             /* 圆角 */
-            padding: 12px;                  /* 内边距 */
+            color: #333;                 /* 文字颜色 */
+            border: 1.5px solid #dddddd;      /* 边框 */
+            padding: 8px 12px;                  /* 内边距 */
             font-family: '微软雅黑';          /* 字体 */
-            font-size: 13px;                /* 字号 */
-            min-height: 20px;               /* 最小高度 */
+            font-size: 14px;                /* 字号 */
+            min-height: 28px;               /* 最小高度 */
+            selection-background-color: #dddddd;
+            selection-color: white;
+            outline: none;
+        }}
+        QDateEdit::drop-down {{
+            subcontrol-origin: padding;
+            subcontrol-position: top right;
+            width: 28px;
+            border-left: 1px solid #dddddd;
+            background: #f5f5f5;
+        }}
+        QDateEdit::down-arrow {{
+            image: url(./icons/down_arrow.png);
+            width: 18px;
+            height: 18px;
         }}
         QPushButton {{
             background-color: #4ECDC4;      /* 按钮背景色 */
@@ -190,7 +249,63 @@ class StyleManager:
             font-size: 13px;                /* 字号 */
             border-radius: 8px;             /* 下拉列表本身也有圆角 */
         }}
-            """,
+        QCalendarWidget {{
+            background: #f8f8f8;
+            border: 1.5px solid #4ECDC4;
+            font-family: '微软雅黑';
+            font-size: 14px;
+            color: #333;
+        }}
+        QCalendarWidget QWidget#qt_calendar_navigationbar {{
+            background: #f8f8f8;
+        }}
+        QCalendarWidget QToolButton {{
+            background: transparent;
+            color: #4ECDC4;
+            font-weight: bold;
+            font-size: 15px;
+            border: none;
+            padding: 2px 8px;
+        }}
+        QCalendarWidget QToolButton::menu-indicator {{
+            image: none;
+        }}
+        QCalendarWidget QToolButton:hover {{
+            color: #45B8B0;
+        }}
+        QCalendarWidget QMenu {{
+            background: #fff;
+            border: 1px solid #4ECDC4;
+        }}
+        QCalendarWidget QSpinBox {{
+            background: #f5f5f5;
+            border: 1px solid #4ECDC4;
+            font-size: 13px;
+            padding: 2px 6px;
+        }}
+        QCalendarWidget QSpinBox::up-button, QCalendarWidget QSpinBox::down-button {{
+            width: 12px;
+            height: 12px;
+        }}
+        QCalendarWidget QAbstractItemView {{
+            outline: none;
+            selection-background-color: #4ECDC4;
+            selection-color: white;
+            font-size: 14px;
+            background: #fff;
+        }}
+        QCalendarWidget QHeaderView {{
+            background: #f8f8f8;
+        }}
+        QCalendarWidget QHeaderView::section {{
+            background: #f8f8f8;
+            color: #4ECDC4;
+            font-weight: bold;
+            border: none;
+            font-size: 13px;
+            padding: 2px 0;
+        }}
+        """ + BASE_SCROLLBAR_STYLE,
         # 四象限主窗口样式
         "quadrant_widget": """
             QWidget {{
@@ -208,7 +323,7 @@ class StyleManager:
                 font-size: 11px;                /* 字号 */
                 color: #333333;                 /* 文字颜色 */
             }}
-        """,
+        """ + BASE_SCROLLBAR_STYLE,
         # 控制面板样式
         "control_panel": """
             QWidget {{
@@ -231,7 +346,7 @@ class StyleManager:
             QPushButton:pressed {{
                 background-color: rgba(100, 100, 100, 1.0);/* 按下时按钮色 */
             }}
-            """,
+            """ + BASE_SCROLLBAR_STYLE,
         # 设置面板样式
         "settings_panel": """
             QDialog {{
@@ -302,7 +417,7 @@ class StyleManager:
                 font-family: '微软雅黑';
                 padding: 5px;
             }}
-        """,
+        """ + BASE_SCROLLBAR_STYLE,
         # 历史记录表格美化样式
         "history_table": """
             QTableWidget {
@@ -331,46 +446,7 @@ class StyleManager:
                 background: transparent;
                 border: none;
             }
-            QScrollBar:vertical {
-                background: transparent;
-                width: 8px;
-                margin: 4px 2px 4px 0;
-                border-radius: 4px;
-                border: none;
-            }
-            QScrollBar::handle:vertical {
-                background: #D6D6D6;
-                min-height: 30px;
-                border-radius: 4px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-                background: none;
-            }
-            QScrollBar:horizontal {
-                background: transparent;
-                height: 8px;
-                margin: 0 4px 0 4px;
-                border-radius: 4px;
-            }
-            QScrollBar::handle:horizontal {
-                background: #D6D6D6;
-                min-width: 30px;
-                border-radius: 4px;
-            }
-            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-                width: 0px;
-            }
-            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
-                background: none;
-            }
-            QScrollArea, QFrame, QWidget {
-                border: none;
-                background: transparent;
-            }
-        """
+            """ + BASE_SCROLLBAR_STYLE,
         }
 
     def get_stylesheet(self, component_name):
