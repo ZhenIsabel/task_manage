@@ -8,9 +8,8 @@ from PyQt6.QtGui import QColor, QCursor, QAction, QDesktopServices
 import os
 
 from add_task_dialog import AddTaskDialog
-from styles import MyColorDialog, WarningPopup
+from styles import MyColorDialog, WarningPopup, StyleManager
 from config_manager import load_config
-from utils import ICON_PATH
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
 
@@ -111,53 +110,21 @@ class TaskLabel(QWidget):
         else:
             bg_color = self.color
             text_color = QColor(0, 0, 0) if self.color.lightness() > 128 else QColor(255, 255, 255)
-        
-        indicator_size = 14  # <= 和字体高度差不多
-        # 设置样式表 - 改进外观
-        # 顶层 TaskLabel 保持透明，不再整块涂色
-        self.setStyleSheet(f"""
-            QWidget {{
-                background: transparent; 
-                border-radius: 10px;
-                border: none;
-            }}
-            QLabel {{
-                background-color: rgba({bg_color.red()}, {bg_color.green()}, {bg_color.blue()}, 217);
-                color: rgb({text_color.red()}, {text_color.green()}, {text_color.blue()});
-                font-weight: bold;
-                font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
-                padding: 2px 8px;      /* 上下 2px、左右 8px */
-            }}
-            QCheckBox {{
-                spacing: 5px;
-                background-color: transparent;
-            }}
-            QCheckBox::indicator {{
-                width: {indicator_size}px;
-                height: {indicator_size}px;
-                border-radius: 9px;
-                border: 2px solid gray;
-                background-color: rgba({bg_color.red()}, {bg_color.green()}, {bg_color.blue()}, 0.85);
-            }}
-            QCheckBox::indicator:checked {{
-                background-color: rgba({bg_color.red()}, {bg_color.green()}, {bg_color.blue()}, 0.85);
-                border: 2px solid #4ECDC4;
-                image:  url({ICON_PATH}/check.png);
-            }}
-            QMenu {{
-                background-color: white;
-                border-radius: 8px;
-                padding: 5px;
-            }}
-            QMenu::item {{
-                padding: 5px 20px;
-                border-radius: 4px;
-            }}
-            QMenu::item:selected {{
-                background-color: #4ECDC4;
-                color: white;
-            }}
-        """)
+        style_manager = StyleManager()
+        indicator_size = 14  # 和字体高度差不多
+
+        # 获取样式模板并格式化
+        stylesheet_template = style_manager.get_stylesheet("task_label")
+        stylesheet = stylesheet_template.format(
+            bg_color_red=bg_color.red(),
+            bg_color_green=bg_color.green(),
+            bg_color_blue=bg_color.blue(),
+            text_color_red=text_color.red(),
+            text_color_green=text_color.green(),
+            text_color_blue=text_color.blue(),
+            indicator_size=indicator_size
+        )
+        self.setStyleSheet(stylesheet)
         
         # 添加阴影效果
         shadow = QGraphicsDropShadowEffect(self)
@@ -333,29 +300,12 @@ class TaskLabel(QWidget):
     
     def create_detail_popup(self):
         """创建详情弹出窗口"""
-        # 预定义sytlesheet样式
-        stylesheet = """
-            QFrame {
-                background-color: #ECECEC;
-                border-radius: 10px;
-                border: 1px solid rgba(100, 100, 100, 0.5);
-            }
-            QLabel {
-                color: black;
-                font-family: '微软雅黑';
-                padding: 4px;
-            }
-            QScrollArea {
-                border: none;
-                background-color: transparent;
-            }
-        """
-
+        style_manager = StyleManager()
         # 创建一个无边框窗口作为弹出窗口
         self.detail_popup = QFrame(self.parent())
         self.detail_popup.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.detail_popup.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.detail_popup.setStyleSheet(stylesheet)
+        self.detail_popup.setStyleSheet(style_manager.get_stylesheet("detail_popup").format())
         
         # 设置阴影效果
         shadow = QGraphicsDropShadowEffect(self.detail_popup)
@@ -386,77 +336,25 @@ class TaskLabel(QWidget):
         # 打开目录按钮
         open_dir_button = QPushButton("目录")
         open_dir_button.clicked.connect(self.open_directory)
-        open_dir_button.setStyleSheet("""
-            QPushButton {
-                background-color: #ECECEC;
-                border: 1px solid rgba(100, 100, 100, 0.5);
-                border-radius: 6px;
-                padding: 4px 8px;
-                font-family: '微软雅黑';
-                font-size: 12px;
-                color: #333;
-            }
-            QPushButton:hover {
-                background-color: #D6D6D6;
-            }
-        """)
+        open_dir_button.setStyleSheet(style_manager.get_stylesheet("task_label_button").format())
         button_layout.addWidget(open_dir_button)
 
         # 编辑按钮
         edit_button = QPushButton("编辑")
         edit_button.clicked.connect(self.edit_task)
-        edit_button.setStyleSheet("""
-            QPushButton {
-                background-color: #ECECEC;
-                border: 1px solid rgba(100, 100, 100, 0.5);
-                border-radius: 6px;
-                padding: 4px 8px;
-                font-family: '微软雅黑';
-                font-size: 12px;
-                color: #333;
-            }
-            QPushButton:hover {
-                background-color: #D6D6D6;
-            }
-        """)
+        edit_button.setStyleSheet(style_manager.get_stylesheet("task_label_button").format())
         button_layout.addWidget(edit_button)
 
         # 更改颜色按钮
         color_button = QPushButton("更改颜色")
         color_button.clicked.connect(self.change_color)
-        color_button.setStyleSheet("""
-            QPushButton {
-                background-color: #ECECEC;
-                border: 1px solid rgba(100, 100, 100, 0.5);
-                border-radius: 6px;
-                padding: 4px 8px;
-                font-family: '微软雅黑';
-                font-size: 12px;
-                color: #333;
-            }
-            QPushButton:hover {
-                background-color: #D6D6D6;
-            }
-        """)
+        color_button.setStyleSheet(style_manager.get_stylesheet("task_label_button").format())
         button_layout.addWidget(color_button)
 
         # 删除按钮
         delete_button = QPushButton("删除")
         delete_button.clicked.connect(self.handle_delete)
-        delete_button.setStyleSheet("""
-            QPushButton {
-                background-color: #FF6B6B;
-                border: 1px solid rgba(100, 100, 100, 0.5);
-                border-radius: 6px;
-                padding: 4px 8px;
-                font-family: '微软雅黑';
-                font-size: 12px;
-                color: white;
-            }
-            QPushButton:hover {
-                background-color: #FF4C4C;
-            }
-        """)
+        delete_button.setStyleSheet(style_manager.get_stylesheet("task_label_button").format())
         button_layout.addWidget(delete_button)
 
         # 把按钮布局加到主 layout

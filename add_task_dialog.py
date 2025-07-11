@@ -4,7 +4,8 @@ from PyQt6.QtWidgets import (QDialog, QWidget, QVBoxLayout,
                              QDateEdit, QPushButton, QHBoxLayout, QComboBox, QTextEdit,QFileDialog)
 from PyQt6.QtGui import QColor, QMouseEvent
 
-from utils import ICON_PATH
+
+from styles import StyleManager
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
 
@@ -30,81 +31,11 @@ class AddTaskDialog(QDialog):
         panel_layout.setContentsMargins(30, 30, 30, 30)
         panel_layout.setSpacing(15)
 
-        # 样式
-        panel.setStyleSheet(f"""
-        QWidget#panel {{
-            background-color: white;
-            border-radius: 15px;
-        }}
-        /* 把你之前放在 QDialog 上的整段 QSS 原封不动贴进来 */
-        QLabel {{
-            color: #333333;
-            font-family: '微软雅黑';
-            font-weight: bold;
-            font-size: 14px;
-        }}
-        QLineEdit, QTextEdit {{
-            background-color: #f5f5f5;
-            color: #333333;
-            border: 1px solid #dddddd;
-            border-radius: 8px;
-            padding: 12px;
-            font-family: '微软雅黑';
-            font-size: 13px;
-        }}
-        QDateEdit {{
-            background-color: #f5f5f5;
-            color: #333333;
-            border: 1px solid #dddddd;
-            border-radius: 8px;
-            padding: 12px;
-            font-family: '微软雅黑';
-            font-size: 13px;
-            min-height: 20px;
-        }}
-        QPushButton {{
-            background-color: #4ECDC4;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            padding: 10px 20px;
-            font-family: '微软雅黑';
-            font-weight: bold;
-        }}
-        QPushButton:hover {{background-color: #45B8B0; }}
-        QComboBox {{
-            background-color: #f5f5f5;
-            color: #333333;
-            border: 1px solid #dddddd;
-            border-radius: 8px;
-            padding: 10px;
-            font-family: '微软雅黑';
-            font-size: 13px;
-        }}
-        QComboBox::drop-down {{
-            subcontrol-origin: padding;
-            subcontrol-position: top right;
-            width: 30px;
-            border-left: 1px solid #dddddd;
-            background-color: #f5f5f5;
-        }}
-        QComboBox::down-arrow {{
-            image: url({ICON_PATH}/down_arrow.png); /* 这里可以放一个小箭头图片，或者不加 */
-            width: 20px;
-            height: 20px;
-        }}
-        QComboBox QAbstractItemView {{
-            background-color: #f5f5f5;
-            border: 1px solid #dddddd;
-            selection-background-color: #4ECDC4; /* 选中时的背景色 */
-            selection-color: white;              /* 选中时文字白色 */
-            padding: 5px;
-            outline: 0px;
-            font-family: '微软雅黑';
-            font-size: 13px;
-            border-radius: 8px; /* 下拉列表本身也有圆角 */
-        }}
-        """)
+        # 样式改为用 styles.py 的 StyleManager 管理
+        style_manager = StyleManager()
+        # 获取 add_task_dialog 的样式表（你需要在 styles.py 里添加对应的 key 和内容）
+        add_task_dialog_stylesheet = style_manager.get_stylesheet("add_task_dialog").format()
+        panel.setStyleSheet(add_task_dialog_stylesheet)
 
         # 阴影
         shadow = QGraphicsDropShadowEffect(self)

@@ -13,15 +13,17 @@ from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont, QCursor, QPainter
 from task_label import TaskLabel
 from config_manager import save_config, save_tasks, TASKS_FILE
 from add_task_dialog import AddTaskDialog
+from styles import StyleManager
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
 
 class QuadrantWidget(QWidget):
     """四象限窗口部件"""
-    def __init__(self, config, parent=None):
+    def __init__(self, config, parent=None, ui_manager=None):
         logger.debug("正在初始化四象限窗口...")
         super().__init__(parent)
         self.config = config
+        self.ui_manager = ui_manager  # 添加UI管理器引用
         self.edit_mode = False
         self.tasks = []
         self.undo_stack = []
@@ -62,28 +64,9 @@ class QuadrantWidget(QWidget):
         self.control_layout.setSpacing(10)  # 增加按钮间距
         
         # 设置控制面板样式
-        self.control_widget.setStyleSheet("""
-            QWidget {
-                background-color: rgba(40, 40, 40, 0.7);
-                border-radius: 15px;
-                padding: 5px;
-            }
-            QPushButton {
-                background-color: rgba(60, 60, 60, 0.8);
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 8px 15px;
-                font-family: '微软雅黑';
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: rgba(80, 80, 80, 0.9);
-            }
-            QPushButton:pressed {
-                background-color: rgba(100, 100, 100, 1.0);
-            }
-        """)
+        style_manager = StyleManager()
+        control_stylesheet = style_manager.get_stylesheet("control_panel").format()
+        self.control_widget.setStyleSheet(control_stylesheet)
         
         # 确保控制面板可见（设置透明度>0）
         self.control_widget.setProperty("opacity", 1.0)
@@ -439,15 +422,35 @@ class QuadrantWidget(QWidget):
         # 更新按钮文本
         self.edit_mode = not self.edit_mode
         self.edit_button.setText("正在编辑" if self.edit_mode else "正在查看")
+        
         # 更新任务的可拖动状态
         for task in self.tasks:
             task.set_draggable(self.edit_mode)
-        # 显示/隐藏添加任务按钮
-        self.add_task_button.setVisible(self.edit_mode)
-        # 显示/隐藏导出任务按钮
-        self.export_tasks_button.setVisible(self.edit_mode)
-        # 显示/隐藏撤销按钮（仅当撤销栈非空时显示）
-        self.undo_button.setVisible(self.edit_mode and len(self.undo_stack) > 0)
+        
+        # 使用UI管理器管理按钮显示/隐藏
+        if self.ui_manager:
+            # 显示/隐藏添加任务按钮
+            if self.edit_mode:
+                self.ui_manager.show_widget("add_task_button", animate=True)
+            else:
+                self.ui_manager.hide_widget("add_task_button", animate=True)
+            
+            # 显示/隐藏导出任务按钮
+            if self.edit_mode:
+                self.ui_manager.show_widget("export_tasks_button", animate=True)
+            else:
+                self.ui_manager.hide_widget("export_tasks_button", animate=True)
+            
+            # 显示/隐藏撤销按钮（仅当撤销栈非空时显示）
+            if self.edit_mode and len(self.undo_stack) > 0:
+                self.ui_manager.show_widget("undo_button", animate=True)
+            else:
+                self.ui_manager.hide_widget("undo_button", animate=True)
+        else:
+            # 兼容旧版本，直接设置可见性
+            self.add_task_button.setVisible(self.edit_mode)
+            self.export_tasks_button.setVisible(self.edit_mode)
+            self.undo_button.setVisible(self.edit_mode and len(self.undo_stack) > 0)
         
         # 更新控制面板尺寸
         self.control_widget.adjustSize()
@@ -592,7 +595,10 @@ class QuadrantWidget(QWidget):
         
         # 确保撤销按钮在编辑模式下可见
         if self.edit_mode:
-            self.undo_button.setVisible(True)
+            if self.ui_manager:
+                self.ui_manager.show_widget("undo_button", animate=True)
+            else:
+                self.undo_button.setVisible(True)
             self.control_widget.adjustSize()
             self.control_widget.updateGeometry()
             
