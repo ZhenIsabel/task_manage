@@ -79,17 +79,31 @@ class StyleManager:
                 image:  url(./icons/check.png); /* 选中时显示对勾图片 */
             }}
             QMenu {{
-                background-color: white;   /* 菜单背景色 */
-                border-radius: 8px;        /* 圆角 */
-                padding: 5px;              /* 内边距 */
+                background-color: #ffffff;
+                border: 1.5px solid #4ECDC4;
+                border-radius: 10px;
+                padding: 8px 0;
+                min-width: 120px;
+                font-family: "微软雅黑";
+                font-size: 14px;
+                color: #333;
+                /* 伪阴影效果 */
+                box-shadow: 0 4px 16px rgba(0,0,0,0.12);
             }}
             QMenu::item {{
-                padding: 5px 20px;         /* 菜单项内边距 */
-                border-radius: 4px;        /* 菜单项圆角 */
+                background: transparent;
+                padding: 8px 24px 8px 24px;
+                border-radius: 6px;
+                margin: 2px 8px;
             }}
             QMenu::item:selected {{
-                background-color: #4ECDC4; /* 选中项背景色 */
-                color: white;              /* 选中项文字色 */
+                background-color: #4ECDC4;
+                color: #fff;
+            }}
+            QMenu::separator {{
+                height: 1px;
+                background: #e0e0e0;
+                margin: 4px 0;
             }}
         """,
         # 详情弹窗样式

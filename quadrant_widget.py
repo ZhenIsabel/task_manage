@@ -5,10 +5,10 @@ from statistics import quantiles
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QColorDialog, QSlider, 
                             QLabel, QGridLayout, QSizePolicy, QCheckBox, QLineEdit, QInputDialog, 
                             QMessageBox, QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QDialog,
-                            QTabWidget, QFormLayout, QSpinBox, QDateEdit)
+                            QTabWidget, QFormLayout, QSpinBox, QDateEdit, QMenu)
 from PyQt6.QtCore import Qt, QPoint, QSize, QRect, QPropertyAnimation, QEasingCurve, QTimer, QDate
 from PyQt6.QtWidgets import QApplication,QFileDialog
-from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont, QCursor, QPainterPath, QLinearGradient
+from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont, QCursor, QPainterPath, QLinearGradient, QAction
 
 from task_label import TaskLabel
 from config_manager import save_config, save_tasks, TASKS_FILE
@@ -83,7 +83,19 @@ class QuadrantWidget(QWidget):
         
         # 添加导出未完成任务按钮
         self.export_tasks_button = QPushButton("导出任务", self)
-        self.export_tasks_button.clicked.connect(self.export_unfinished_tasks)
+        # 新增：创建菜单
+        self.export_menu = QMenu(self.export_tasks_button)
+        # 主动设置菜单样式，确保生效
+        style_manager = StyleManager()
+        self.export_menu.setStyleSheet(style_manager.get_stylesheet("QMenu"))
+        self.action_export_unfinished = QAction("导出在办", self)
+        self.action_export_all = QAction("导出所有", self)
+        self.export_menu.addAction(self.action_export_unfinished)
+        self.export_menu.addAction(self.action_export_all)
+        self.export_tasks_button.setMenu(self.export_menu)
+        # 绑定动作
+        self.action_export_unfinished.triggered.connect(self.export_unfinished_tasks)
+        self.action_export_all.triggered.connect(self.export_all_tasks)
         self.export_tasks_button.setVisible(False)  # 初始隐藏
         self.export_tasks_button.setCursor(Qt.CursorShape.PointingHandCursor)
 
@@ -844,6 +856,41 @@ class QuadrantWidget(QWidget):
             QMessageBox.critical(self, "导出失败", f"导出任务时发生错误:\n{str(e)}")
             error_msg = f"导出任务时发生错误: {str(e)}"
             logger.error(error_msg)
+
+    def export_all_tasks(self):
+        """导出所有任务到文本文件（包括已完成）"""
+        desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+        default_filename = os.path.join(desktop_path, "所有任务.txt")
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            "保存所有任务",
+            default_filename,
+            "文本文件 (*.txt);;所有文件 (*)"
+        )
+        if not filename:
+            logger.info("用户取消了导出所有任务操作")
+            return
+        all_tasks = []
+        for i, task in enumerate(self.tasks):
+            task_info = []
+            task_info.append(f"{len(all_tasks) + 1}.")
+            if hasattr(task, 'text') and task.text:
+                task_info.append(f"{task.text}")
+            if hasattr(task, 'notes') and task.notes:
+                task_info.append(f"\n备注: {task.notes}")
+            if task_info:
+                all_tasks.append("".join(task_info))
+        if not all_tasks:
+            logger.info("导出任务失败：没有任务可导出")
+            QMessageBox.information(self, "导出任务", "没有任务可导出")
+            return
+        try:
+            with open(filename, 'w', encoding='utf-8') as f:
+                f.write("\n\n".join(all_tasks))
+            logger.info(f"成功导出 {len(all_tasks)} 个任务到: {filename}")
+        except Exception as e:
+            QMessageBox.critical(self, "导出失败", f"导出任务时发生错误:\n{str(e)}")
+            logger.error(f"导出任务时发生错误: {str(e)}")
 
 
     def update_ui_config(self, key, value):
