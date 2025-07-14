@@ -1,2 +1,14 @@
-PyQt6
-pywin32
+# GUI框架
+PyQt6>=6.4.0
+
+# Windows API支持（仅Windows平台需要）
+pywin32>=306; sys_platform == "win32"
+
+# 数据处理和Excel导出
+pandas>=1.5.0
+openpyxl>=3.0.0
+
+# 开发工具（可选）
+# pytest>=7.0.0
+# black>=22.0.0
+# flake8>=5.0.0
