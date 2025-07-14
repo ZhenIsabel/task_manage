@@ -87,7 +87,7 @@ class QuadrantWidget(QWidget):
         self.export_menu = QMenu(self.export_tasks_button)
         # 主动设置菜单样式，确保生效
         style_manager = StyleManager()
-        self.export_menu.setStyleSheet(style_manager.get_stylesheet("QMenu"))
+        self.export_menu.setStyleSheet(style_manager.get_stylesheet("menu"))
         self.action_export_unfinished = QAction("导出在办", self)
         self.action_export_all = QAction("导出所有", self)
         self.export_menu.addAction(self.action_export_unfinished)
@@ -858,36 +858,84 @@ class QuadrantWidget(QWidget):
             logger.error(error_msg)
 
     def export_all_tasks(self):
-        """导出所有任务到文本文件（包括已完成）"""
+        """导出所有任务到Excel文件（包括已完成），列名为创建日期、截止日期、修改日期，后面为事项所有属性"""
+        try:
+            import pandas as pd
+        except ImportError:
+            QMessageBox.critical(self, "导出失败", "未安装pandas库，无法导出为Excel。请先安装pandas。")
+            logger.error("导出失败：未安装pandas库")
+            return
+        
+        try:
+            import openpyxl
+        except ImportError:
+            QMessageBox.critical(self, "导出失败", "未安装openpyxl库，无法导出为Excel。请先安装openpyxl。\n\n安装命令：pip install openpyxl")
+            logger.error("导出失败：未安装openpyxl库")
+            return
+
         desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
-        default_filename = os.path.join(desktop_path, "所有任务.txt")
+        default_filename = os.path.join(desktop_path, "所有任务.xlsx")
         filename, _ = QFileDialog.getSaveFileName(
             self,
             "保存所有任务",
             default_filename,
-            "文本文件 (*.txt);;所有文件 (*)"
+            "Excel文件 (*.xlsx);;所有文件 (*)"
         )
         if not filename:
             logger.info("用户取消了导出所有任务操作")
             return
-        all_tasks = []
-        for i, task in enumerate(self.tasks):
-            task_info = []
-            task_info.append(f"{len(all_tasks) + 1}.")
-            if hasattr(task, 'text') and task.text:
-                task_info.append(f"{task.text}")
-            if hasattr(task, 'notes') and task.notes:
-                task_info.append(f"\n备注: {task.notes}")
-            if task_info:
-                all_tasks.append("".join(task_info))
-        if not all_tasks:
+
+        # 从当前界面显示的self.tasks中收集数据
+        if not self.tasks:
             logger.info("导出任务失败：没有任务可导出")
             QMessageBox.information(self, "导出任务", "没有任务可导出")
             return
+
+        # 获取字段配置
+        field_names = [f['name'] for f in self.config.get('task_fields', [])]
+        
+        # 准备数据行
+        rows = []
+        for task in self.tasks:
+            # 获取任务数据
+            task_data = task.get_data()
+            
+            row = {
+                '任务名': task_data.get('text', ''),
+                '到期日期': task_data.get('due_date', ''),
+                '优先级': task_data.get('priority', ''),
+                '备注': task_data.get('notes', ''),
+                '目录': task_data.get('directory', ''),
+                '创建日期': task_data.get('create_date', ''),
+                '完成状态': '已完成' if task_data.get('completed', False) else '未完成',
+                '完成日期': task_data.get('completed_date', '')
+            }
+            
+            rows.append(row)
+
+        if not rows:
+            logger.info("导出任务失败：没有有效任务可导出")
+            QMessageBox.information(self, "导出任务", "没有有效任务可导出")
+            return
+
+        # 定义列的顺序
+        column_order = [
+            '任务名', '到期日期', '优先级', '备注', '目录', '创建日期',
+            '完成状态', '完成日期', 
+        ]
+
         try:
-            with open(filename, 'w', encoding='utf-8') as f:
-                f.write("\n\n".join(all_tasks))
-            logger.info(f"成功导出 {len(all_tasks)} 个任务到: {filename}")
+            # 创建DataFrame
+            df = pd.DataFrame(rows)
+            
+            # 重新排列列的顺序
+            existing_columns = [col for col in column_order if col in df.columns]
+            df = df[existing_columns]
+            
+            # 导出到Excel
+            df.to_excel(filename, index=False)
+            logger.info(f"成功导出 {len(df)} 个任务到: {filename}")
+            QMessageBox.information(self, "导出成功", f"成功导出 {len(df)} 个任务到:\n{filename}")
         except Exception as e:
             QMessageBox.critical(self, "导出失败", f"导出任务时发生错误:\n{str(e)}")
             logger.error(f"导出任务时发生错误: {str(e)}")

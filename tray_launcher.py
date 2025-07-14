@@ -4,6 +4,7 @@ import subprocess
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
 from PyQt6.QtGui import QIcon, QAction
 from PyQt6.QtCore import QCoreApplication
+from styles import StyleManager
 
 # 配置日志系统
 import logging

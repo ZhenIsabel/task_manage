@@ -78,33 +78,6 @@ class StyleManager:
                 border: 2px solid #4ECDC4;    /* 选中时边框色 */
                 image:  url(./icons/check.png); /* 选中时显示对勾图片 */
             }}
-            QMenu {{
-                background-color: #ffffff;
-                border: 1.5px solid #4ECDC4;
-                border-radius: 10px;
-                padding: 8px 0;
-                min-width: 120px;
-                font-family: "微软雅黑";
-                font-size: 14px;
-                color: #333;
-                /* 伪阴影效果 */
-                box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-            }}
-            QMenu::item {{
-                background: transparent;
-                padding: 8px 24px 8px 24px;
-                border-radius: 6px;
-                margin: 2px 8px;
-            }}
-            QMenu::item:selected {{
-                background-color: #4ECDC4;
-                color: #fff;
-            }}
-            QMenu::separator {{
-                height: 1px;
-                background: #e0e0e0;
-                margin: 4px 0;
-            }}
         """,
         # 详情弹窗样式
         "detail_popup": """
@@ -359,6 +332,31 @@ class StyleManager:
             }}
             QPushButton:pressed {{
                 background-color: rgba(100, 100, 100, 1.0);/* 按下时按钮色 */
+            }}
+            QMenu {{
+                background-color: #ffffff;
+                border-radius: 10px;
+                padding: 6px 0;
+                min-width: 60px;
+                font-family: "微软雅黑";
+                font-size: 14px;
+                color: #333333;
+            }}
+            QMenu::item {{
+                background: transparent;
+                padding: 8px 8px 8px 8px;
+                border-radius: 6px;
+                margin: 2px 8px;
+                color: #333333;
+            }}
+            QMenu::item:selected {{
+                background-color: #4ECDC4;
+                color: #fff;
+            }}
+            QMenu::separator {{
+                height: 1px;
+                background: #e0e0e0;
+                margin: 4px 0;
             }}
             """ + BASE_SCROLLBAR_STYLE,
         # 设置面板样式
