@@ -55,7 +55,7 @@ class AddTaskDialog(QDialog):
                 if default_value:
                     w.setDate(QDate.fromString(default_value, "yyyy-MM-dd"))
                 else:
-                    w.setDate(QDate.currentDate().addDays(1))
+                    w.setDate(QDate.currentDate().addDays(0))
             elif f['type'] == 'select':
                 # 创建下拉选择框
                 w = QComboBox()

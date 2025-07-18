@@ -885,8 +885,16 @@ class QuadrantWidget(QWidget):
             logger.info("用户取消了导出所有任务操作")
             return
 
-        # 从当前界面显示的self.tasks中收集数据
-        if not self.tasks:
+        # 读取 tasks.json 文件
+        try:
+            with open(TASKS_FILE, 'r', encoding='utf-8') as f:
+                all_tasks_data = json.load(f)
+        except Exception as e:
+            logger.error(f"读取任务文件失败: {str(e)}")
+            QMessageBox.critical(self, "导出失败", f"读取任务文件失败: {str(e)}")
+            return
+
+        if not all_tasks_data:
             logger.info("导出任务失败：没有任务可导出")
             QMessageBox.information(self, "导出任务", "没有任务可导出")
             return
@@ -896,21 +904,20 @@ class QuadrantWidget(QWidget):
         
         # 准备数据行
         rows = []
-        for task in self.tasks:
-            # 获取任务数据
-            task_data = task.get_data()
-            
+        for task_data in all_tasks_data:
+            # 可选：如果你只想导出未被删除的任务，加上下面一行
+            # if task_data.get('deleted', False): continue
+
             row = {
-                '任务名': task_data.get('text', ''),
-                '到期日期': task_data.get('due_date', ''),
-                '优先级': task_data.get('priority', ''),
-                '备注': task_data.get('notes', ''),
-                '目录': task_data.get('directory', ''),
-                '创建日期': task_data.get('create_date', ''),
+                '任务名': task_data.get('text_history', [{}])[-1].get('value', ''),
+                '到期日期': task_data.get('due_date_history', [{}])[-1].get('value', ''),
+                '优先级': task_data.get('priority_history', [{}])[-1].get('value', ''),
+                '备注': task_data.get('notes_history', [{}])[-1].get('value', ''),
+                '目录': task_data.get('directory_history', [{}])[-1].get('value', ''),
+                '创建日期': task_data.get('create_date_history', [{}])[-1].get('value', ''),
                 '完成状态': '已完成' if task_data.get('completed', False) else '未完成',
                 '完成日期': task_data.get('completed_date', '')
             }
-            
             rows.append(row)
 
         if not rows:
