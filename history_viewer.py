@@ -70,15 +70,24 @@ class HistoryViewer(QDialog):
         scroll_area.setWidget(scroll_content)
         panel_layout.addWidget(scroll_area)
         
+        # 关闭和导出按钮布局
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        
+        # 导出按钮
+        export_button = QPushButton("导出")
+        export_button.setStyleSheet(style_manager.get_stylesheet("task_label_button"))
+        export_button.setFixedHeight(35)
+        export_button.clicked.connect(self.export_history)
+        button_layout.addWidget(export_button)
+        
         # 关闭按钮
         close_button = QPushButton("关闭")
         close_button.clicked.connect(self.close)
         close_button.setStyleSheet(style_manager.get_stylesheet("task_label_button"))
         close_button.setFixedHeight(35)
-        
-        button_layout = QHBoxLayout()
-        button_layout.addStretch()
         button_layout.addWidget(close_button)
+        
         panel_layout.addLayout(button_layout)
         
         main_layout.addWidget(panel)
@@ -208,3 +217,71 @@ class HistoryViewer(QDialog):
             x = screen_geometry.center().x() - self.width() // 2
             y = screen_geometry.center().y() - self.height() // 2
             self.move(x, y) 
+
+    def export_history(self):
+        """导出历史记录为Excel或CSV文件"""
+        try:
+            import pandas as pd
+        except ImportError:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "导出失败", "未安装pandas库，无法导出为Excel/CSV。请先安装pandas。\n\n安装命令：pip install pandas openpyxl")
+            return
+        from PyQt6.QtWidgets import QFileDialog, QMessageBox
+        # 重新生成 merged_history
+        from config_manager import load_config
+        config = load_config()
+        field_names = [f['name'] for f in config.get('task_fields', [])]
+        merged_history = []
+        # 读取 tasks.json
+        import os, json
+        tasks_file = 'tasks.json'
+        if not os.path.exists(tasks_file):
+            QMessageBox.critical(self, "导出失败", "未找到历史记录数据")
+            return
+        with open(tasks_file, 'r', encoding='utf-8') as f:
+            all_tasks = json.load(f)
+        task_id = self.task_data.get('id')
+        target_task = None
+        for task in all_tasks:
+            if task.get('id') == task_id:
+                target_task = task
+                break
+        if not target_task:
+            QMessageBox.critical(self, "导出失败", "未找到该任务的历史记录")
+            return
+        for field_name in field_names:
+            history_key = f'{field_name}_history'
+            if history_key in target_task and target_task[history_key]:
+                for record in target_task[history_key]:
+                    merged_history.append({
+                        '时间': record.get('timestamp', ''),
+                        '字段': field_name,
+                        '操作': '创建' if record.get('action', 'update') == 'create' else '更新',
+                        '值': record.get('value', '')
+                    })
+        if not merged_history:
+            QMessageBox.information(self, "导出历史记录", "没有历史记录可导出")
+            return
+        # 选择文件保存路径
+        desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+        default_filename = os.path.join(desktop_path, "任务历史记录.xlsx")
+        filename, filetype = QFileDialog.getSaveFileName(
+            self,
+            "导出历史记录",
+            default_filename,
+            "Excel文件 (*.xlsx);;CSV文件 (*.csv);;所有文件 (*)"
+        )
+        if not filename:
+            return
+        try:
+            df = pd.DataFrame(merged_history)
+            if filetype.startswith("Excel") or filename.endswith(".xlsx"):
+                df.to_excel(filename, index=False)
+            elif filetype.startswith("CSV") or filename.endswith(".csv"):
+                df.to_csv(filename, index=False, encoding='utf-8-sig')
+            else:
+                # 默认Excel
+                df.to_excel(filename, index=False)
+            QMessageBox.information(self, "导出成功", f"成功导出历史记录到:\n{filename}")
+        except Exception as e:
+            QMessageBox.critical(self, "导出失败", f"导出历史记录时发生错误:\n{str(e)}") 
