@@ -6,77 +6,89 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 import logging
 import threading
-import time
+import copy
 
 # 获取logger并确保配置正确
 logger = logging.getLogger(__name__)
 
-# 如果logger没有处理器，添加一个默认的处理器
 if not logger.handlers:
-    # 创建控制台处理器
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
-    
-    # 创建格式化器
     formatter = logging.Formatter(
         '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     console_handler.setFormatter(formatter)
-    
-    # 添加处理器到logger
     logger.addHandler(console_handler)
     logger.setLevel(logging.INFO)
 
 class DatabaseManager:
-    """数据库管理器 - 支持本地缓存和远程同步，并支持定时同步"""
+    """数据库管理器"""
     
-    def __init__(self, db_path: str = 'tasks.db', remote_config: Optional[Dict] = None, sync_interval: int = 0):
+    def __init__(self, db_path: str = 'tasks.db', remote_config: Optional[Dict] = None, sync_interval: int = 0, flush_interval: int = 5):
         """
         :param db_path: 数据库文件路径
         :param remote_config: 远程服务器配置
         :param sync_interval: 定时同步间隔（秒），为0表示不自动同步
+        :param flush_interval: 内存数据写入磁盘的间隔（秒）
         """
         self.db_path = db_path
         self.conn = None
-        self.remote_config = remote_config or {}
+        # 禁用远程同步
+        # self.remote_config = remote_config or {}
+        self.remote_config = {}
         self.api_base_url = self.remote_config.get('api_base_url', '')
         self.api_token = self.remote_config.get('api_token', '')
         self._sync_interval = sync_interval
         self._sync_thread = None
         self._stop_sync_event = threading.Event()
-        
+
+        # 内存缓存
+        self._task_cache = {}  # id -> task_data
+        self._task_history_cache = []  # [(task_id, field_name, field_value, action, timestamp)]
+        self._deleted_task_ids = set()
+        self._cache_lock = threading.Lock()
+        self._cache_dirty = False
+
+        # 定时flush相关
+        self._flush_interval = flush_interval
+        self._flush_thread = None
+        self._stop_flush_event = threading.Event()
+
         logger.info(f"初始化数据库管理器: {db_path}")
         if self.api_base_url:
             logger.info(f"配置远程服务器: {self.api_base_url}")
         else:
             logger.info("使用本地模式")
-            
+
         self.init_database()
+        self._load_all_tasks_to_cache()
+        self.start_periodic_flush(self._flush_interval)
+        # 启用定时同步
         if self._sync_interval and self.api_base_url:
             self.start_periodic_sync(self._sync_interval)
-    
+
     def get_connection(self):
         """获取数据库连接"""
         if self.conn is None:
             self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
             self.conn.row_factory = sqlite3.Row  # 使查询结果可以通过列名访问
         return self.conn
-    
+
     def close_connection(self):
         """关闭数据库连接"""
+        self.flush_cache_to_db()
         if self.conn:
             self.conn.close()
             self.conn = None
         self.stop_periodic_sync()
-    
+        self.stop_periodic_flush()
+
     def init_database(self):
         """初始化数据库表结构"""
         try:
             logger.info("开始初始化数据库表结构")
             conn = self.get_connection()
             cursor = conn.cursor()
-            
-            # 创建配置表
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS config (
                     key TEXT PRIMARY KEY,
@@ -148,24 +160,20 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"数据库初始化失败: {str(e)}")
             raise
-    
+
     def _make_api_request(self, method: str, endpoint: str, data: Optional[Dict] = None) -> Optional[Dict]:
-        """发送API请求到远程服务器"""
         if not self.api_base_url:
             logger.debug("未配置API服务器地址，跳过API请求")
             return None
-        
         try:
             url = f"{self.api_base_url.rstrip('/')}/{endpoint.lstrip('/')}"
             headers = {
                 'Content-Type': 'application/json',
                 'Authorization': f'Bearer {self.api_token}'
             }
-            
             logger.debug(f"发送API请求: {method} {url}")
             if data:
                 logger.debug(f"请求数据: {json.dumps(data, ensure_ascii=False)[:200]}...")
-            
             response = requests.request(
                 method=method,
                 url=url,
@@ -173,9 +181,7 @@ class DatabaseManager:
                 json=data,
                 timeout=30
             )
-            
             logger.debug(f"API响应状态: {response.status_code}")
-            
             if response.status_code == 200:
                 result = response.json()
                 logger.debug(f"API请求成功: {endpoint}")
@@ -186,7 +192,6 @@ class DatabaseManager:
             else:
                 logger.error(f"API请求失败: {response.status_code} - {response.text}")
                 return None
-                
         except requests.exceptions.Timeout:
             logger.error(f"API请求超时: {endpoint}")
             return None
@@ -196,19 +201,103 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"API请求异常: {str(e)}")
             return None
-    
+
+    def _load_all_tasks_to_cache(self):
+        """启动时加载所有任务到内存缓存"""
+        with self._cache_lock:
+            self._task_cache.clear()
+            self._deleted_task_ids.clear()
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM tasks')
+            for row in cursor.fetchall():
+                task = dict(row)
+                self._task_cache[task['id']] = task
+                if task.get('deleted'):
+                    self._deleted_task_ids.add(task['id'])
+            # 加载历史记录到缓存（可选，通常不需要全部缓存历史）
+            # self._task_history_cache = []
+            self._cache_dirty = False
+
+    def flush_cache_to_db(self):
+        """将内存缓存中的更改批量写入数据库"""
+        with self._cache_lock:
+            if not self._cache_dirty:
+                return
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            # 批量写入tasks
+            for task_id, task in self._task_cache.items():
+                cursor.execute('''
+                    INSERT OR REPLACE INTO tasks 
+                    (id, color, position_x, position_y, completed, completed_date, deleted, 
+                     text, notes, due_date, priority, directory, create_date, updated_at, sync_status, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    task['id'],
+                    task.get('color', '#4ECDC4'),
+                    task.get('position_x', 100),
+                    task.get('position_y', 100),
+                    task.get('completed', False),
+                    task.get('completed_date', ''),
+                    task.get('deleted', False),
+                    task.get('text', ''),
+                    task.get('notes', ''),
+                    task.get('due_date', ''),
+                    task.get('priority', ''),
+                    task.get('directory', ''),
+                    task.get('create_date', ''),
+                    task.get('updated_at', datetime.now().isoformat()),
+                    task.get('sync_status', ''),
+                    task.get('created_at', datetime.now().isoformat())
+                ))
+            # 批量写入历史记录
+            for hist in self._task_history_cache:
+                cursor.execute('''
+                    INSERT INTO task_history 
+                    (task_id, field_name, field_value, action, timestamp)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', hist)
+            self._task_history_cache.clear()
+            conn.commit()
+            self._cache_dirty = False
+            logger.info("内存缓存已写入数据库")
+
+    def start_periodic_flush(self, interval_seconds: int):
+        """启动定时flush线程，将内存缓存定期写入数据库"""
+        if self._flush_thread and self._flush_thread.is_alive():
+            return
+        if interval_seconds <= 0:
+            return
+        self._flush_interval = interval_seconds
+        self._stop_flush_event.clear()
+        self._flush_thread = threading.Thread(target=self._periodic_flush_worker, daemon=True)
+        self._flush_thread.start()
+        logger.info(f"定时flush线程已启动，间隔 {interval_seconds} 秒")
+
+    def stop_periodic_flush(self):
+        """停止定时flush线程"""
+        if self._flush_thread and self._flush_thread.is_alive():
+            self._stop_flush_event.set()
+            self._flush_thread.join(timeout=5)
+            logger.info("定时flush线程已停止")
+
+    def _periodic_flush_worker(self):
+        """定时flush线程的工作函数"""
+        logger.info("定时flush线程工作函数启动")
+        while not self._stop_flush_event.is_set():
+            try:
+                self.flush_cache_to_db()
+            except Exception as e:
+                logger.error(f"定时flush异常: {str(e)}")
+            self._stop_flush_event.wait(self._flush_interval)
+        logger.info("定时flush线程退出")
+
     def sync_to_server(self) -> bool:
         """同步本地数据到服务器"""
         try:
-            # 获取需要同步的任务
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                SELECT * FROM tasks WHERE sync_status != 'synced'
-            ''')
-            unsynced_tasks = cursor.fetchall()
-            
+            with self._cache_lock:
+                unsynced_tasks = [copy.deepcopy(task) for task in self._task_cache.values() if task.get('sync_status') != 'synced']
             if not unsynced_tasks:
                 logger.info("没有需要同步的数据")
                 return True
@@ -221,286 +310,224 @@ class DatabaseManager:
                 # 发送到服务器
                 result = self._make_api_request('POST', '/api/tasks', task_data)
                 if result:
-                    # 更新同步状态
-                    cursor.execute('''
-                        UPDATE tasks SET sync_status = 'synced' WHERE id = ?
-                    ''', (task['id'],))
+                    with self._cache_lock:
+                        self._task_cache[task['id']]['sync_status'] = 'synced'
+                        self._cache_dirty = True
                 else:
                     logger.error(f"同步任务 {task['id']} 失败")
-            
-            conn.commit()
-            
             # 记录同步状态
+            conn = self.get_connection()
+            cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO sync_status (sync_type, status, message)
                 VALUES (?, ?, ?)
             ''', ('upload', 'success', f'同步了 {len(unsynced_tasks)} 个任务'))
-            
             conn.commit()
             logger.info(f"成功同步 {len(unsynced_tasks)} 个任务到服务器")
             return True
-            
         except Exception as e:
             logger.error(f"同步到服务器失败: {str(e)}")
             return False
-    
+
     def sync_from_server(self) -> bool:
         """从服务器同步数据到本地"""
         try:
-            # 获取服务器数据
             result = self._make_api_request('GET', '/api/tasks')
             if not result:
                 logger.error("无法从服务器获取数据")
                 return False
-            
             server_tasks = result.get('tasks', [])
-            
-            # 更新本地数据
+            updated_count = 0
+            with self._cache_lock:
+                for task_data in server_tasks:
+                    local_task = self._task_cache.get(task_data['id'])
+                    if (not local_task) or (task_data['updated_at'] > local_task.get('updated_at', '')):
+                        self._save_task_to_cache(task_data, 'synced')
+                        updated_count += 1
+                self._cache_dirty = True
+            # 记录同步状态
             conn = self.get_connection()
             cursor = conn.cursor()
-            
-            for task_data in server_tasks:
-                # 检查本地是否有更新版本
-                cursor.execute('''
-                    SELECT updated_at FROM tasks WHERE id = ?
-                ''', (task_data['id'],))
-                
-                local_task = cursor.fetchone()
-                
-                if not local_task or task_data['updated_at'] > local_task['updated_at']:
-                    # 服务器数据更新，覆盖本地数据
-                    self._save_task_to_local(cursor, task_data, 'synced')
-            
-            conn.commit()
-            
-            # 记录同步状态
             cursor.execute('''
                 INSERT INTO sync_status (sync_type, status, message)
                 VALUES (?, ?, ?)
             ''', ('download', 'success', f'从服务器同步了 {len(server_tasks)} 个任务'))
-            
             conn.commit()
             logger.info(f"成功从服务器同步 {len(server_tasks)} 个任务")
             return True
-            
         except Exception as e:
             logger.error(f"从服务器同步失败: {str(e)}")
             return False
-    
-    def _save_task_to_local(self, cursor, task_data: Dict[str, Any], sync_status: str = 'modified'):
-        """保存任务到本地数据库"""
+
+    def _save_task_to_cache(self, task_data: Dict[str, Any], sync_status: str = 'modified'):
+        """保存任务到内存缓存"""
         task_id = task_data['id']
         color = task_data.get('color', '#4ECDC4')
         position = task_data.get('position', {'x': 100, 'y': 100})
         completed = task_data.get('completed', False)
         completed_date = task_data.get('completed_date', '')
         deleted = task_data.get('deleted', False)
-        
-        # 获取配置中的字段定义
         from config_manager import load_config
         config = load_config()
         field_names = [f['name'] for f in config.get('task_fields', [])]
-        
-        # 构建字段值字典
         field_values = {}
         for field_name in field_names:
             if field_name in task_data:
                 field_values[field_name] = str(task_data[field_name])
             else:
                 field_values[field_name] = ''
-        
-        # 插入或更新任务信息
-        cursor.execute('''
-            INSERT OR REPLACE INTO tasks 
-            (id, color, position_x, position_y, completed, completed_date, deleted, 
-             text, notes, due_date, priority, directory, create_date, updated_at, sync_status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (task_id, color, position['x'], position['y'], completed, 
-              completed_date, deleted, field_values.get('text', ''),
-              field_values.get('notes', ''), field_values.get('due_date', ''),
-              field_values.get('priority', ''), field_values.get('directory', ''),
-              field_values.get('create_date', ''), task_data.get('updated_at', datetime.now().isoformat()),
-              sync_status))
-    
+        task = {
+            'id': task_id,
+            'color': color,
+            'position_x': position['x'],
+            'position_y': position['y'],
+            'completed': completed,
+            'completed_date': completed_date,
+            'deleted': deleted,
+            'text': field_values.get('text', ''),
+            'notes': field_values.get('notes', ''),
+            'due_date': field_values.get('due_date', ''),
+            'priority': field_values.get('priority', ''),
+            'directory': field_values.get('directory', ''),
+            'create_date': field_values.get('create_date', ''),
+            'updated_at': task_data.get('updated_at', datetime.now().isoformat()),
+            'sync_status': sync_status,
+            'created_at': task_data.get('created_at', datetime.now().isoformat())
+        }
+        self._task_cache[task_id] = task
+        if deleted:
+            self._deleted_task_ids.add(task_id)
+        self._cache_dirty = True
+
     def save_task(self, task_data: Dict[str, Any]) -> bool:
-        """保存任务到数据库"""
+        """保存任务到内存缓存，延迟写入数据库"""
         try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            # 保存到本地数据库
-            self._save_task_to_local(cursor, task_data, 'modified')
-            
-            # 如果是新任务，设置创建时间
-            if not self._task_exists(task_data['id']):
-                cursor.execute('''
-                    UPDATE tasks SET created_at = ? WHERE id = ?
-                ''', (datetime.now().isoformat(), task_data['id']))
-            
-            # 只有在没有迁移历史记录的情况下才保存字段历史记录
-            if not task_data.get('_history_migrated', False):
-                self._save_task_history(cursor, task_data['id'], task_data)
-            
-            conn.commit()
-            logger.info(f"任务 {task_data['id']} 本地保存成功")
-            threading.Thread(target=self.sync_to_server).start()
+            with self._cache_lock:
+                is_new = not self._task_exists_in_cache(task_data['id'])
+                self._save_task_to_cache(task_data, 'modified')
+                if is_new:
+                    self._task_cache[task_data['id']]['created_at'] = datetime.now().isoformat()
+                if not task_data.get('_history_migrated', False):
+                    self._save_task_history_to_cache(task_data['id'], task_data)
+                self._cache_dirty = True
+            logger.info(f"任务 {task_data['id']} 已写入内存缓存")
             return True
         except Exception as e:
             logger.error(f"保存任务失败: {str(e)}")
             return False
-        # 远程保存任务
-        
-    
-    def _task_exists(self, task_id: str) -> bool:
-        """检查任务是否存在"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT 1 FROM tasks WHERE id = ?', (task_id,))
-        return cursor.fetchone() is not None
-    
-    def _save_task_history(self, cursor, task_id: str, task_data: Dict[str, Any]):
-        """保存任务字段历史记录"""
-        # 获取配置中的字段定义
+
+    def _task_exists_in_cache(self, task_id: str) -> bool:
+        """检查任务是否在内存缓存中存在"""
+        return task_id in self._task_cache
+
+    def _save_task_history_to_cache(self, task_id: str, task_data: Dict[str, Any]):
+        """保存任务字段历史记录到内存缓存"""
         from config_manager import load_config
         config = load_config()
         field_names = [f['name'] for f in config.get('task_fields', [])]
-        
         current_timestamp = datetime.now().isoformat()
-        
         for field_name in field_names:
             if field_name in task_data:
                 current_value = str(task_data[field_name])
-                
-                # 检查是否需要添加历史记录 - 从tasks表中获取当前值
-                cursor.execute('''
-                    SELECT {} FROM tasks WHERE id = ?
-                '''.format(field_name), (task_id,))
-                
-                result = cursor.fetchone()
-                if not result or str(result[0]) != current_value:
-                    # 值发生变化，添加历史记录
-                    action = 'create' if not result else 'update'
-                    cursor.execute('''
-                        INSERT INTO task_history 
-                        (task_id, field_name, field_value, action, timestamp)
-                        VALUES (?, ?, ?, ?, ?)
-                    ''', (task_id, field_name, current_value, action, current_timestamp))
-    
+                prev_value = None
+                if task_id in self._task_cache:
+                    prev_value = str(self._task_cache[task_id].get(field_name, ''))
+                if prev_value != current_value:
+                    action = 'create' if prev_value is None else 'update'
+                    self._task_history_cache.append(
+                        (task_id, field_name, current_value, action, current_timestamp)
+                    )
+        self._cache_dirty = True
+
     def load_tasks(self, include_completed_today: bool = True) -> List[Dict[str, Any]]:
-        """加载任务列表"""
+        """从内存缓存加载任务列表"""
         try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            # 构建查询条件
-            conditions = ['deleted = FALSE']
-            params = []
-            
-            if include_completed_today:
-                # 包含未完成的任务和今天完成的任务
+            with self._cache_lock:
+                tasks = list(self._task_cache.values())
+                result = []
                 today = datetime.now().strftime('%Y-%m-%d')
-                conditions.append('(completed = FALSE OR completed_date = ?)')
-                params.append(today)
-            else:
-                # 只包含未完成的任务
-                conditions.append('completed = FALSE')
-            
-            # 查询任务信息
-            query = f'''
-                SELECT * FROM tasks 
-                WHERE {' AND '.join(conditions)}
-                ORDER BY created_at DESC
-            '''
-            cursor.execute(query, params)
-            tasks = cursor.fetchall()
-            
-            # 转换为字典格式
-            result = []
-            for task in tasks:
-                task_dict = dict(task)
-                task_dict['position'] = {'x': task['position_x'], 'y': task['position_y']}
-                result.append(task_dict)
-            
-            logger.info(f"成功加载 {len(result)} 个任务")
-            threading.Thread(target=self.sync_from_server).start()
+                for task in tasks:
+                    if task.get('deleted'):
+                        continue
+                    if include_completed_today:
+                        if (not task.get('completed')) or (task.get('completed_date') == today):
+                            task_dict = dict(task)
+                            task_dict['position'] = {'x': task['position_x'], 'y': task['position_y']}
+                            result.append(task_dict)
+                    else:
+                        if not task.get('completed'):
+                            task_dict = dict(task)
+                            task_dict['position'] = {'x': task['position_x'], 'y': task['position_y']}
+                            result.append(task_dict)
+                result.sort(key=lambda t: t.get('created_at', ''), reverse=True)
+            logger.info(f"成功加载 {len(result)} 个任务（来自内存缓存）")
             return result
         except Exception as e:
             logger.error(f"加载任务失败: {str(e)}")
             return []
-    
+
     def get_task_history(self, task_id: str) -> Dict[str, List[Dict[str, Any]]]:
-        """获取任务的历史记录"""
+        """从数据库获取任务的历史记录"""
         try:
+            self.flush_cache_to_db()  # 确保历史记录已写入
             conn = self.get_connection()
             cursor = conn.cursor()
-            
             cursor.execute('''
                 SELECT field_name, field_value, action, timestamp
                 FROM task_history 
                 WHERE task_id = ?
                 ORDER BY timestamp ASC
             ''', (task_id,))
-            
             history_records = cursor.fetchall()
-            
-            # 按字段分组历史记录
             field_history = {}
             for record in history_records:
                 field_name = record['field_name']
                 if field_name not in field_history:
                     field_history[field_name] = []
-                
                 field_history[field_name].append({
                     'value': record['field_value'],
                     'timestamp': record['timestamp'],
                     'action': record['action']
                 })
-            
             return field_history
         except Exception as e:
             logger.error(f"获取任务历史记录失败: {str(e)}")
             return {}
-    
+
     def delete_task(self, task_id: str) -> bool:
-        """逻辑删除任务"""
+        """逻辑删除任务（仅标记为deleted，延迟写入数据库）"""
         try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                UPDATE tasks 
-                SET deleted = TRUE, updated_at = ?, sync_status = 'modified'
-                WHERE id = ?
-            ''', (datetime.now().isoformat(), task_id))
-            
-            conn.commit()
-            logger.info(f"任务 {task_id} 已逻辑删除")
+            with self._cache_lock:
+                if task_id in self._task_cache:
+                    self._task_cache[task_id]['deleted'] = True
+                    self._task_cache[task_id]['updated_at'] = datetime.now().isoformat()
+                    self._task_cache[task_id]['sync_status'] = 'modified'
+                    self._deleted_task_ids.add(task_id)
+                    self._cache_dirty = True
+                else:
+                    logger.warning(f"任务 {task_id} 不存在于缓存，无法删除")
+                    return False
+            logger.info(f"任务 {task_id} 已逻辑删除（内存缓存）")
             threading.Thread(target=self.sync_to_server).start()
             return True
         except Exception as e:
             logger.error(f"删除任务失败: {str(e)}")
             return False
-    
+
     def get_sync_status(self) -> Dict[str, Any]:
         """获取同步状态"""
         try:
+            self.flush_cache_to_db()
             conn = self.get_connection()
             cursor = conn.cursor()
-            
-            # 获取最近的同步记录
             cursor.execute('''
                 SELECT * FROM sync_status 
                 ORDER BY last_sync_at DESC 
                 LIMIT 5
             ''')
             sync_records = cursor.fetchall()
-            
-            # 获取待同步的任务数量
-            cursor.execute('''
-                SELECT COUNT(*) FROM tasks WHERE sync_status != 'synced'
-            ''')
-            pending_sync_count = cursor.fetchone()[0]
-            
+            with self._cache_lock:
+                pending_sync_count = sum(1 for t in self._task_cache.values() if t.get('sync_status') != 'synced')
             return {
                 'last_sync_records': [dict(record) for record in sync_records],
                 'pending_sync_count': pending_sync_count,
@@ -512,9 +539,6 @@ class DatabaseManager:
 
     # ========== 定时同步相关 ==========
     def start_periodic_sync(self, interval_seconds: int):
-        """
-        启动定时同步线程，每隔 interval_seconds 秒自动同步到服务器并从服务器拉取数据。
-        """
         if self._sync_thread and self._sync_thread.is_alive():
             logger.info("定时同步线程已在运行")
             return
@@ -556,8 +580,8 @@ class DatabaseManager:
 # 全局数据库管理器实例
 _db_manager = None
 
-def get_db_manager(sync_interval: int =3000) -> DatabaseManager:
-    """获取全局数据库管理器实例，可选定时同步间隔（秒）"""
+def get_db_manager(sync_interval: int = 0, flush_interval: int = 5) -> DatabaseManager:
+    """获取全局数据库管理器实例，可选定时同步间隔（秒）和flush间隔（秒）"""
     global _db_manager
     if _db_manager is None:
         # 从配置文件加载远程配置
@@ -568,6 +592,5 @@ def get_db_manager(sync_interval: int =3000) -> DatabaseManager:
                     remote_config = json.load(f)
             except Exception as e:
                 logger.error(f"加载远程配置失败: {str(e)}")
-        
-        _db_manager = DatabaseManager(remote_config=remote_config, sync_interval=sync_interval)
-    return _db_manager 
+        _db_manager = DatabaseManager(remote_config=remote_config, sync_interval=sync_interval, flush_interval=flush_interval)
+    return _db_manager
