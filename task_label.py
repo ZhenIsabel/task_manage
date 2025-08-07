@@ -456,12 +456,27 @@ class TaskLabel(QWidget):
 
     def handle_delete(self):
         """处理删除任务"""
-        if self.detail_popup:
-            self.detail_popup.hide()   # ✅ 先隐藏掉 detail_popup
-            self.detail_popup.deleteLater()  # （可选）彻底释放内存
-            self.detail_popup = None
-
-        self.deleteRequested.emit(self)  # 再发出删除自己的信号
+        reply = QMessageBox.question(self, '确认删除', 
+                                   '确定要删除这个任务吗？\n删除后无法恢复。',
+                                   QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            # 使用数据库管理器进行逻辑删除
+            try:
+                from database_manager import get_db_manager
+                db_manager = get_db_manager()
+                success = db_manager.delete_task(self.task_id)
+                if success:
+                    if self.detail_popup:
+                        self.detail_popup.hide()   # ✅ 先隐藏掉 detail_popup
+                        self.detail_popup.deleteLater()  # （可选）彻底释放内存
+                        self.detail_popup = None
+                    self.deleteRequested.emit(self)  # 再发出删除自己的信号
+                else:
+                    QMessageBox.warning(self, "删除失败", "删除任务失败，请重试")
+            except Exception as e:
+                logger.error(f"删除任务失败: {str(e)}")
+                QMessageBox.warning(self, "删除失败", f"删除任务失败: {str(e)}")
 
     def update_status_label(self):
         """刷新状态文字"""

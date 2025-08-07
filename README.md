@@ -5,7 +5,6 @@
 ## 功能特性
 
 ### 用户功能
-- 🖱️ 桌面融合模式（默认启用，可穿透鼠标操作）
 - 📌 四象限任务管理：重要/紧急维度分类
 - 🎨 深度自定义：支持配置颜色、透明度、圆角等样式
 - 🔄 撤销操作
@@ -19,7 +18,6 @@
 
 ### 开发功能
 - 📦 可扩展字段系统（见`task_label.EDITABLE_FIELDS`）
-- 🛠️ 配置热更新机制（修改立即生效）
 - 🎭 完善的动画系统（淡入淡出、拖拽反馈）
 - 📄 详尽的日志系统（操作轨迹可追溯）
 
@@ -39,13 +37,16 @@ python main.py
 ### 目录结构
 ```plaintext
 task_manage/
-├── quadrant_widget.py    # 主界面逻辑
-├── task_label.py          # 任务标签组件
-├── config_manager.py      # 配置持久化管理
-├── add_task_dialog.py     # 任务添加对话框
-├── history_viewer.py      # 历史记录查看器
-├── migrate_data.py        # 数据迁移工具
-└── main.py                # 程序入口
+├── quadrant_widget.py      # 主界面逻辑
+├── task_label.py           # 任务标签组件
+├── config_manager.py       # 配置持久化管理
+├── database_manager.py     # 数据库管理器（新增）
+├── add_task_dialog.py      # 任务添加对话框
+├── history_viewer.py       # 历史记录查看器
+├── migrate_data.py         # 旧数据迁移工具
+├── migrate_to_database.py  # JSON到数据库迁移工具（新增）
+├── database_backup.py      # 数据库备份工具（新增）
+└── main.py                 # 程序入口
 ```
 
 ### 配置系统
@@ -54,10 +55,16 @@ task_manage/
 - 扩展配置项：修改 `DEFAULT_CONFIG` 字典后自动合并到现有配置
 ### 任务系统
 - 数据结构：通过 `get_data` 序列化任务状态
-- 持久化存储：自动保存到 `tasks.json`
+- 持久化存储：自动保存到 SQLite 数据库（`task_manager.db`）
 - 字段扩展：修改 `TaskLabel.EDITABLE_FIELDS` 添加新字段
 - 历史记录：每个字段的完整修改历史，支持查看和追溯
 - 逻辑删除：已完成任务标记隐藏，保留完整历史数据
+### 数据库系统
+- 数据库类型：SQLite（轻量级、无需服务器）
+- 数据库文件：`task_manager.db`
+- 表结构：tasks（任务）、task_fields（字段值）、task_field_history（历史记录）
+- 数据迁移：支持从JSON文件自动迁移到数据库
+- 备份恢复：提供完整的数据库备份和恢复功能
 
 ## 历史记录功能
 
@@ -77,6 +84,4 @@ task_manage/
 ### 数据迁移
 - 首次启动时自动检测并迁移旧格式数据
 - 自动创建备份文件（tasks_backup.json）
-- 手动迁移：运行 `python migrate_data.py`
-
-详细说明请参考 [HISTORY_FEATURES.md](HISTORY_FEATURES.md)
+- 数据库迁移：运行 `python migrate_to_database.py` 将JSON数据迁移到SQLite数据库

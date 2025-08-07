@@ -9,6 +9,7 @@ import json
 import os
 
 from styles import StyleManager
+from database_manager import get_db_manager
 import logging
 logger = logging.getLogger(__name__)
 
@@ -97,46 +98,33 @@ class HistoryViewer(QDialog):
         self.center_on_parent()
         
     def load_history_records(self, layout):
-        """加载历史记录并合并显示到一个表格"""
-        tasks_file = 'tasks.json'
-        if not os.path.exists(tasks_file):
-            layout.addWidget(QLabel("未找到历史记录数据"))
-            return
-
+        """从数据库加载历史记录并合并显示到一个表格"""
         try:
-            with open(tasks_file, 'r', encoding='utf-8') as f:
-                all_tasks = json.load(f)
-
-            # 找到对应的任务
+            # 从数据库获取历史记录
             task_id = self.task_data.get('id')
-            target_task = None
-            for task in all_tasks:
-                if task.get('id') == task_id:
-                    target_task = task
-                    break
-
-            if not target_task:
+            if not task_id:
+                layout.addWidget(QLabel("未找到任务ID"))
+                return
+            
+            db_manager = get_db_manager()
+            field_history = db_manager.get_task_history(task_id)
+            
+            if not field_history:
                 layout.addWidget(QLabel("未找到该任务的历史记录"))
                 return
 
             # 合并所有字段的历史记录
-            from config_manager import load_config
-            config = load_config()
-            field_names = [f['name'] for f in config.get('task_fields', [])]
-
             merged_history = []
-            for field_name in field_names:
-                history_key = f'{field_name}_history'
-                if history_key in target_task and target_task[history_key]:
-                    for record in target_task[history_key]:
-                        merged_history.append({
-                            'field': field_name,
-                            'timestamp': record.get('timestamp', ''),
-                            'action': record.get('action', 'update'),
-                            'value': record.get('value', '')
-                        })
+            for field_name, history_list in field_history.items():
+                for record in history_list:
+                    merged_history.append({
+                        'field': field_name,
+                        'timestamp': record.get('timestamp', ''),
+                        'action': record.get('action', 'update'),
+                        'value': record.get('value', '')
+                    })
 
-            # 按时间排序（可选）
+            # 按时间排序
             merged_history.sort(key=lambda x: x['timestamp'])
 
             # 创建合并表格

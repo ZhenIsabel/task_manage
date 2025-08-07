@@ -8,6 +8,8 @@ pywin32>=306; sys_platform == "win32"
 pandas>=1.5.0
 openpyxl>=3.0.0
 
+# 数据库支持（SQLite是Python标准库，无需额外安装）
+
 # 开发工具（可选）
 # pytest>=7.0.0
 # black>=22.0.0
