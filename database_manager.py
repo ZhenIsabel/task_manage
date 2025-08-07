@@ -33,9 +33,7 @@ class DatabaseManager:
         """
         self.db_path = db_path
         self.conn = None
-        # 禁用远程同步
-        # self.remote_config = remote_config or {}
-        self.remote_config = {}
+        self.remote_config = remote_config or {}
         self.api_base_url = self.remote_config.get('api_base_url', '')
         self.api_token = self.remote_config.get('api_token', '')
         self._sync_interval = sync_interval
@@ -580,7 +578,7 @@ class DatabaseManager:
 # 全局数据库管理器实例
 _db_manager = None
 
-def get_db_manager(sync_interval: int = 0, flush_interval: int = 5) -> DatabaseManager:
+def get_db_manager(sync_interval: int = 180, flush_interval: int = 5) -> DatabaseManager:
     """获取全局数据库管理器实例，可选定时同步间隔（秒）和flush间隔（秒）"""
     global _db_manager
     if _db_manager is None:
