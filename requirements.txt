@@ -1,5 +1,9 @@
 # GUI框架
 PyQt6>=6.4.0
+PyQt6-Qt6==6.5.0
+PyQt6-sip==13.5.1
+requests==2.31.0
+# SQLite是Python标准库，不需要额外安装
 
 # Windows API支持（仅Windows平台需要）
 pywin32>=306; sys_platform == "win32"

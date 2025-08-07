@@ -91,3 +91,6 @@ Thumbs.db
 tasks.json
 四象限工作大法.lnk
 tasks_backup.json
+sqlite3.exe
+database_manager.py
+tasks.db
