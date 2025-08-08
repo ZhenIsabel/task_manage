@@ -1,6 +1,6 @@
 from datetime import datetime
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, 
-                            QLabel, QLineEdit, QInputDialog, QGraphicsDropShadowEffect,
+                            QLabel, QLineEdit, QInputDialog,
                             QMenu, QFrame, QScrollArea, QSizePolicy, QDialog, QColorDialog, QMessageBox,
                             QLayout,QPushButton)
 from PyQt6.QtCore import Qt, pyqtSignal, QDate, QPoint, QEvent, QUrl
@@ -8,7 +8,9 @@ from PyQt6.QtGui import QColor, QCursor, QAction, QDesktopServices
 import os
 
 from add_task_dialog import AddTaskDialog
-from styles import MyColorDialog, WarningPopup, StyleManager
+from styles import StyleManager
+from ui import MyColorDialog, WarningPopup
+from ui import apply_drop_shadow
 from config_manager import load_config
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
@@ -77,7 +79,8 @@ class TaskLabel(QWidget):
         if self.due_date:
             self.due_date_label = QLabel(f"到期: {self.due_date}")
             self.due_date_label.setAlignment(Qt.AlignmentFlag.AlignRight)
-            self.due_date_label.setStyleSheet("font-size: 10px;")
+            style_manager = StyleManager()
+            self.due_date_label.setStyleSheet(style_manager.get_stylesheet("due_date_label"))
         
         # 将复选框和标签放在同一行
         title_layout = QHBoxLayout()
@@ -127,11 +130,7 @@ class TaskLabel(QWidget):
         self.setStyleSheet(stylesheet)
         
         # 添加阴影效果
-        shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(15)
-        shadow.setColor(QColor(0, 0, 0, 80))
-        shadow.setOffset(3, 3)
-        self.setGraphicsEffect(shadow)
+        apply_drop_shadow(self, blur_radius=15, color=QColor(0, 0, 0, 80), offset_x=3, offset_y=3)
     
     def on_status_changed(self, state):
         """复选框状态改变时的处理"""
@@ -312,17 +311,15 @@ class TaskLabel(QWidget):
         """创建详情弹出窗口"""
         style_manager = StyleManager()
         # 创建一个无边框窗口作为弹出窗口
-        self.detail_popup = QFrame(self.parent())
+        parent_widget = self.parent()
+        # 保护性判断：确保父级存在
+        self.detail_popup = QFrame(parent_widget if parent_widget else self)
         self.detail_popup.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.detail_popup.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.detail_popup.setStyleSheet(style_manager.get_stylesheet("detail_popup").format())
         
         # 设置阴影效果
-        shadow = QGraphicsDropShadowEffect(self.detail_popup)
-        shadow.setBlurRadius(20)
-        shadow.setColor(QColor(0, 0, 0, 180))
-        shadow.setOffset(3, 3)
-        self.detail_popup.setGraphicsEffect(shadow)
+        apply_drop_shadow(self.detail_popup, blur_radius=20, color=QColor(0, 0, 0, 180), offset_x=3, offset_y=3)
         
         # 创建布局
         layout = QVBoxLayout(self.detail_popup)
@@ -340,23 +337,13 @@ class TaskLabel(QWidget):
             title_text = self.text[0]
         title_label = QLabel(title_text)
         title_label.setWordWrap(True)
-        title_label.setStyleSheet("font-size: 14px; font-weight: bold; color: black;")
+        title_label.setStyleSheet(style_manager.get_stylesheet("detail_title_label"))
         title_layout.addWidget(title_label)
         
         # 更改颜色按钮
         color_button = QPushButton()
         color_button.setFixedSize(24, 24)
-        color_button.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {self.color.name()};
-                border: 2px solid #bbb;
-                border-radius: 6px;
-                margin: 0 2px;
-            }}
-            QPushButton:hover {{
-                border: 2px solid #4ECDC4;
-            }}
-        """)
+        color_button.setStyleSheet(StyleManager().get_stylesheet("color_button").format(button_color=self.color.name()))
         color_button.clicked.connect(self.change_color)
         title_layout.addWidget(color_button)
         layout.addLayout(title_layout)
@@ -449,7 +436,12 @@ class TaskLabel(QWidget):
             if global_popup and global_popup.isVisible():
                 if event.type() == QEvent.Type.MouseButtonPress:
                     # 如果点击位置不在全局弹窗上，关闭它
-                    if not global_popup.geometry().contains(event.globalPosition().toPoint()):
+                    # 保护性判断：部分事件可能没有 globalPosition
+                    try:
+                        click_point = event.globalPosition().toPoint()
+                    except Exception:
+                        return super().eventFilter(obj, event)
+                    if not global_popup.geometry().contains(click_point):
                         global_popup.hide()
                         return True  # 消耗这个事件
         return super().eventFilter(obj, event)
@@ -502,37 +494,18 @@ class TaskLabel(QWidget):
     def open_directory(self):
         """打开目录"""
         if self.task_id:
-            directory = os.path.join(self.directory)
-            if os.path.exists(directory):
-                QDesktopServices.openUrl(QUrl.fromLocalFile(directory))
-                self.detail_popup.hide()
+            # 容错：目录字段可能为 None 或空
+            directory = (self.directory or "").strip()
+            if directory:
+                if os.path.exists(directory):
+                    QDesktopServices.openUrl(QUrl.fromLocalFile(directory))
+                    if self.detail_popup:
+                        self.detail_popup.hide()
+                else:
+                    popup = WarningPopup(self, "目录不存在！")
+                    logger.warning(f"尝试打开不存在的目录：{directory}")
+                    popup.exec()
             else:
-                popup = WarningPopup(self, "目录不存在！")
-                logger.warning(f"尝试打开不存在的目录：{directory}")
+                popup = WarningPopup(self, "未配置目录路径！")
+                logger.warning("尝试打开空目录路径")
                 popup.exec()
-            
-        def change_color(self):
-            """更改标签颜色"""
-            color_dialog = MyColorDialog(self.color, self)
-            color_dialog.setWindowTitle("选择标签颜色")
-            if color_dialog.exec() == QDialog.DialogCode.Accepted:
-                color = color_dialog.selectedColor()
-                if color.isValid():
-                    self.color = color
-                    self.update_appearance()
-                    # 更新色块按钮颜色
-                    if hasattr(self, 'detail_popup') and self.detail_popup:
-                        # 找到色块按钮并更新其样式
-                        for btn in self.detail_popup.findChildren(QPushButton):
-                            if btn.fixedWidth() == 24 and btn.fixedHeight() == 24:
-                                btn.setStyleSheet(f"""
-                                    QPushButton {{
-                                        background-color: {self.color.name()};
-                                        border: 2px solid #bbb;
-                                        border-radius: 6px;
-                                        margin: 0 2px;
-                                    }}
-                                    QPushButton:hover {{
-                                        border: 2px solid #4ECDC4;
-                                    }}
-                                """)

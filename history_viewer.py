@@ -9,6 +9,7 @@ import json
 import os
 
 from styles import StyleManager
+from ui import apply_drop_shadow
 from database_manager import get_db_manager
 import logging
 logger = logging.getLogger(__name__)
@@ -48,20 +49,17 @@ class HistoryViewer(QDialog):
         # 任务基本信息
         if self.task_data.get('text'):
             text_label = QLabel(f" {self.task_data.get('text', '没有详细内容喵~')}修改记录")
-            text_label.setStyleSheet("font-size: 12px; color: #666; border: none; background: transparent;")
+            text_label.setStyleSheet(style_manager.get_stylesheet("label_small_muted"))
             text_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             panel_layout.addWidget(text_label)
         
         # 创建滚动区域
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        scroll_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        scroll_area.setStyleSheet(style_manager.get_stylesheet("scroll_area_transparent"))
         
         scroll_content = QWidget()
-        scroll_content.setStyleSheet("""
-            background: #F0F0F0;
-            border-radius: 12px;
-        """)
+        scroll_content.setStyleSheet(style_manager.get_stylesheet("scroll_content_panel"))
         scroll_layout = QVBoxLayout(scroll_content)
         scroll_layout.setSpacing(5)
         
@@ -96,6 +94,8 @@ class HistoryViewer(QDialog):
         # 居中显示
         self.adjustSize()
         self.center_on_parent()
+        # 添加阴影
+        apply_drop_shadow(panel, blur_radius=20, color=QColor(0, 0, 0, 150), offset_x=0, offset_y=0)
         
     def load_history_records(self, layout):
         """从数据库加载历史记录并合并显示到一个表格"""

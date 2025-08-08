@@ -1,10 +1,9 @@
 import json
 import os
 from datetime import datetime
-from statistics import quantiles
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QColorDialog, QSlider, 
                             QLabel, QGridLayout, QSizePolicy, QCheckBox, QLineEdit, QInputDialog, 
-                            QMessageBox, QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QDialog,
+                            QMessageBox, QDialog,
                             QTabWidget, QFormLayout, QSpinBox, QDateEdit, QMenu)
 from PyQt6.QtCore import Qt, QPoint, QSize, QRect, QPropertyAnimation, QEasingCurve, QTimer, QDate
 from PyQt6.QtWidgets import QApplication,QFileDialog
@@ -14,6 +13,7 @@ from task_label import TaskLabel
 from config_manager import save_config, save_tasks, TASKS_FILE
 from add_task_dialog import AddTaskDialog
 from styles import StyleManager
+from ui import apply_drop_shadow
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
 
@@ -60,13 +60,16 @@ class QuadrantWidget(QWidget):
         
         # 创建控制按钮区域 - 美化控制面板
         self.control_widget = QWidget(self)
+        # 确保样式表背景可绘制
+        self.control_widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.control_layout = QHBoxLayout(self.control_widget)
         self.control_layout.setSpacing(10)  # 增加按钮间距
         
         # 设置控制面板样式
         style_manager = StyleManager()
-        control_stylesheet = style_manager.get_stylesheet("control_panel").format()
-        self.control_widget.setStyleSheet(control_stylesheet)
+        # 指定对象名供样式选择器匹配
+        self.control_widget.setObjectName("control_panel")
+        self.control_widget.setStyleSheet(style_manager.get_stylesheet("control_panel"))
         
         # 确保控制面板可见（设置透明度>0）
         self.control_widget.setProperty("opacity", 1.0)
@@ -86,7 +89,6 @@ class QuadrantWidget(QWidget):
         # 新增：创建菜单
         self.export_menu = QMenu(self.export_tasks_button)
         # 主动设置菜单样式，确保生效
-        style_manager = StyleManager()
         self.export_menu.setStyleSheet(style_manager.get_stylesheet("menu"))
         self.action_export_unfinished = QAction("导出在办", self)
         self.action_export_all = QAction("导出所有", self)
@@ -121,11 +123,7 @@ class QuadrantWidget(QWidget):
         self.control_layout.addWidget(self.exit_button)
         
         # 添加控制面板阴影效果
-        control_shadow = QGraphicsDropShadowEffect(self)
-        control_shadow.setBlurRadius(20)
-        control_shadow.setColor(QColor(0, 0, 0, 100))
-        control_shadow.setOffset(0, 0)
-        self.control_widget.setGraphicsEffect(control_shadow)
+        apply_drop_shadow(self.control_widget, blur_radius=20, color=QColor(0, 0, 0, 100), offset_x=0, offset_y=0)
         # 设置控制面板为悬浮式
         self.control_widget.setParent(self)
         # 自动计算初始尺寸
@@ -788,11 +786,7 @@ class QuadrantWidget(QWidget):
         
         
         # 添加对话框阴影
-        dialog_shadow = QGraphicsDropShadowEffect(dialog)
-        dialog_shadow.setBlurRadius(20)
-        dialog_shadow.setColor(QColor(0, 0, 0, 150))
-        dialog_shadow.setOffset(0, 0)
-        dialog.setGraphicsEffect(dialog_shadow)
+        apply_drop_shadow(dialog, blur_radius=20, color=QColor(0, 0, 0, 150), offset_x=0, offset_y=0)
         
         # 设置对话框在父窗口中居中显示
         dialog.move(

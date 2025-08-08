@@ -1,11 +1,12 @@
 from PyQt6.QtCore import Qt,QDate
 from PyQt6.QtWidgets import (QDialog, QWidget, QVBoxLayout,
-                             QGraphicsDropShadowEffect, QLabel, QLineEdit,
+                             QLabel, QLineEdit,
                              QDateEdit, QPushButton, QHBoxLayout, QComboBox, QTextEdit,QFileDialog)
 from PyQt6.QtGui import QColor, QMouseEvent
 
 
 from styles import StyleManager
+from ui import apply_drop_shadow
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
 
@@ -32,11 +33,7 @@ class AddTaskDialog(QDialog):
         panel.setStyleSheet(add_task_dialog_stylesheet)
 
         # # 阴影
-        shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(5)
-        shadow.setOffset(0, 0)
-        shadow.setColor(QColor(0, 0, 0, 150))
-        panel.setGraphicsEffect(shadow)
+        apply_drop_shadow(panel, blur_radius=5, color=QColor(0, 0, 0, 150), offset_x=0, offset_y=0)
 
         # ------- 下面放你的字段、按钮 ------- #
         self.inputs = {}

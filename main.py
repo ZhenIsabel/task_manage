@@ -1,6 +1,5 @@
 import sys
 from PyQt6.QtWidgets import QApplication, QMessageBox
-from PyQt6.QtCore import QPropertyAnimation, QEasingCurve
 
 from config_manager import load_config
 from quadrant_widget import QuadrantWidget

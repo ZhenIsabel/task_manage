@@ -1,5 +1,5 @@
-from PyQt6.QtWidgets import QWidget, QApplication
-from PyQt6.QtCore import QPropertyAnimation, QEasingCurve, QTimer, pyqtSignal, QObject
+from PyQt6.QtWidgets import QWidget, QApplication, QColorDialog, QDialog, QVBoxLayout, QLabel, QPushButton, QGraphicsDropShadowEffect
+from PyQt6.QtCore import QPropertyAnimation, QEasingCurve, QTimer, pyqtSignal, QObject, Qt
 from PyQt6.QtGui import QColor
 import logging
 
@@ -330,3 +330,110 @@ class UIManager(QObject):
             animation.stop()
         self.widget_animations.clear()
         logger.info("UIManager 清理完成")
+
+
+class MyColorDialog(QColorDialog):
+    """自定义颜色对话框（迁移至 ui.py 管理 UI 组件）"""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_custom_style()
+    
+    def _apply_custom_style(self):
+        """应用自定义样式"""
+        self.setStyleSheet("""
+            QColorDialog {
+                background-color: #ECECEC;
+            }
+            QLabel {
+                color: #333;
+                font-family: '微软雅黑';
+                font-size: 12px;
+            }
+            QPushButton {
+                background-color: #ECECEC;
+                border: 1px solid rgba(100, 100, 100, 0.5);
+                border-radius: 6px;
+                padding: 4px 8px;
+                font-family: '微软雅黑';
+                font-size: 12px;
+                color: #333;
+            }
+            QPushButton:hover {
+                background-color: #D6D6D6;
+            }
+            QFrame {
+                background-color: #ECECEC;
+            }
+            QLineEdit {
+                background-color: white;
+                border: 1px solid rgba(100, 100, 100, 0.5);
+                border-radius: 4px;
+                padding: 2px 6px;
+                font-family: '微软雅黑';
+                font-size: 12px;
+                color: #333;
+            }
+        """)
+
+
+class WarningPopup(QDialog):
+    """警告弹窗（迁移至 ui.py 管理 UI 组件）"""
+    def __init__(self, parent=None, message=""):
+        super().__init__(parent)
+        self._setup_ui(message)
+        self._apply_style()
+    
+    def _setup_ui(self, message):
+        """设置UI"""
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setFixedSize(280, 140)
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(12)
+
+        text_label = QLabel(message)
+        text_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        button = QPushButton("关闭")
+        button.clicked.connect(self.accept)
+        button.setFixedWidth(80)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        layout.addWidget(text_label)
+        layout.addWidget(button, alignment=Qt.AlignmentFlag.AlignCenter)
+    
+    def _apply_style(self):
+        """应用样式"""
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #ECECEC;
+                border-radius: 10px;
+            }
+            QPushButton {
+                background-color: #ECECEC;
+                border: 1px solid rgba(100, 100, 100, 0.5);
+                border-radius: 6px;
+                padding: 4px 8px;
+                font-family: '微软雅黑';
+                font-size: 12px;
+                color: #333;
+            }
+            QPushButton:hover {
+                background-color: #D6D6D6;
+            }
+        """)
+
+
+def apply_drop_shadow(target_widget: QWidget,
+                      blur_radius: int = 20,
+                      color: QColor = QColor(0, 0, 0, 150),
+                      offset_x: int = 0,
+                      offset_y: int = 0) -> None:
+    """为任意控件统一应用阴影效果"""
+    effect = QGraphicsDropShadowEffect(target_widget)
+    effect.setBlurRadius(blur_radius)
+    effect.setColor(color)
+    effect.setOffset(offset_x, offset_y)
+    target_widget.setGraphicsEffect(effect)

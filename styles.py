@@ -1,6 +1,4 @@
-from PyQt6.QtWidgets import QColorDialog, QDialog, QVBoxLayout, QLabel, QPushButton
-from PyQt6.QtGui import QPixmap
-from PyQt6.QtCore import Qt
+# 样式集中管理：不包含任何 UI 控件类
 
 
 # ===== 基础样式模板 =====
@@ -293,46 +291,8 @@ class StyleManager:
             padding: 2px 0;
         }}
         """ + BASE_SCROLLBAR_STYLE,
-        # 四象限主窗口样式
-        "quadrant_widget": """
-            QWidget {{
-                background-color: #F8F9FA;      /* 主窗口背景色 */
-                border: 1px solid #E0E0E0;      /* 边框 */
-                border-radius: 8px;             /* 圆角 */
-            }}
-            QLabel {{
-                background-color: #FFFFFF;       /* 标签背景色 */
-                border: 1px solid #E0E0E0;      /* 边框 */
-                border-radius: 6px;             /* 圆角 */
-                padding: 6px 10px;              /* 内边距 */
-                margin: 2px;                    /* 外边距 */
-                font-family: '微软雅黑';          /* 字体 */
-                font-size: 11px;                /* 字号 */
-                color: #333333;                 /* 文字颜色 */
-            }}
-        """ + BASE_SCROLLBAR_STYLE,
-        # 控制面板样式
-        "control_panel": """
-            QWidget {{
-                background-color: rgba(40, 40, 40, 0.7);   /* 控制面板背景色，带透明度 */
-                border-radius: 15px;                       /* 圆角 */
-                padding: 5px;                              /* 内边距 */
-            }}
-            QPushButton {{
-                background-color: rgba(60, 60, 60, 0.8);   /* 按钮背景色 */
-                color: white;                              /* 文字颜色 */
-                border: none;                              /* 无边框 */
-                border-radius: 8px;                        /* 圆角 */
-                padding: 8px 15px;                         /* 内边距 */
-                font-family: '微软雅黑';                    /* 字体 */
-                font-weight: bold;                         /* 加粗 */
-            }}
-            QPushButton:hover {{
-                background-color: rgba(80, 80, 80, 0.9);   /* 悬停时按钮色 */
-            }}
-            QPushButton:pressed {{
-                background-color: rgba(100, 100, 100, 1.0);/* 按下时按钮色 */
-            }}
+        # 通用菜单样式
+        "menu": """
             QMenu {{
                 background-color: #ffffff;
                 border-radius: 10px;
@@ -358,6 +318,72 @@ class StyleManager:
                 background: #e0e0e0;
                 margin: 4px 0;
             }}
+        """ + BASE_SCROLLBAR_STYLE,
+        # 四象限主窗口样式
+        "quadrant_widget": """
+            QWidget {{
+                background-color: #F8F9FA;      /* 主窗口背景色 */
+                border: 1px solid #E0E0E0;      /* 边框 */
+                border-radius: 8px;             /* 圆角 */
+            }}
+            QLabel {{
+                background-color: #FFFFFF;       /* 标签背景色 */
+                border: 1px solid #E0E0E0;      /* 边框 */
+                border-radius: 6px;             /* 圆角 */
+                padding: 6px 10px;              /* 内边距 */
+                margin: 2px;                    /* 外边距 */
+                font-family: '微软雅黑';          /* 字体 */
+                font-size: 11px;                /* 字号 */
+                color: #333333;                 /* 文字颜色 */
+            }}
+        """ + BASE_SCROLLBAR_STYLE,
+        # 控制面板样式
+        "control_panel": """
+            #control_panel {
+                background-color: rgba(40, 40, 40, 0.7);   /* 控制面板背景色，带透明度 */
+                border-radius: 15px;                       /* 圆角 */
+                padding: 5px;                              /* 内边距 */
+            }
+            #control_panel QPushButton {
+                background-color: rgba(60, 60, 60, 0.8);   /* 按钮背景色 */
+                color: white;                              /* 文字颜色 */
+                border: none;                              /* 无边框 */
+                border-radius: 8px;                        /* 圆角 */
+                padding: 8px 15px;                         /* 内边距 */
+                font-family: '微软雅黑';                    /* 字体 */
+                font-weight: bold;                         /* 加粗 */
+            }
+            #control_panel QPushButton:hover {
+                background-color: rgba(80, 80, 80, 0.9);   /* 悬停时按钮色 */
+            }
+            #control_panel QPushButton:pressed {
+                background-color: rgba(100, 100, 100, 1.0);/* 按下时按钮色 */
+            }
+            #control_panel QMenu {
+                background-color: #ffffff;
+                border-radius: 10px;
+                padding: 6px 0;
+                min-width: 60px;
+                font-family: "微软雅黑";
+                font-size: 14px;
+                color: #333333;
+            }
+            #control_panel QMenu::item {
+                background: transparent;
+                padding: 8px 8px 8px 8px;
+                border-radius: 6px;
+                margin: 2px 8px;
+                color: #333333;
+            }
+            #control_panel QMenu::item:selected {
+                background-color: #4ECDC4;
+                color: #fff;
+            }
+            #control_panel QMenu::separator {
+                height: 1px;
+                background: #e0e0e0;
+                margin: 4px 0;
+            }
             """ + BASE_SCROLLBAR_STYLE,
         # 设置面板样式
         "settings_panel": """
@@ -432,29 +458,74 @@ class StyleManager:
         """ + BASE_SCROLLBAR_STYLE,
         # 历史记录表格美化样式
         "history_table": """
-            QTableWidget {
+            QTableWidget {{
                 border: none;
                 border-radius: 10px;
                 font-family: '微软雅黑', 'Microsoft YaHei', sans-serif;
                 font-size: 13px;
                 color: #333;
                 gridline-color: #F0F0F0;
-            }
-            QTableWidget::item {
+            }}
+            QTableWidget::item {{
                 border: none;
                 padding: 8px 6px;
-            }
-            QHeaderView::section {
+            }}
+            QHeaderView::section {{
                 color: #666;
                 border: none;
                 font-weight: bold;
                 font-size: 13px;
                 padding: 8px 0;
-            }
-            QTableCornerButton::section {
+            }}
+            QTableCornerButton::section {{
                 border: none;
-            }
+            }}
             """ + BASE_SCROLLBAR_STYLE,
+        # 通用：小号灰色标签
+        "label_small_muted": """
+            QLabel {{
+                font-size: 12px;
+                color: #666;
+                border: none;
+                background: transparent;
+            }}
+        """,
+        # 通用：透明滚动区域
+        "scroll_area_transparent": """
+            QScrollArea {{ border: none; background: transparent; }}
+        """,
+        # 通用：浅灰圆角容器
+        "scroll_content_panel": """
+            QWidget {{background: #F0F0F0; border-radius: 12px; }}
+        """,
+        # 详情标题标签
+        "detail_title_label": """
+            QLabel {{ font-size: 14px; font-weight: bold; color: black; }}
+        """,
+        # 到期日期标签
+        "due_date_label": """
+            QLabel {{ font-size: 10px; }}
+        """,
+        # 颜色按钮（详细弹窗内）
+        "color_button": """
+            QPushButton {{
+                background-color: {button_color};
+                border: 2px solid #bbb;
+                border-radius: 6px;
+                margin: 0 2px;
+            }}
+            QPushButton:hover {{
+                border: 2px solid #4ECDC4;
+            }}
+        """,
+        # 颜色色块（设置页）
+        "color_chip": """
+            QPushButton {{
+                background-color: {button_color};
+                border-radius: 15px;
+                border: 1px solid #ddd;
+            }}
+        """,
         }
 
     def get_stylesheet(self, component_name):
@@ -473,97 +544,4 @@ class StyleManager:
         """移除组件的样式"""
         if component_name in self.stylesheets:
             del self.stylesheets[component_name]
-
-
-class MyColorDialog(QColorDialog):
-    """自定义颜色对话框"""
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._apply_custom_style()
-    
-    def _apply_custom_style(self):
-        """应用自定义样式"""
-        self.setStyleSheet("""
-            QColorDialog {
-                background-color: #ECECEC;
-            }
-            QLabel {
-                color: #333;
-                font-family: '微软雅黑';
-                font-size: 12px;
-            }
-            QPushButton {
-                background-color: #ECECEC;
-                border: 1px solid rgba(100, 100, 100, 0.5);
-                border-radius: 6px;
-                padding: 4px 8px;
-                font-family: '微软雅黑';
-                font-size: 12px;
-                color: #333;
-            }
-            QPushButton:hover {
-                background-color: #D6D6D6;
-            }
-            QFrame {
-                background-color: #ECECEC;
-            }
-            QLineEdit {
-                background-color: white;
-                border: 1px solid rgba(100, 100, 100, 0.5);
-                border-radius: 4px;
-                padding: 2px 6px;
-                font-family: '微软雅黑';
-                font-size: 12px;
-                color: #333;
-            }
-        """)
-
-
-class WarningPopup(QDialog):
-    """警告弹窗"""
-    def __init__(self, parent=None, message=""):
-        super().__init__(parent)
-        self._setup_ui(message)
-        self._apply_style()
-    
-    def _setup_ui(self, message):
-        """设置UI"""
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedSize(280, 140)
         
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(12)
-
-        text_label = QLabel(message)
-        text_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        button = QPushButton("关闭")
-        button.clicked.connect(self.accept)
-        button.setFixedWidth(80)
-        button.setCursor(Qt.CursorShape.PointingHandCursor)
-
-        layout.addWidget(text_label)
-        layout.addWidget(button, alignment=Qt.AlignmentFlag.AlignCenter)
-    
-    def _apply_style(self):
-        """应用样式"""
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #ECECEC;
-                border-radius: 10px;
-            }
-            QPushButton {
-                background-color: #ECECEC;
-                border: 1px solid rgba(100, 100, 100, 0.5);
-                border-radius: 6px;
-                padding: 4px 8px;
-                font-family: '微软雅黑';
-                font-size: 12px;
-                color: #333;
-            }
-            QPushButton:hover {
-                background-color: #D6D6D6;
-            }
-        """)
