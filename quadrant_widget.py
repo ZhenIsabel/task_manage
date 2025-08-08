@@ -160,6 +160,37 @@ class QuadrantWidget(QWidget):
 
         # 新增：记录当前显示的 detail_popup
         self.current_detail_popup = None
+        
+        # 延迟设置窗口为底层（避免与置顶功能冲突）
+        self.bottom_layer_timer = QTimer(self)
+        self.bottom_layer_timer.setSingleShot(True)
+        self.bottom_layer_timer.timeout.connect(self.set_to_bottom_layer)
+        
+    def set_to_bottom_layer(self):
+        """将窗口设置为底层（仅在启动时调用）"""
+        try:
+            # 检查是否有Windows API支持
+            try:
+                import win32gui
+                import win32con
+                
+                # 获取窗口句柄
+                hwnd = int(self.winId())
+                if hwnd:
+                    # 将窗口设置为底层
+                    win32gui.SetWindowPos(hwnd, win32con.HWND_BOTTOM, 0, 0, 0, 0, 
+                                         win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOACTIVATE)
+                    logger.info("窗口已设置为底层")
+                else:
+                    logger.warning("无法获取窗口句柄")
+            except ImportError:
+                logger.warning("Windows API 不可用，无法设置窗口层级")
+        except Exception as e:
+            logger.warning(f"设置窗口底层失败: {e}")
+    
+    def start_bottom_layer_timer(self):
+        """启动底层设置定时器（在窗口显示后调用）"""
+        self.bottom_layer_timer.start(1000)  # 1秒后设置为底层
 
     def periodic_save_config(self):
         """定期保存控件位置"""

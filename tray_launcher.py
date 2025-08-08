@@ -312,10 +312,11 @@ class TaskManagerTray(QSystemTrayIcon):
                                 win32gui.SetWindowPos(hwnd, win32con.HWND_TOP, 0, 0, 0, 0, 
                                                     win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_SHOWWINDOW)
                             
-                            # 使用SetWindowPos将窗口临时置顶，然后立即取消置顶状态
+                            # 临时置顶显示窗口
                             win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0, 
                                                 win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_SHOWWINDOW)
                             time.sleep(0.1)  # 短暂延迟
+                            # 取消置顶，保持在正常层级
                             win32gui.SetWindowPos(hwnd, win32con.HWND_NOTOPMOST, 0, 0, 0, 0, 
                                                 win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_SHOWWINDOW)
                         
@@ -350,10 +351,11 @@ class TaskManagerTray(QSystemTrayIcon):
                                     win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
                                     win32gui.ShowWindow(hwnd, win32con.SW_NORMAL)
                                     
-                                    # 设置窗口位置和状态
+                                    # 临时置顶显示窗口
                                     win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0, 
                                                         win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_SHOWWINDOW)
                                     time.sleep(0.1)
+                                    # 取消置顶，保持在正常层级
                                     win32gui.SetWindowPos(hwnd, win32con.HWND_NOTOPMOST, 0, 0, 0, 0, 
                                                         win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_SHOWWINDOW)
                                     
