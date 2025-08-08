@@ -85,7 +85,7 @@ pip install -r requirements.txt
 
 ```bash
 # 直接运行（首次运行会自动初始化数据库）
-python main.py
+python tray_launcher.py
 ```
 
 ### 3. 同步模式配置
@@ -102,6 +102,7 @@ python remote_config.py
 
 #### 3.2 启动服务器（可选）
 
+在服务器端
 ```bash
 # 安装服务器依赖
 pip install -r server_requirements.txt
@@ -125,13 +126,12 @@ python sync_manager.py
 - **类型**：SQLite
 - **文件**：`tasks.db`
 - **表结构**：
-  - `config`：应用配置
   - `tasks`：任务数据（包含所有字段）
   - `task_history`：任务历史记录
   - `sync_status`：同步状态记录
 
 ### 服务器数据库
-- **类型**：SQLite（可扩展为PostgreSQL/MySQL）
+- **类型**：SQLite
 - **文件**：`server_tasks.db`
 - **表结构**：
   - `users`：用户信息
@@ -231,62 +231,6 @@ GET /api/tasks/{task_id}/history
 - **第三象限**：紧急不重要
 - **第四象限**：不重要不紧急
 
-### 数据管理
-
-#### 本地数据迁移
-```bash
-# 从JSON文件迁移到数据库
-python migrate_to_database.py
-```
-
-#### 数据备份
-```bash
-# 创建备份
-python sync_manager.py
-# 选择"创建备份"
-```
-
-#### 数据恢复
-```bash
-# 从备份恢复
-python sync_manager.py
-# 选择"从备份恢复"
-```
-
-## 开发指南
-
-### 添加新字段
-
-1. 在`config.json`中添加字段定义
-2. 更新数据库表结构
-3. 修改相关UI组件
-4. 更新同步逻辑
-
-### 自定义主题
-
-编辑`styles.py`文件，修改样式定义。
-
-### 扩展API
-
-在`server_example.py`中添加新的API端点。
-
-## 故障排除
-
-### 常见问题
-
-1. **数据库连接失败**
-   - 检查数据库文件权限
-   - 确保没有其他程序占用数据库
-
-2. **同步失败**
-   - 检查网络连接
-   - 验证API地址和令牌
-   - 查看同步日志
-
-3. **界面显示异常**
-   - 检查PyQt6安装
-   - 重启应用程序
-
 ### 日志查看
 
 应用程序日志保存在`logs/`目录下。
@@ -294,21 +238,3 @@ python sync_manager.py
 ## 许可证
 
 本项目采用MIT许可证。
-
-## 贡献
-
-欢迎提交Issue和Pull Request！
-
-## 更新日志
-
-### v2.0.0
-- 重构为客户端-服务器架构
-- 添加数据同步功能
-- 优化数据库结构
-- 改进历史记录系统
-
-### v1.0.0
-- 初始版本发布
-- 基本任务管理功能
-- 四象限界面
-- 本地数据存储

@@ -190,7 +190,7 @@ class QuadrantWidget(QWidget):
     
     def start_bottom_layer_timer(self):
         """启动底层设置定时器（在窗口显示后调用）"""
-        self.bottom_layer_timer.start(1000)  # 1秒后设置为底层
+        self.bottom_layer_timer.start(300)  # 1秒后设置为底层
 
     def periodic_save_config(self):
         """定期保存控件位置"""
