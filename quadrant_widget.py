@@ -13,6 +13,7 @@ from task_label import TaskLabel
 from config_manager import save_config, save_tasks, TASKS_FILE
 from add_task_dialog import AddTaskDialog
 from styles import StyleManager
+from database_manager import get_db_manager
 from ui import apply_drop_shadow
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
@@ -1044,9 +1045,25 @@ class QuadrantWidget(QWidget):
         # 保存配置和任务
         self.save_config()
         self.save_tasks()
-        logger.info("程序关闭前的保存操作已完成")
         
-        # 添加以下代码确保程序完全退出
+        # 退出前：确保内存缓存写盘并进行一次远程同步
+        try:
+            db_manager = get_db_manager()
+            # 先写盘，确保数据库与缓存一致
+            db_manager.flush_cache_to_db()
+            # 如果配置了远程，则执行一次上传同步
+            if getattr(db_manager, 'api_base_url', ''):
+                sync_ok = db_manager.sync_to_server()
+                logger.info(f"退出前远程同步结果: {sync_ok}")
+                # 同步后的状态也写盘
+                db_manager.flush_cache_to_db()
+            # 关闭连接并停止后台线程
+            db_manager.close_connection()
+        except Exception as e:
+            logger.error(f"退出时写盘/同步失败: {str(e)}")
+        
+        logger.info("程序关闭前的保存/同步操作完成，即将退出")
+        # 确保程序完全退出
         from PyQt6.QtWidgets import QApplication
         QApplication.instance().quit()
         

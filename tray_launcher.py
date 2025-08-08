@@ -4,17 +4,18 @@ import subprocess
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
 from PyQt6.QtGui import QIcon, QAction
 from PyQt6.QtCore import QCoreApplication
-from styles import StyleManager
 
 # 配置日志系统
+from utils import init_logging
 import logging
-logger = logging.getLogger(__name__)  # 自动获取模块名
+logger = logging.getLogger(__name__)
 
 class TaskManagerTray(QSystemTrayIcon):
     def __init__(self, app):
         super().__init__()
         self.app = app
         self.process = None
+        init_logging()
         
         # 设置图标 - 使用项目中的图标
         icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons", "app_icon.png")
@@ -71,7 +72,6 @@ class TaskManagerTray(QSystemTrayIcon):
                 [python_exe, main_script], 
                 creationflags=subprocess.CREATE_NO_WINDOW,
                 cwd=os.path.dirname(os.path.abspath(__file__)),
-                stdout=open(os.path.join(os.path.dirname(__file__), 'main_output.log'), 'w'), 
                 stderr=subprocess.STDOUT,
                 text=True,
                 # 新增环境变量
