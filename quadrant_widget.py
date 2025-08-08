@@ -30,7 +30,7 @@ class QuadrantWidget(QWidget):
         self.undo_stack = []
         
         # 设置为无边框、保持在底层且作为桌面级窗口
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnBottomHint | Qt.WindowType.Tool)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint  | Qt.WindowType.Tool)
         # 设置窗口为透明背景
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         # 允许鼠标事件穿透到桌面
