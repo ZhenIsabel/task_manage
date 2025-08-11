@@ -1,20 +1,18 @@
 import json
 import os
 from datetime import datetime
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QColorDialog, QSlider, 
-                            QLabel, QGridLayout, QSizePolicy, QCheckBox, QLineEdit, QInputDialog, 
-                            QMessageBox, QDialog,
-                            QTabWidget, QFormLayout, QSpinBox, QDateEdit, QMenu)
-from PyQt6.QtCore import Qt, QPoint, QSize, QRect, QPropertyAnimation, QEasingCurve, QTimer, QDate
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QColorDialog, QSlider,  QMessageBox, QDialog,
+                            QTabWidget, QFormLayout, QSpinBox,  QMenu)
+from PyQt6.QtCore import Qt, QPoint,  QRect, QTimer
 from PyQt6.QtWidgets import QApplication,QFileDialog
-from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont, QCursor, QPainterPath, QLinearGradient, QAction
+from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont,  QPainterPath, QLinearGradient, QAction
 
-from task_label import TaskLabel
-from config_manager import save_config, save_tasks, TASKS_FILE
-from add_task_dialog import AddTaskDialog
-from styles import StyleManager
-from database_manager import get_db_manager
-from ui import apply_drop_shadow
+from .task_label import TaskLabel
+from config.config_manager import save_config, save_tasks, TASKS_FILE
+from .add_task_dialog import AddTaskDialog
+from ui.styles import StyleManager
+from database.database_manager import get_db_manager
+from ui.ui import apply_drop_shadow
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
 
@@ -1035,7 +1033,7 @@ class QuadrantWidget(QWidget):
         
         try:
             # 使用新的历史记录加载函数
-            from config_manager import load_tasks_with_history
+            from config.config_manager import load_tasks_with_history
             tasks_data = load_tasks_with_history()
             
             # 加载可见的任务

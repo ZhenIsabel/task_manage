@@ -1,16 +1,17 @@
 import json
-import os
 from datetime import datetime
 from PyQt6.QtWidgets import QMessageBox
 import logging
 logger = logging.getLogger(__name__)
 
 # 导入数据库管理器
-from database_manager import get_db_manager
+from database.database_manager import get_db_manager
 
-# 配置文件路径（用于向后兼容）
-CONFIG_FILE = 'config.json'
-TASKS_FILE = 'tasks.json'
+# 配置和数据文件（统一定位到项目根目录）
+import os
+APP_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+CONFIG_FILE = os.path.join(APP_ROOT,'config', 'config.json')
+TASKS_FILE = os.path.join(APP_ROOT,'database', 'tasks.json')
 
 # 默认配置
 DEFAULT_CONFIG = {

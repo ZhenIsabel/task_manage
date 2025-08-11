@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime
 from typing import Dict, List
-from database_manager import get_db_manager
+from database.database_manager import get_db_manager
 
 class SyncManager:
     """同步管理器"""

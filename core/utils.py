@@ -2,11 +2,13 @@ import logging
 import logging.handlers
 import os
 
-ICON_PATH = "./icons"
+import os
+APP_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+ICON_PATH = os.path.join(APP_ROOT, "icons")
 
 def init_logging():
     """统一初始化日志配置"""
-    log_dir = os.path.abspath("logs")
+    log_dir = os.path.join(APP_ROOT, "logs")
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     

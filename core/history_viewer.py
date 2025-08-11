@@ -8,9 +8,9 @@ from datetime import datetime
 import json
 import os
 
-from styles import StyleManager
-from ui import apply_drop_shadow
-from database_manager import get_db_manager
+from ui.styles import StyleManager
+from ui.ui import apply_drop_shadow
+from database.database_manager import get_db_manager
 import logging
 logger = logging.getLogger(__name__)
 
@@ -216,7 +216,7 @@ class HistoryViewer(QDialog):
             return
         from PyQt6.QtWidgets import QFileDialog, QMessageBox
         # 重新生成 merged_history
-        from config_manager import load_config
+        from config.config_manager import load_config
         config = load_config()
         field_names = [f['name'] for f in config.get('task_fields', [])]
         merged_history = []

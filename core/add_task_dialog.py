@@ -5,8 +5,8 @@ from PyQt6.QtWidgets import (QDialog, QWidget, QVBoxLayout,
 from PyQt6.QtGui import QColor, QMouseEvent
 
 
-from styles import StyleManager
-from ui import apply_drop_shadow
+from ui.styles import StyleManager
+from ui.ui import apply_drop_shadow
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
 

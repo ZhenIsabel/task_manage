@@ -7,11 +7,10 @@ from PyQt6.QtCore import Qt, pyqtSignal, QDate, QPoint, QEvent, QUrl
 from PyQt6.QtGui import QColor, QCursor, QAction, QDesktopServices
 import os
 
-from add_task_dialog import AddTaskDialog
-from styles import StyleManager
-from ui import MyColorDialog, WarningPopup
-from ui import apply_drop_shadow
-from config_manager import load_config
+from .add_task_dialog import AddTaskDialog
+from ui.styles import StyleManager
+from ui.ui import MyColorDialog, WarningPopup, apply_drop_shadow
+from config.config_manager import load_config
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
 
@@ -455,7 +454,7 @@ class TaskLabel(QWidget):
         if reply == QMessageBox.StandardButton.Yes:
             # 使用数据库管理器进行逻辑删除
             try:
-                from database_manager import get_db_manager
+                from database.database_manager import get_db_manager
                 db_manager = get_db_manager()
                 success = db_manager.delete_task(self.task_id)
                 if success:
@@ -487,7 +486,7 @@ class TaskLabel(QWidget):
         task_data = self.get_data()
         
         # 显示历史记录查看器
-        from history_viewer import HistoryViewer
+        from .history_viewer import HistoryViewer
         history_dialog = HistoryViewer(task_data, self.parent())
         history_dialog.exec()
     

@@ -5,8 +5,13 @@ from typing import Dict, Optional
 class RemoteConfigManager:
     """远程配置管理器"""
     
-    def __init__(self, config_file: str = 'remote_config.json'):
-        self.config_file = config_file
+    def __init__(self, config_file: str = None):
+        if config_file:
+            self.config_file = config_file
+        else:
+            # 默认定位到config目录
+            app_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+            self.config_file = os.path.join(app_root,'config', 'remote_config.json')
         self.config = self.load_config()
     
     def load_config(self) -> Dict:
@@ -47,7 +52,7 @@ class RemoteConfigManager:
     
     def test_connection(self) -> bool:
         """测试服务器连接"""
-        from database_manager import DatabaseManager
+        from database.database_manager import DatabaseManager
         
         if not self.config.get('api_base_url'):
             print("未配置服务器地址")

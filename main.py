@@ -1,11 +1,11 @@
 import sys
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
-from config_manager import load_config
-from quadrant_widget import QuadrantWidget
-from ui import UIManager
+from config.config_manager import load_config
+from core.quadrant_widget import QuadrantWidget
+from ui.ui import UIManager
 
-from utils import init_logging
+from core.utils import init_logging
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
 

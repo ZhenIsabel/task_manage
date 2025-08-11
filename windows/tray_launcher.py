@@ -5,6 +5,11 @@ from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
 from PyQt6.QtGui import QIcon, QAction
 from PyQt6.QtCore import QCoreApplication
 
+# 确保项目根目录在模块搜索路径中
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 # Windows API 导入（用于窗口管理）
 try:
     import win32gui
@@ -16,7 +21,7 @@ except ImportError:
     HAS_WIN32 = False
 
 # 配置日志系统
-from utils import init_logging
+from core.utils import init_logging
 import logging
 logger = logging.getLogger(__name__)
 
@@ -25,10 +30,11 @@ class TaskManagerTray(QSystemTrayIcon):
         super().__init__()
         self.app = app
         self.process = None
-        init_logging()
         
-        # 设置图标 - 使用项目中的图标
-        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons", "app_icon.png")
+        
+        # 设置图标 - 使用项目根目录下的图标
+        self.project_root = PROJECT_ROOT
+        icon_path = os.path.join(PROJECT_ROOT, "icons", "app_icon.png")
         self.setIcon(QIcon(icon_path))
         self.setToolTip("四象限任务管理工具")
         
@@ -43,10 +49,10 @@ class TaskManagerTray(QSystemTrayIcon):
         open_action.triggered.connect(self.open_app)
         menu.addAction(open_action)
         
-        # 添加"置顶"选项
-        bring_to_front_action = QAction("置顶", self)
-        bring_to_front_action.triggered.connect(self.bring_to_front)
-        menu.addAction(bring_to_front_action)
+        # # 添加"置顶"选项
+        # bring_to_front_action = QAction("置顶", self)
+        # bring_to_front_action.triggered.connect(self.bring_to_front)
+        # menu.addAction(bring_to_front_action)
         
         # 添加分隔线
         menu.addSeparator()
@@ -72,7 +78,7 @@ class TaskManagerTray(QSystemTrayIcon):
             if not os.path.exists(python_exe):
                 python_exe = sys.executable
                 
-            main_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "main.py")
+            main_script = os.path.join(PROJECT_ROOT, "main.py")
             
             # 检查主脚本是否存在
             if not os.path.exists(main_script):
@@ -86,7 +92,7 @@ class TaskManagerTray(QSystemTrayIcon):
             self.process = subprocess.Popen(
                 [python_exe, main_script], 
                 creationflags=subprocess.CREATE_NO_WINDOW,
-                cwd=os.path.dirname(os.path.abspath(__file__)),
+                cwd=PROJECT_ROOT,
                 stderr=subprocess.STDOUT,
                 text=True,
                 # 新增环境变量
@@ -106,61 +112,14 @@ class TaskManagerTray(QSystemTrayIcon):
             logger.exception(error_msg)
 
     def open_app(self):
-        """打开应用（如果已关闭则重新启动）"""
+        """置顶应用（如果已关闭则重新启动）"""
             # 新增进程状态检查
-        if self.process and self.process.poll() is None:
-            try:
-                # 检查进程是否真的存活
-                if sys.platform == 'win32' and HAS_WIN32:
-                    process_handle = win32api.OpenProcess(win32con.PROCESS_QUERY_INFORMATION, 0, self.process.pid)
-                    if not process_handle:
-                        logger.debug("进程句柄获取失败，重置进程状态")
-                        self.process = None
-            except Exception as e:
-                self.process = None
-                logger.error(f"进程状态检查异常：{str(e)}") 
-
-
-        if self.process is None or self.process.poll() is not None:
+        is_running = self.bring_to_front()
+        logger.info(f"running:{is_running}")
+        if not is_running:
             logger.info("应用未运行，正在重新启动...")
             self.start_app()
-        else:
-            # 应用已在运行，尝试将其窗口置顶
-            logger.info(f"应用已在运行，PID: {self.process.pid}")
-            try:
-                # 检查是否有Windows API支持
-                if not HAS_WIN32:
-                    logger.warning("Windows API 不可用，尝试重新启动应用...")
-                    self.process.terminate()
-                    self.start_app()
-                    return
-                
-                def callback(hwnd, hwnds):
-                    # 检查窗口是否可见
-                    if win32gui.IsWindowVisible(hwnd):
-                        _, pid = win32process.GetWindowThreadProcessId(hwnd)
-                        # 检查窗口是否属于我们的进程
-                        if pid == self.process.pid:
-                            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-                            win32gui.SetForegroundWindow(hwnd)
-                            hwnds.append(hwnd)
-                    return True
-                
-                hwnds = []
-                win32gui.EnumWindows(callback, hwnds)
-                
-                if not hwnds:
-                    logger.warning("找不到应用窗口，尝试重新启动...")
-                    self.process.terminate()
-                    self.start_app()
-                else:
-                    logger.info(f"已激活应用窗口，句柄: {hwnds}")
-                    self.showMessage("操作成功", "已将四象限任务管理工具窗口置顶", 
-                                    QSystemTrayIcon.MessageIcon.Information)
-            except Exception as e:
-                logger.error(f"激活窗口失败: {str(e)}，尝试重新启动...")
-                self.process.terminate()
-                self.start_app()
+        
     
     def find_related_python_processes(self):
         """查找所有相关的Python进程"""
@@ -250,21 +209,15 @@ class TaskManagerTray(QSystemTrayIcon):
         # 检查应用是否在运行
         if self.process is None or self.process.poll() is not None:
             logger.info("应用未运行，无法置顶")
-            self.showMessage("操作失败", "应用未运行，请先打开应用", 
-                           QSystemTrayIcon.MessageIcon.Warning)
+            self.showMessage("操作失败", "应用未运行，请先打开应用", QSystemTrayIcon.MessageIcon.Warning)
             return
         
         try:
             # 检查是否有Windows API支持
             if not HAS_WIN32:
                 logger.error("Windows API 不可用，无法执行置顶操作")
-                self.showMessage("操作失败", "系统不支持此功能", 
-                               QSystemTrayIcon.MessageIcon.Critical)
+                self.showMessage("操作失败", "系统不支持此功能", QSystemTrayIcon.MessageIcon.Critical)
                 return
-            
-            # 添加延迟，等待窗口创建完成
-            import time
-            time.sleep(0.5)
             
             # 查找所有相关的Python进程
             related_pids = self.find_related_python_processes()
@@ -291,7 +244,7 @@ class TaskManagerTray(QSystemTrayIcon):
                     
                     # 如果是相关进程的窗口
                     if pid in related_pids:
-                        logger.info(f"找到进程窗口: hwnd={hwnd}, title='{window_text}', class='{class_name}', visible={is_visible}")
+                        # logger.info(f"找到进程窗口: hwnd={hwnd}, title='{window_text}', class='{class_name}', visible={is_visible}")
                         
                         # 精确检查是否是主窗口，排除系统和内部窗口
                         is_main_window = self._is_likely_main_window(window_text, class_name, is_visible)
@@ -315,6 +268,7 @@ class TaskManagerTray(QSystemTrayIcon):
                             # 临时置顶显示窗口
                             win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0, 
                                                 win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_SHOWWINDOW)
+                            import time
                             time.sleep(0.1)  # 短暂延迟
                             # 取消置顶，保持在正常层级
                             win32gui.SetWindowPos(hwnd, win32con.HWND_NOTOPMOST, 0, 0, 0, 0, 
@@ -327,56 +281,6 @@ class TaskManagerTray(QSystemTrayIcon):
             # 枚举所有窗口，包括子窗口和隐藏窗口
             win32gui.EnumWindows(debug_callback, None)
             
-            # 如果常规枚举没找到，尝试备用方法
-            if not target_windows:
-                logger.info("常规枚举未找到窗口，尝试备用方法...")
-                
-                try:
-                    # 方法1: 直接查找所有属于目标进程的窗口（不过滤条件）
-                    def find_all_process_windows(hwnd, result):
-                        try:
-                            _, pid = win32process.GetWindowThreadProcessId(hwnd)
-                            if pid in related_pids:
-                                class_name = win32gui.GetClassName(hwnd)
-                                window_text = win32gui.GetWindowText(hwnd)
-                                is_visible = win32gui.IsWindowVisible(hwnd)
-                                logger.info(f"找到进程窗口: hwnd={hwnd}, class='{class_name}', title='{window_text}', visible={is_visible}")
-                                
-                                # 检查是否是主窗口
-                                if self._is_likely_main_window(window_text, class_name, is_visible):
-                                    result.append(hwnd)
-                                    
-                                    # 尝试各种方法让窗口显示和置顶
-                                    win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
-                                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-                                    win32gui.ShowWindow(hwnd, win32con.SW_NORMAL)
-                                    
-                                    # 临时置顶显示窗口
-                                    win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0, 
-                                                        win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_SHOWWINDOW)
-                                    time.sleep(0.1)
-                                    # 取消置顶，保持在正常层级
-                                    win32gui.SetWindowPos(hwnd, win32con.HWND_NOTOPMOST, 0, 0, 0, 0, 
-                                                        win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_SHOWWINDOW)
-                                    
-                                    # 尝试设置前台
-                                    try:
-                                        win32gui.SetForegroundWindow(hwnd)
-                                    except:
-                                        win32gui.BringWindowToTop(hwnd)
-                                
-                        except Exception as e:
-                            logger.debug(f"处理窗口时出错: {e}")
-                        return True
-                    
-                    alt_windows = []
-                    win32gui.EnumWindows(find_all_process_windows, alt_windows)
-                    target_windows.extend(alt_windows)
-                    logger.info(f"通过备用方法找到 {len(alt_windows)} 个进程窗口")
-                    
-                except Exception as e:
-                    logger.info(f"备用窗口查找方法失败: {e}")
-            
             # 输出调试信息
             related_windows = [w for w in all_windows if w['pid'] in related_pids]
             logger.info(f"总共找到 {len(all_windows)} 个窗口")
@@ -385,8 +289,8 @@ class TaskManagerTray(QSystemTrayIcon):
             
             if target_windows:
                 logger.info(f"成功操作了 {len(target_windows)} 个窗口")
-                self.showMessage("操作成功", "已将四象限任务管理工具窗口置顶", 
-                               QSystemTrayIcon.MessageIcon.Information)
+                self.showMessage("操作成功", "已将四象限任务管理工具窗口置顶", QSystemTrayIcon.MessageIcon.Information)
+                return True
             else:
                 # 如果没找到目标窗口，显示相关进程的所有窗口信息
                 if related_windows:
@@ -396,13 +300,11 @@ class TaskManagerTray(QSystemTrayIcon):
                 else:
                     logger.warning(f"相关进程 {related_pids} 没有找到任何窗口")
                 
-                self.showMessage("操作失败", "找不到可操作的应用窗口，可能应用窗口创建失败", 
-                               QSystemTrayIcon.MessageIcon.Warning)
+                self.showMessage("操作失败", "找不到可操作的应用窗口，可能应用窗口创建失败", QSystemTrayIcon.MessageIcon.Warning)
                 
         except Exception as e:
             logger.error(f"置顶窗口失败: {str(e)}")
-            self.showMessage("操作失败", f"置顶操作失败: {str(e)}", 
-                           QSystemTrayIcon.MessageIcon.Critical)
+            self.showMessage("操作失败", f"置顶操作失败: {str(e)}", QSystemTrayIcon.MessageIcon.Critical)
     
     def exit_app(self):
         """退出应用"""
@@ -432,6 +334,7 @@ class TaskManagerTray(QSystemTrayIcon):
             self.open_app()
 
 if __name__ == "__main__":
+    init_logging()
     logger.info("托盘应用启动中...")
     # 创建应用
     app = QApplication(sys.argv)
