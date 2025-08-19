@@ -113,12 +113,24 @@ class HistoryViewer(QDialog):
                 layout.addWidget(QLabel("未找到该任务的历史记录"))
                 return
 
+            # 字段名称映射
+            field_name_map = {
+                'text': '任务内容',
+                'notes': '备注',
+                'due_date': '到期日期',
+                'priority': '优先级',
+                'directory': '目录',
+                'create_date': '创建日期'
+            }
+
             # 合并所有字段的历史记录
             merged_history = []
             for field_name, history_list in field_history.items():
+                # 使用友好的字段名称
+                display_name = field_name_map.get(field_name, field_name)
                 for record in history_list:
                     merged_history.append({
-                        'field': field_name,
+                        'field': display_name,
                         'timestamp': record.get('timestamp', ''),
                         'action': record.get('action', 'update'),
                         'value': record.get('value', '')
@@ -214,62 +226,81 @@ class HistoryViewer(QDialog):
             from PyQt6.QtWidgets import QMessageBox
             QMessageBox.critical(self, "导出失败", "未安装pandas库，无法导出为Excel/CSV。请先安装pandas。\n\n安装命令：pip install pandas openpyxl")
             return
+        
         from PyQt6.QtWidgets import QFileDialog, QMessageBox
-        # 重新生成 merged_history
-        from config.config_manager import load_config
-        config = load_config()
-        field_names = [f['name'] for f in config.get('task_fields', [])]
-        merged_history = []
-        # 读取 tasks.json
-        import os, json
-        tasks_file = 'tasks.json'
-        if not os.path.exists(tasks_file):
-            QMessageBox.critical(self, "导出失败", "未找到历史记录数据")
-            return
-        with open(tasks_file, 'r', encoding='utf-8') as f:
-            all_tasks = json.load(f)
+        import os
+        
+        # 从数据库获取历史记录
         task_id = self.task_data.get('id')
-        target_task = None
-        for task in all_tasks:
-            if task.get('id') == task_id:
-                target_task = task
-                break
-        if not target_task:
-            QMessageBox.critical(self, "导出失败", "未找到该任务的历史记录")
+        if not task_id:
+            QMessageBox.critical(self, "导出失败", "未找到任务ID")
             return
-        for field_name in field_names:
-            history_key = f'{field_name}_history'
-            if history_key in target_task and target_task[history_key]:
-                for record in target_task[history_key]:
+        
+        try:
+            db_manager = get_db_manager()
+            field_history = db_manager.get_task_history(task_id)
+            
+            if not field_history:
+                QMessageBox.information(self, "导出历史记录", "没有历史记录可导出")
+                return
+            
+            # 合并所有字段的历史记录
+            merged_history = []
+            
+            # 字段名称映射
+            field_name_map = {
+                'text': '任务内容',
+                'notes': '备注',
+                'due_date': '到期日期',
+                'priority': '优先级',
+                'directory': '目录',
+                'create_date': '创建日期'
+            }
+            
+            for field_name, history_list in field_history.items():
+                # 使用友好的字段名称
+                display_name = field_name_map.get(field_name, field_name)
+                for record in history_list:
                     merged_history.append({
                         '时间': record.get('timestamp', ''),
-                        '字段': field_name,
+                        '字段': display_name,
                         '操作': '创建' if record.get('action', 'update') == 'create' else '更新',
                         '值': record.get('value', '')
                     })
-        if not merged_history:
-            QMessageBox.information(self, "导出历史记录", "没有历史记录可导出")
-            return
-        # 选择文件保存路径
-        desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
-        default_filename = os.path.join(desktop_path, "任务历史记录.xlsx")
-        filename, filetype = QFileDialog.getSaveFileName(
-            self,
-            "导出历史记录",
-            default_filename,
-            "Excel文件 (*.xlsx);;CSV文件 (*.csv);;所有文件 (*)"
-        )
-        if not filename:
-            return
-        try:
-            df = pd.DataFrame(merged_history)
-            if filetype.startswith("Excel") or filename.endswith(".xlsx"):
-                df.to_excel(filename, index=False)
-            elif filetype.startswith("CSV") or filename.endswith(".csv"):
-                df.to_csv(filename, index=False, encoding='utf-8-sig')
-            else:
-                # 默认Excel
-                df.to_excel(filename, index=False)
-            QMessageBox.information(self, "导出成功", f"成功导出历史记录到:\n{filename}")
+            
+            if not merged_history:
+                QMessageBox.information(self, "导出历史记录", "没有历史记录可导出")
+                return
+            
+            # 按时间排序
+            merged_history.sort(key=lambda x: x['时间'])
+            
+            # 选择文件保存路径
+            desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+            default_filename = os.path.join(desktop_path, "任务历史记录.xlsx")
+            filename, filetype = QFileDialog.getSaveFileName(
+                self,
+                "导出历史记录",
+                default_filename,
+                "Excel文件 (*.xlsx);;CSV文件 (*.csv);;所有文件 (*)"
+            )
+            
+            if not filename:
+                return
+            
+            try:
+                df = pd.DataFrame(merged_history)
+                if filetype.startswith("Excel") or filename.endswith(".xlsx"):
+                    df.to_excel(filename, index=False)
+                elif filetype.startswith("CSV") or filename.endswith(".csv"):
+                    df.to_csv(filename, index=False, encoding='utf-8-sig')
+                else:
+                    # 默认Excel
+                    df.to_excel(filename, index=False)
+                
+                QMessageBox.information(self, "导出成功", f"成功导出历史记录到:\n{filename}")
+            except Exception as e:
+                QMessageBox.critical(self, "导出失败", f"导出历史记录时发生错误:\n{str(e)}")
+                
         except Exception as e:
-            QMessageBox.critical(self, "导出失败", f"导出历史记录时发生错误:\n{str(e)}") 
+            QMessageBox.critical(self, "导出失败", f"获取历史记录时发生错误:\n{str(e)}") 

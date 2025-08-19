@@ -133,12 +133,15 @@ class TaskLabel(QWidget):
     
     def on_status_changed(self, state):
         """复选框状态改变时的处理"""
+        # 更新外观
         self.update_appearance()
-        self.statusChanged.emit(self)
-
+        
         # 如果detail_popup存在，刷新里面的状态文字
         if hasattr(self, 'status_label') and self.status_label:
             self.update_status_label()
+        
+        # 触发保存信号
+        self.statusChanged.emit(self)
     
     def mousePressEvent(self, event):
         """鼠标按下事件"""
@@ -221,8 +224,8 @@ class TaskLabel(QWidget):
                 {'name': 'due_date', 'label': '到期日期', 'type': 'date', 'required': False}
             ]
 
-        dialog= AddTaskDialog(self, task_fields=task_fields)
-            # 3) 如果点击「确定」就取回数据
+        dialog = AddTaskDialog(self, task_fields=task_fields)
+        # 3) 如果点击「确定」就取回数据
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return                          # 点了取消
 
@@ -242,6 +245,14 @@ class TaskLabel(QWidget):
                 setattr(self, key, task_data[key])
         # 特殊处理标签文本更新
         self.label.setText(self.text)
+        
+        # 更新到期日期标签
+        if hasattr(self, 'due_date_label') and self.due_date_label:
+            if self.due_date:
+                self.due_date_label.setText(f"到期: {self.due_date}")
+            else:
+                self.due_date_label.setText("")
+        
         # 触发保存
         self.statusChanged.emit(self)
     
@@ -254,24 +265,24 @@ class TaskLabel(QWidget):
             if color.isValid():
                 self.color = color
                 self.update_appearance()
+                # 触发保存信号
+                self.statusChanged.emit(self)
     
     def get_data(self):
         """获取标签数据"""
         data = {
-                'id': self.task_id,
-                'color': self.color.name(),
-                'position': {'x': self.pos().x(), 'y': self.pos().y()},
-                'completed': self.checkbox.isChecked(),
-                'date': datetime.now().strftime('%Y-%m-%d')
-            }
+            'id': self.task_id,
+            'color': self.color.name(),
+            'position': {'x': self.pos().x(), 'y': self.pos().y()},
+            'completed': self.checkbox.isChecked(),
+            'completed_date': datetime.now().strftime('%Y-%m-%d') if self.checkbox.isChecked() else ''
+        }
         
-        # 如果任务刚被标记为完成，记录完成日期
-        if self.checkbox.isChecked():
-            data['completed_date'] = datetime.now().strftime('%Y-%m-%d')
-        
+        # 添加所有可编辑字段
         for meta in self.get_editable_fields():
             key = meta["name"]
-            data[key] = getattr(self, key, "")
+            value = getattr(self, key, "")
+            data[key] = value if value is not None else ""
 
         return data
         
