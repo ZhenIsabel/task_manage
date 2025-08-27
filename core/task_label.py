@@ -32,7 +32,8 @@ class TaskLabel(QWidget):
                 {"name": "priority",  "label": "优先级",   "type": "select", "required": False, "options": ["高", "中", "低"]},
                 {"name": "notes",     "label": "备注",     "type": "multiline",  "required": False},
                 {"name": "directory","label": "目录","type": "file", "required": False},
-                {"name":"create_date","label":"创建日期","type":"date","required":False}
+                {"name":"create_date","label":"创建日期","type":"date","required":False},
+                {"name":"completed_date","label":"完成日期","type":"date","required":False}
             ]
         return fields
     
@@ -139,6 +140,14 @@ class TaskLabel(QWidget):
         # 如果detail_popup存在，刷新里面的状态文字
         if hasattr(self, 'status_label') and self.status_label:
             self.update_status_label()
+
+        # 更新completed_date
+        if self.checkbox.isChecked():
+            self.completed_date = datetime.now().strftime('%Y-%m-%d')
+            logger.info(f"任务 {self.task_id} 已完成")
+        else:
+            self.completed_date = ""
+            logger.info(f"任务 {self.task_id} 完成状态取消")
         
         # 触发保存信号
         self.statusChanged.emit(self)
@@ -179,10 +188,6 @@ class TaskLabel(QWidget):
             dialog.setLabelText("任务内容:")
             dialog.setTextValue(self.text)
             dialog.setWindowTitle("编辑任务")
-            
-            # if dialog.exec() == QDialog.DialogCode.Accepted:
-            #     self.text = dialog.textValue()
-            #     self.label.setText(self.text)
     
     def set_draggable(self, draggable):
         """设置任务标签是否可拖动"""
@@ -275,7 +280,6 @@ class TaskLabel(QWidget):
             'color': self.color.name(),
             'position': {'x': self.pos().x(), 'y': self.pos().y()},
             'completed': self.checkbox.isChecked(),
-            'completed_date': datetime.now().strftime('%Y-%m-%d') if self.checkbox.isChecked() else ''
         }
         
         # 添加所有可编辑字段

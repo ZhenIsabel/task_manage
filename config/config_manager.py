@@ -90,10 +90,6 @@ def save_tasks(tasks, parent=None):
             if not success:
                 logger.error(f"保存任务 {task_id} 失败")
         
-        # 标记不在当前列表中的任务为逻辑删除
-        # 注意：这里需要从数据库获取所有任务，然后标记删除
-        # 为了简化，我们暂时不处理这个逻辑，因为数据库会自动处理历史记录
-        
         logger.info(f"成功保存了 {len(current_task_ids)} 个任务")
         return True
     except Exception as e:
