@@ -51,7 +51,10 @@ class TaskLabel(QWidget):
         self.dragging = False
         self.drag_start_position = None
         self._draggable = False  # 初始化 _draggable 属性，默认为不可拖动
-
+        
+        # 新增：到期状态
+        self.is_overdue = False
+        
         # 如果你想限制最小宽度：
         self.setMinimumWidth(80)
         
@@ -97,6 +100,10 @@ class TaskLabel(QWidget):
         #     layout.addWidget(self.due_date_label)
         
         self.setLayout(layout)
+        
+        # 初始化时检查到期状态
+        self.check_overdue_status()
+        
         self.update_appearance()
         
         # 文本可能改动时，随时调整标签尺寸
@@ -118,6 +125,12 @@ class TaskLabel(QWidget):
 
         # 获取样式模板并格式化
         stylesheet_template = style_manager.get_stylesheet("task_label")
+        
+        # 根据到期状态选择样式
+        if self.is_overdue and not self.checkbox.isChecked():
+            # 到期任务使用带橙色描边的样式
+            stylesheet_template = style_manager.get_stylesheet("task_label_overdue")
+        
         stylesheet = stylesheet_template.format(
             bg_color_red=bg_color.red(),
             bg_color_green=bg_color.green(),
@@ -148,6 +161,9 @@ class TaskLabel(QWidget):
         else:
             self.completed_date = ""
             logger.info(f"任务 {self.task_id} 完成状态取消")
+        
+        # 重新检查到期状态（完成的任务不应该显示为到期）
+        self.check_overdue_status()
         
         # 触发保存信号
         self.statusChanged.emit(self)
@@ -194,6 +210,26 @@ class TaskLabel(QWidget):
         self._draggable = draggable
         # 可能还需要更新鼠标样式或其他视觉提示
         self.setCursor(Qt.CursorShape.SizeAllCursor if draggable else Qt.CursorShape.ArrowCursor)
+
+    def set_overdue_status(self, is_overdue):
+        """设置任务的到期状态"""
+        if self.is_overdue != is_overdue:
+            self.is_overdue = is_overdue
+            # 更新外观以显示到期状态
+            self.update_appearance()
+            logger.debug(f"任务 {self.task_id} 到期状态更新: {is_overdue}")
+
+    def check_overdue_status(self):
+        """检查并更新任务的到期状态"""
+        if hasattr(self, 'due_date') and self.due_date:
+            try:
+                from datetime import datetime
+                due_date = datetime.strptime(self.due_date, '%Y-%m-%d').date()
+                today = datetime.now().date()
+                is_overdue = due_date <= today
+                self.set_overdue_status(is_overdue)
+            except ValueError as e:
+                logger.warning(f"任务 {self.task_id} 的到期日期格式错误: {self.due_date}, 错误: {e}")
 
     def contextMenuEvent(self, event):
         """右键菜单事件"""
@@ -257,6 +293,9 @@ class TaskLabel(QWidget):
                 self.due_date_label.setText(f"到期: {self.due_date}")
             else:
                 self.due_date_label.setText("")
+        
+        # 重新检查到期状态
+        self.check_overdue_status()
         
         # 触发保存
         self.statusChanged.emit(self)

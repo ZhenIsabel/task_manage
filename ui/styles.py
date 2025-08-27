@@ -77,6 +77,44 @@ class StyleManager:
                 image:  url(./icons/check.png); /* 选中时显示对勾图片 */
             }}
         """,
+            # 到期任务标签样式（带橙色描边）
+            "task_label_overdue": """
+            QWidget {{
+                background: transparent;  /* 透明背景 */
+                border-radius: 10px;      /* 圆角 */
+                
+            }}
+            QLabel {{
+                background: qlineargradient(
+        x1:0, y1:0, x2:1, y2:0,
+        stop:0 rgba({bg_color_red}, {bg_color_green}, {bg_color_blue}, 217),
+        stop:0.5 rgba({bg_color_red}, {bg_color_green}, {bg_color_blue}, 217),
+        stop:0.51 rgba(255, 165, 0, 0.8),
+        stop:1 rgba(255, 165, 0, 0.8)
+    );
+    color: rgb({text_color_red}, {text_color_green}, {text_color_blue});
+    font-weight: bold;
+    font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+    padding: 2px 8px;
+    border-radius: 10px;
+            }}
+            QCheckBox {{
+                spacing: 5px;             /* 复选框与文字间距 */
+                background-color: transparent;  /* 透明背景 */
+            }}
+            QCheckBox::indicator {{
+                width: {indicator_size}px;     /* 指示器宽度 */
+                height: {indicator_size}px;    /* 指示器高度 */
+                border-radius: 9px;            /* 圆角 */
+                border: 2px solid gray;        /* 灰色边框 */
+                background-color: rgba({bg_color_red}, {bg_color_green}, {bg_color_blue}, 0.85); /* 背景色 */
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: rgba({bg_color_red}, {bg_color_green}, {bg_color_blue}, 0.85); /* 选中时背景色 */
+                border: 2px solid #4ECDC4;    /* 选中时边框色 */
+                image:  url(./icons/check.png); /* 选中时显示对勾图片 */
+            }}
+        """,
         # 详情弹窗样式
         "detail_popup": """
             QFrame {{
