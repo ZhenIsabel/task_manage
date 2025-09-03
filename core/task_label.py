@@ -5,6 +5,10 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QCheckBox,
                             QLayout,QPushButton)
 from PyQt6.QtCore import Qt, pyqtSignal, QDate, QPoint, QEvent, QUrl
 from PyQt6.QtGui import QColor, QCursor, QAction, QDesktopServices
+try:
+    import sip  # 用于判断 PyQt 对象是否已被销毁
+except Exception:
+    sip = None
 import os
 
 from .add_task_dialog import AddTaskDialog
@@ -496,24 +500,58 @@ class TaskLabel(QWidget):
         parent = self.parent()
         global_popup = getattr(parent, "current_detail_popup", None)
 
+        # 安全检测：global_popup 可能已被 deleteLater 销毁
+        def _is_popup_valid(widget):
+            if widget is None:
+                return False
+            if sip:
+                try:
+                    if sip.isdeleted(widget):
+                        return False
+                except Exception:
+                    # sip 不可用或判断异常时，走后续 try 保护
+                    pass
+            # 最后再试探性访问一个轻量属性确保未崩
+            try:
+                _ = widget.isVisible()
+            except Exception:
+                return False
+            return True
+
+        popup_valid = _is_popup_valid(global_popup)
+        if not popup_valid and hasattr(parent, "current_detail_popup"):
+            # 清理父级上悬挂的引用，避免后续再次访问
+            try:
+                if getattr(parent, "current_detail_popup", None) is global_popup:
+                    parent.current_detail_popup = None
+            except Exception:
+                pass
+
         # 只处理全局弹窗
-        if obj == global_popup:
+        if popup_valid and obj == global_popup:
             if event.type() == QEvent.Type.MouseButtonPress:
                 # 点击了popup的内部，不关
                 return False
         else:
             # 如果有全局弹窗且显示
-            if global_popup and global_popup.isVisible():
-                if event.type() == QEvent.Type.MouseButtonPress:
-                    # 如果点击位置不在全局弹窗上，关闭它
-                    # 保护性判断：部分事件可能没有 globalPosition
+            if popup_valid:
+                try:
+                    if global_popup.isVisible() and event.type() == QEvent.Type.MouseButtonPress:
+                        # 如果点击位置不在全局弹窗上，关闭它
+                        try:
+                            click_point = event.globalPosition().toPoint()
+                        except Exception:
+                            return super().eventFilter(obj, event)
+                        if not global_popup.geometry().contains(click_point):
+                            global_popup.hide()
+                            return True  # 消耗这个事件
+                except Exception:
+                    # 如果这里再抛异常，兜底清理引用
                     try:
-                        click_point = event.globalPosition().toPoint()
+                        if hasattr(parent, "current_detail_popup") and parent.current_detail_popup is global_popup:
+                            parent.current_detail_popup = None
                     except Exception:
-                        return super().eventFilter(obj, event)
-                    if not global_popup.geometry().contains(click_point):
-                        global_popup.hide()
-                        return True  # 消耗这个事件
+                        pass
         return super().eventFilter(obj, event)
 
     def handle_delete(self):
@@ -534,6 +572,15 @@ class TaskLabel(QWidget):
                         self.detail_popup.hide()   # ✅ 先隐藏掉 detail_popup
                         self.detail_popup.deleteLater()  # （可选）彻底释放内存
                         self.detail_popup = None
+                    # 同步清理父级的全局弹窗引用，避免悬挂
+                    try:
+                        parent = self.parent()
+                        if parent and getattr(parent, "current_detail_popup", None):
+                            if parent.current_detail_popup is not None:
+                                # 如果父级引用的正是我们刚刚删除的弹窗，置空
+                                parent.current_detail_popup = None
+                    except Exception:
+                        pass
                     self.deleteRequested.emit(self)  # 再发出删除自己的信号
                 else:
                     QMessageBox.warning(self, "删除失败", "删除任务失败，请重试")

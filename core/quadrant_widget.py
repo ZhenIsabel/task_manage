@@ -104,10 +104,10 @@ class QuadrantWidget(QWidget):
         self.export_tasks_button.setVisible(False)  # 初始隐藏
         self.export_tasks_button.setCursor(Qt.CursorShape.PointingHandCursor)
 
-        self.undo_button = QPushButton("撤销", self)
-        self.undo_button.clicked.connect(self.undo_action)
-        self.undo_button.setVisible(False)  # 初始隐藏
-        self.undo_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        # self.undo_button = QPushButton("撤销", self)
+        # self.undo_button.clicked.connect(self.undo_action)
+        # self.undo_button.setVisible(False)  # 初始隐藏
+        # self.undo_button.setCursor(Qt.CursorShape.PointingHandCursor)
         
         self.settings_button = QPushButton("设置", self)
         self.settings_button.clicked.connect(self.show_settings)
@@ -121,7 +121,7 @@ class QuadrantWidget(QWidget):
         self.control_layout.addWidget(self.edit_button)
         self.control_layout.addWidget(self.add_task_button)
         self.control_layout.addWidget(self.export_tasks_button)
-        self.control_layout.addWidget(self.undo_button)
+        # self.control_layout.addWidget(self.undo_button)
         self.control_layout.addWidget(self.settings_button)
         self.control_layout.addWidget(self.exit_button)
         
@@ -482,8 +482,8 @@ class QuadrantWidget(QWidget):
         # 使用UI管理器的通用批量操作方法
         # 定义需要切换的子控件
         edit_mode_children = ["add_task_button", "export_tasks_button"]
-        if len(self.undo_stack) > 0:
-            edit_mode_children.append("undo_button")
+        # if len(self.undo_stack) > 0:
+        #     edit_mode_children.append("undo_button")
         
         # 批量切换控件显示状态
         self.ui_manager.batch_toggle_widgets(edit_mode_children, self.edit_mode, animate=False)
@@ -640,11 +640,11 @@ class QuadrantWidget(QWidget):
         # 确保撤销按钮在编辑模式下可见
         if self.edit_mode:
             if self.ui_manager:
-                self.ui_manager.batch_toggle_widgets(["undo_button"], True, animate=False)
+                # self.ui_manager.batch_toggle_widgets(["undo_button"], True, animate=False)
                 self.ui_manager.adjust_container_size("control_panel")
                 self.ui_manager.ensure_widget_in_bounds("control_panel")
             else:
-                self.undo_button.setVisible(True)
+                # self.undo_button.setVisible(True)
                 self.control_widget.adjustSize()
                 self.control_widget.updateGeometry()
             
@@ -652,70 +652,71 @@ class QuadrantWidget(QWidget):
 
     def undo_action(self):
         """撤销上一次操作"""
-        if not self.undo_stack:
-            logger.debug("撤销栈为空，无法撤销")
-            return
+        pass
+        # if not self.undo_stack:
+        #     logger.debug("撤销栈为空，无法撤销")
+        #     return
             
-        logger.debug("正在执行撤销操作...")
+        # logger.debug("正在执行撤销操作...")
         
-        # 弹出最近的状态
-        previous_state = self.undo_stack.pop()
+        # # 弹出最近的状态
+        # previous_state = self.undo_stack.pop()
         
-        # 恢复配置
-        self.config = previous_state['config']
+        # # 恢复配置
+        # self.config = previous_state['config']
         
-        # 恢复控制面板位置
-        control_panel = previous_state.get('control_panel', {})
-        if control_panel:
-            self.control_widget.move(control_panel['x'], control_panel['y'])
+        # # 恢复控制面板位置
+        # control_panel = previous_state.get('control_panel', {})
+        # if control_panel:
+        #     self.control_widget.move(control_panel['x'], control_panel['y'])
         
-        # 清除当前所有任务
-        for task in self.tasks:
-            task.deleteLater()
-        self.tasks.clear()
+        # # 清除当前所有任务
+        # for task in self.tasks:
+        #     task.deleteLater()
+        # self.tasks.clear()
         
-        # 恢复任务
-        for task_data in previous_state['tasks']:
-            # 提取位置信息
-            x = task_data.pop('x', 0)
-            y = task_data.pop('y', 0)
+        # # 恢复任务
+        # for task_data in previous_state['tasks']:
+        #     # 提取位置信息
+        #     x = task_data.pop('x', 0)
+        #     y = task_data.pop('y', 0)
             
-            # 创建任务
-            task_id = task_data.get('task_id', f"task_{len(self.tasks)}_{datetime.now().strftime('%Y%m%d%H%M%S')}")
-            color = task_data.pop('color', '#FFFFFF')
-            completed = task_data.pop('completed', False)
+        #     # 创建任务
+        #     task_id = task_data.get('task_id', f"task_{len(self.tasks)}_{datetime.now().strftime('%Y%m%d%H%M%S')}")
+        #     color = task_data.pop('color', '#FFFFFF')
+        #     completed = task_data.pop('completed', False)
             
-            # 创建任务标签
-            task = TaskLabel(
-                task_id=task_id,
-                color=color,
-                parent=self,
-                completed=completed,
-                **task_data
-            )
+        #     # 创建任务标签
+        #     task = TaskLabel(
+        #         task_id=task_id,
+        #         color=color,
+        #         parent=self,
+        #         completed=completed,
+        #         **task_data
+        #     )
             
-            # 设置任务位置
-            task.move(x, y)
+        #     # 设置任务位置
+        #     task.move(x, y)
             
-            # 连接信号
-            task.deleteRequested.connect(self.delete_task)
-            task.statusChanged.connect(self.save_tasks)
+        #     # 连接信号
+        #     task.deleteRequested.connect(self.delete_task)
+        #     task.statusChanged.connect(self.save_tasks)
             
-            # 显示任务
-            task.show()
+        #     # 显示任务
+        #     task.show()
             
-            # 添加到任务列表
-            self.tasks.append(task)
+        #     # 添加到任务列表
+        #     self.tasks.append(task)
         
-        # 更新界面
-        self.update()
+        # # 更新界面
+        # self.update()
         
-        # 如果撤销栈为空，隐藏撤销按钮
-        if not self.undo_stack:
-            self.undo_button.setVisible(False)
-            # 更新控制面板尺寸
-            self.control_widget.adjustSize()
-            self.control_widget.updateGeometry()
+        # # 如果撤销栈为空，隐藏撤销按钮
+        # if not self.undo_stack:
+        #     self.undo_button.setVisible(False)
+        #     # 更新控制面板尺寸
+        #     self.control_widget.adjustSize()
+        #     self.control_widget.updateGeometry()
         
             
         # 保存当前状态

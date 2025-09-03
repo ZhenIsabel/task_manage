@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime
 from typing import Dict, List
-from database.database_manager import get_db_manager
+from database_manager import get_db_manager
 
 class SyncManager:
     """同步管理器"""
@@ -82,6 +82,16 @@ class SyncManager:
             print("\n暂无同步记录")
         
         return status
+
+    def clear_server_and_upload(self) -> bool:
+        """清空服务器并用本地数据覆盖"""
+        print("=== 清空服务器并覆盖 ===")
+        result = self.db_manager.clear_server_and_upload()
+        if result:
+            print("✅ 已清空服务器并用本地数据覆盖")
+        else:
+            print("❌ 操作失败，请检查日志")
+        return result
     
     def resolve_conflicts(self) -> Dict[str, int]:
         """解决同步冲突"""
@@ -160,7 +170,8 @@ def main():
         print("6. 创建备份")
         print("7. 从备份恢复")
         print("8. 列出备份")
-        print("9. 退出")
+        print("9. 清空服务器并用本地覆盖")
+        print("10. 退出")
         
         choice = input("\n请输入选择 (1-9): ").strip()
         
@@ -197,6 +208,12 @@ def main():
             sync_manager.list_backups()
             
         elif choice == '9':
+            confirm = input("此操作将删除服务器全部任务，并用本地任务覆盖。确认? (y/N): ").strip().lower()
+            if confirm == 'y':
+                sync_manager.clear_server_and_upload()
+            else:
+                print("操作已取消")
+        elif choice == '10':
             print("退出同步工具")
             break
             
