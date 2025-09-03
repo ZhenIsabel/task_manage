@@ -612,43 +612,44 @@ class QuadrantWidget(QWidget):
     def save_undo_state(self):
         """保存当前状态到撤销栈"""
         logger.debug("正在保存当前状态到撤销栈...")
+        pass
         
-        # 收集当前状态
-        current_state = {
-            'tasks': [],  # 任务信息
-            'config': json.loads(json.dumps(self.config)),  # 深拷贝配置
-            'control_panel': {
-                'x': self.control_widget.x(),
-                'y': self.control_widget.y()
-            }
-        }
+        # # 收集当前状态
+        # current_state = {
+        #     'tasks': [],  # 任务信息
+        #     'config': json.loads(json.dumps(self.config)),  # 深拷贝配置
+        #     'control_panel': {
+        #         'x': self.control_widget.x(),
+        #         'y': self.control_widget.y()
+        #     }
+        # }
         
-        # 保存所有任务的信息和位置
-        for task in self.tasks:
-            task_data = task.get_data()
-            task_data['x'] = task.x()
-            task_data['y'] = task.y()
-            current_state['tasks'].append(task_data)
+        # # 保存所有任务的信息和位置
+        # for task in self.tasks:
+        #     task_data = task.get_data()
+        #     task_data['x'] = task.x()
+        #     task_data['y'] = task.y()
+        #     current_state['tasks'].append(task_data)
         
-        # 添加到撤销栈
-        self.undo_stack.append(current_state)
+        # # 添加到撤销栈
+        # self.undo_stack.append(current_state)
         
-        # 限制撤销栈大小为5
-        if len(self.undo_stack) > 5:
-            self.undo_stack.pop(0)  # 移除最旧的状态
+        # # 限制撤销栈大小为5
+        # if len(self.undo_stack) > 5:
+        #     self.undo_stack.pop(0)  # 移除最旧的状态
         
-        # 确保撤销按钮在编辑模式下可见
-        if self.edit_mode:
-            if self.ui_manager:
-                # self.ui_manager.batch_toggle_widgets(["undo_button"], True, animate=False)
-                self.ui_manager.adjust_container_size("control_panel")
-                self.ui_manager.ensure_widget_in_bounds("control_panel")
-            else:
-                # self.undo_button.setVisible(True)
-                self.control_widget.adjustSize()
-                self.control_widget.updateGeometry()
+        # # 确保撤销按钮在编辑模式下可见
+        # if self.edit_mode:
+        #     if self.ui_manager:
+        #         # self.ui_manager.batch_toggle_widgets(["undo_button"], True, animate=False)
+        #         self.ui_manager.adjust_container_size("control_panel")
+        #         self.ui_manager.ensure_widget_in_bounds("control_panel")
+        #     else:
+        #         # self.undo_button.setVisible(True)
+        #         self.control_widget.adjustSize()
+        #         self.control_widget.updateGeometry()
             
-        logger.debug(f"状态已保存，撤销栈大小: {len(self.undo_stack)}")
+        # logger.debug(f"状态已保存，撤销栈大小: {len(self.undo_stack)}")
 
     def undo_action(self):
         """撤销上一次操作"""
@@ -916,20 +917,6 @@ class QuadrantWidget(QWidget):
         
         # 显示对话框
         dialog.exec()
-    
-    def mousePressEvent(self, e):
-        """拖动实现 - 鼠标按下"""
-        if e.button() == Qt.MouseButton.LeftButton:
-            self._drag_pos = e.globalPosition().toPoint() - self.pos()
-
-    def mouseMoveEvent(self, e):
-        """拖动实现 - 鼠标移动"""
-        if self._drag_pos and e.buttons() & Qt.MouseButton.LeftButton:
-            self.move(e.globalPosition().toPoint() - self._drag_pos)
-
-    def mouseReleaseEvent(self, e):
-        """拖动实现 - 鼠标释放"""
-        self._drag_pos = None
 
     def export_unfinished_tasks(self):
         """导出未完成的任务到文本文件"""
