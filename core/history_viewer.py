@@ -95,7 +95,7 @@ class HistoryViewer(QDialog):
         self.adjustSize()
         self.center_on_parent()
         # 添加阴影
-        apply_drop_shadow(panel, blur_radius=20, color=QColor(0, 0, 0, 150), offset_x=0, offset_y=0)
+        apply_drop_shadow(panel, blur_radius=10, color=QColor(0, 0, 0, 60), offset_x=0, offset_y=0)
         
     def load_history_records(self, layout):
         """从数据库加载历史记录并合并显示到一个表格"""

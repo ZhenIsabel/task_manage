@@ -151,7 +151,7 @@ class TaskLabel(QWidget):
         self.setStyleSheet(stylesheet)
         
         # 添加阴影效果
-        apply_drop_shadow(self, blur_radius=15, color=QColor(0, 0, 0, 80), offset_x=3, offset_y=3)
+        apply_drop_shadow(self, blur_radius=8, color=QColor(0, 0, 0, 20), offset_x=2, offset_y=3)
     
     def on_status_changed(self, state):
         """复选框状态改变时的处理"""
@@ -389,7 +389,7 @@ class TaskLabel(QWidget):
         self.detail_popup.setStyleSheet(style_manager.get_stylesheet("detail_popup").format())
         
         # 设置阴影效果
-        apply_drop_shadow(self.detail_popup, blur_radius=20, color=QColor(0, 0, 0, 180), offset_x=3, offset_y=3)
+        apply_drop_shadow(self.detail_popup, blur_radius=10, color=QColor(0, 0, 0, 60), offset_x=2, offset_y=2)
         
         # 创建布局
         layout = QVBoxLayout(self.detail_popup)

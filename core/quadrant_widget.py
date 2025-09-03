@@ -126,7 +126,7 @@ class QuadrantWidget(QWidget):
         self.control_layout.addWidget(self.exit_button)
         
         # 添加控制面板阴影效果
-        apply_drop_shadow(self.control_widget, blur_radius=20, color=QColor(0, 0, 0, 100), offset_x=0, offset_y=0)
+        apply_drop_shadow(self.control_widget, blur_radius=10, color=QColor(0, 0, 0, 50), offset_x=0, offset_y=0)
         # 设置控制面板为悬浮式
         self.control_widget.setParent(self)
         # 自动计算初始尺寸
@@ -824,7 +824,7 @@ class QuadrantWidget(QWidget):
         
         
         # 添加对话框阴影
-        apply_drop_shadow(dialog, blur_radius=20, color=QColor(0, 0, 0, 150), offset_x=0, offset_y=0)
+        apply_drop_shadow(dialog, blur_radius=10, color=QColor(0, 0, 0, 60), offset_x=0, offset_y=0)
         
         # 设置对话框在父窗口中居中显示
         dialog.move(

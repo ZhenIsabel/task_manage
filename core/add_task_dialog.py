@@ -33,7 +33,7 @@ class AddTaskDialog(QDialog):
         panel.setStyleSheet(add_task_dialog_stylesheet)
 
         # # 阴影
-        apply_drop_shadow(panel, blur_radius=5, color=QColor(0, 0, 0, 150), offset_x=0, offset_y=0)
+        apply_drop_shadow(panel, blur_radius=8, color=QColor(0, 0, 0, 60), offset_x=0, offset_y=0)
 
         # ------- 下面放你的字段、按钮 ------- #
         self.inputs = {}
