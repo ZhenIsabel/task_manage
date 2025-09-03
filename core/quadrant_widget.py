@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import QApplication,QFileDialog
 from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont,  QPainterPath, QLinearGradient, QAction
 
 from .task_label import TaskLabel
-from config.config_manager import save_config, save_tasks, TASKS_FILE
+from config.config_manager import save_config, save_tasks
 from .add_task_dialog import AddTaskDialog
 from ui.styles import StyleManager
 from database.database_manager import get_db_manager
@@ -167,6 +167,15 @@ class QuadrantWidget(QWidget):
         self.bottom_layer_timer = QTimer(self)
         self.bottom_layer_timer.setSingleShot(True)
         self.bottom_layer_timer.timeout.connect(self.set_to_bottom_layer)
+
+        # 新增：空白区域长按拖动窗口的状态与计时器
+        self.long_press_timer = QTimer(self)
+        self.long_press_timer.setSingleShot(True)
+        self.long_press_timer.setInterval(1000)  # 1秒长按
+        self.long_press_timer.timeout.connect(self._enable_blank_drag)
+        self._pending_blank_drag = False
+        self._blank_drag_active = False
+        self._blank_drag_offset = None
         
     def set_to_bottom_layer(self):
         """将窗口设置为底层（仅在启动时调用）"""
@@ -433,8 +442,18 @@ class QuadrantWidget(QWidget):
     def mousePressEvent(self, event):
         """鼠标按下事件"""
         if event.button() == Qt.MouseButton.LeftButton:
-            self.drag_position = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
-            event.accept()
+            # 仅当在空白区域时才准备进入长按拖动
+            local_pos = event.position().toPoint()
+            if self._is_blank_area(local_pos):
+                self._pending_blank_drag = True
+                self._blank_drag_active = False
+                # 记录与窗口左上角的偏移
+                self._blank_drag_offset = event.globalPosition().toPoint() - self.pos()
+                self.long_press_timer.start()
+                event.accept()
+            else:
+                # 非空白区域，保持原有其他控件交互
+                event.ignore()
         elif event.button() == Qt.MouseButton.RightButton:
             # 右键点击空白区域时召唤控制面板
             click_pos = event.position().toPoint()  # 注意这里是相对于当前窗口的局部位置
@@ -465,9 +484,47 @@ class QuadrantWidget(QWidget):
     def mouseMoveEvent(self, event):
         """鼠标移动事件"""
         if event.buttons() & Qt.MouseButton.LeftButton:
-            self.drag_position = event.globalPosition().toPoint() - self.pos()
-            self.move(event.globalPosition().toPoint() - self.drag_position)
-            event.accept()
+            if self._blank_drag_active and self._blank_drag_offset is not None:
+                self.move(event.globalPosition().toPoint() - self._blank_drag_offset)
+                event.accept()
+            else:
+                event.ignore()
+        else:
+            event.ignore()
+
+    def mouseReleaseEvent(self, event):
+        """鼠标释放事件"""
+        if self.long_press_timer.isActive():
+            self.long_press_timer.stop()
+        self._pending_blank_drag = False
+        self._blank_drag_active = False
+        self._blank_drag_offset = None
+        event.accept()
+
+    def _enable_blank_drag(self):
+        """长按计时到达后，启用窗口拖动"""
+        if self._pending_blank_drag:
+            self._blank_drag_active = True
+
+    def _is_blank_area(self, local_pos):
+        """判断点击位置是否为象限面板空白处（不含任务与控制面板）"""
+        child = self.childAt(local_pos)
+        if child is None:
+            return True
+        # 控制面板或其子控件
+        w = child
+        while w is not None:
+            if w is self.control_widget:
+                return False
+            w = w.parentWidget()
+        # 任务标签或其子控件
+        w = child
+        from .task_label import TaskLabel as _TaskLabel
+        while w is not None:
+            if isinstance(w, _TaskLabel):
+                return False
+            w = w.parentWidget()
+        return True
     
     def toggle_edit_mode(self):
         """切换编辑模式"""
