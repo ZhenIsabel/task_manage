@@ -38,7 +38,11 @@ class TaskLabel(QWidget):
         return fields
     
     def __init__(self, task_id, color,completed=False, parent=None,  **fields):
-        super().__init__(parent)
+        try:
+            super().__init__(parent)
+        except Exception as e:
+            logger.error(f"任务标签初始化失败 (task_id: {task_id}): {str(e)}", exc_info=True)
+            raise
         self.task_id = task_id
         self.color = QColor(color)
 
@@ -52,7 +56,7 @@ class TaskLabel(QWidget):
         self.drag_start_position = None
         self._draggable = False  # 初始化 _draggable 属性，默认为不可拖动
         
-        # 新增：到期状态
+        # 到期状态
         self.is_overdue = False
         
         # 如果你想限制最小宽度：
@@ -114,12 +118,16 @@ class TaskLabel(QWidget):
     
     def update_appearance(self):
         """更新标签外观"""
-        if self.checkbox.isChecked(): # 🔥🔥🔥用真实勾选状态
-            bg_color = QColor(200, 200, 200)  # 灰色背景
-            text_color = QColor(100, 100, 100)  # 深灰色文字
-        else:
-            bg_color = self.color
-            text_color = QColor(0, 0, 0) if self.color.lightness() > 128 else QColor(255, 255, 255)
+        try:
+            if self.checkbox.isChecked(): # 🔥🔥🔥用真实勾选状态
+                bg_color = QColor(200, 200, 200)  # 灰色背景
+                text_color = QColor(100, 100, 100)  # 深灰色文字
+            else:
+                bg_color = self.color
+                text_color = QColor(0, 0, 0) if self.color.lightness() > 128 else QColor(255, 255, 255)
+        except Exception as e:
+            logger.error(f"更新任务标签外观失败 (task_id: {self.task_id}): {str(e)}", exc_info=True)
+            return
         style_manager = StyleManager()
         indicator_size = 14  # 和字体高度差不多
 
@@ -170,25 +178,31 @@ class TaskLabel(QWidget):
     
     def mousePressEvent(self, event):
         """鼠标按下事件"""
-        if event.button() == Qt.MouseButton.LeftButton and getattr(self, '_draggable', True):
-            self.dragging = True
-            self.drag_start_position = event.pos()
+        try:
+            if event.button() == Qt.MouseButton.LeftButton and getattr(self, '_draggable', True):
+                self.dragging = True
+                self.drag_start_position = event.pos()
+        except Exception as e:
+            logger.error(f"鼠标按下事件处理失败 (task_id: {self.task_id}): {str(e)}", exc_info=True)
     
     def mouseMoveEvent(self, event):
         """鼠标移动事件"""
-        if self.dragging and (event.buttons() & Qt.MouseButton.LeftButton):
-            # 计算移动距离
-            delta = event.pos() - self.drag_start_position
-            new_pos = self.pos() + delta
-            
-            # 添加边界限制，防止拖动到 x<20, y<20 的位置
-            if new_pos.x() < 20:
-                new_pos.setX(20)
-            if new_pos.y() < 20:
-                new_pos.setY(20)
+        try:
+            if self.dragging and (event.buttons() & Qt.MouseButton.LeftButton):
+                # 计算移动距离
+                delta = event.pos() - self.drag_start_position
+                new_pos = self.pos() + delta
                 
-            self.move(new_pos)
-            event.accept()
+                # 添加边界限制，防止拖动到 x<20, y<20 的位置
+                if new_pos.x() < 20:
+                    new_pos.setX(20)
+                if new_pos.y() < 20:
+                    new_pos.setY(20)
+                    
+                self.move(new_pos)
+                event.accept()
+        except Exception as e:
+            logger.error(f"鼠标移动事件处理失败 (task_id: {self.task_id}): {str(e)}", exc_info=True)
     
     def mouseReleaseEvent(self, event):
         """鼠标释放事件"""
@@ -233,22 +247,25 @@ class TaskLabel(QWidget):
 
     def contextMenuEvent(self, event):
         """右键菜单事件"""
-        parent = self.parent()
-        # 关闭全局的 popup
-        if hasattr(parent, "current_detail_popup") and parent.current_detail_popup:
-            parent.current_detail_popup.hide()
-            parent.current_detail_popup.deleteLater()
-            parent.current_detail_popup = None
+        try:
+            parent = self.parent()
+            # 关闭全局的 popup
+            if hasattr(parent, "current_detail_popup") and parent.current_detail_popup:
+                parent.current_detail_popup.hide()
+                parent.current_detail_popup.deleteLater()
+                parent.current_detail_popup = None
 
-        # 创建新的
-        self.create_detail_popup()
-        self.position_detail_popup()
-        self.detail_popup.show()
-        self.detail_popup.raise_()
+            # 创建新的
+            self.create_detail_popup()
+            self.position_detail_popup()
+            self.detail_popup.show()
+            self.detail_popup.raise_()
 
-        # 记录到全局
-        if hasattr(parent, "current_detail_popup"):
-            parent.current_detail_popup = self.detail_popup
+            # 记录到全局
+            if hasattr(parent, "current_detail_popup"):
+                parent.current_detail_popup = self.detail_popup
+        except Exception as e:
+            logger.error(f"右键菜单事件处理失败 (task_id: {self.task_id}): {str(e)}", exc_info=True)
 
     def edit_task(self):
         """编辑任务内容"""
@@ -501,11 +518,12 @@ class TaskLabel(QWidget):
 
     def handle_delete(self):
         """处理删除任务"""
-        reply = QMessageBox.question(self, '确认删除', 
-                                   '确定要删除这个任务吗？\n删除后无法恢复。',
-                                   QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        from ui.ui import DeleteConfirmDialog
         
-        if reply == QMessageBox.StandardButton.Yes:
+        dialog = DeleteConfirmDialog(self, '确定要删除这个任务吗？\n删除后无法恢复。')
+        dialog.exec()
+        
+        if dialog.get_result():
             # 使用数据库管理器进行逻辑删除
             try:
                 from database.database_manager import get_db_manager

@@ -19,8 +19,12 @@ logger = logging.getLogger(__name__)  # 自动获取模块名
 class QuadrantWidget(QWidget):
     """四象限窗口部件"""
     def __init__(self, config, parent=None, ui_manager=None):
-        logger.debug("正在初始化四象限窗口...")
-        super().__init__(parent)
+        try:
+            logger.debug("正在初始化四象限窗口...")
+            super().__init__(parent)
+        except Exception as e:
+            logger.error(f"四象限窗口初始化失败: {str(e)}", exc_info=True)
+            raise
         self.config = config
         self.ui_manager = ui_manager  # 添加UI管理器引用
         self.edit_mode = False
@@ -239,7 +243,11 @@ class QuadrantWidget(QWidget):
     
     def paintEvent(self, event):
         """绘制事件 - 美化版本"""
-        painter = QPainter(self)
+        try:
+            painter = QPainter(self)
+        except Exception as e:
+            logger.error(f"绘制事件失败: {str(e)}", exc_info=True)
+            return
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)  # 抗锯齿
         
         # 获取窗口尺寸

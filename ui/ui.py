@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QWidget, QApplication, QColorDialog, QDialog, QVBoxLayout, QLabel, QPushButton, QGraphicsDropShadowEffect
+from PyQt6.QtWidgets import QWidget, QApplication, QColorDialog, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QGraphicsDropShadowEffect
 from PyQt6.QtCore import QPropertyAnimation, QEasingCurve, QTimer, pyqtSignal, QObject, Qt
 from PyQt6.QtGui import QColor
 import logging
@@ -340,40 +340,9 @@ class MyColorDialog(QColorDialog):
     
     def _apply_custom_style(self):
         """应用自定义样式"""
-        self.setStyleSheet("""
-            QColorDialog {
-                background-color: #ECECEC;
-            }
-            QLabel {
-                color: #333;
-                font-family: '微软雅黑';
-                font-size: 12px;
-            }
-            QPushButton {
-                background-color: #ECECEC;
-                border: 1px solid rgba(100, 100, 100, 0.5);
-                border-radius: 6px;
-                padding: 4px 8px;
-                font-family: '微软雅黑';
-                font-size: 12px;
-                color: #333;
-            }
-            QPushButton:hover {
-                background-color: #D6D6D6;
-            }
-            QFrame {
-                background-color: #ECECEC;
-            }
-            QLineEdit {
-                background-color: white;
-                border: 1px solid rgba(100, 100, 100, 0.5);
-                border-radius: 4px;
-                padding: 2px 6px;
-                font-family: '微软雅黑';
-                font-size: 12px;
-                color: #333;
-            }
-        """)
+        from ui.styles import StyleManager
+        style_manager = StyleManager()
+        self.setStyleSheet(style_manager.get_stylesheet("color_dialog"))
 
 
 class WarningPopup(QDialog):
@@ -389,7 +358,16 @@ class WarningPopup(QDialog):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFixedSize(280, 140)
         
-        layout = QVBoxLayout(self)
+        # 创建主布局
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # 创建面板
+        self.panel = QWidget()
+        self.panel.setObjectName("panel")
+        
+        # 创建面板布局
+        layout = QVBoxLayout(self.panel)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(12)
 
@@ -403,27 +381,104 @@ class WarningPopup(QDialog):
 
         layout.addWidget(text_label)
         layout.addWidget(button, alignment=Qt.AlignmentFlag.AlignCenter)
+        
+        # 将面板添加到主布局
+        main_layout.addWidget(self.panel)
     
     def _apply_style(self):
         """应用样式"""
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #ECECEC;
-                border-radius: 10px;
-            }
-            QPushButton {
-                background-color: #ECECEC;
-                border: 1px solid rgba(100, 100, 100, 0.5);
-                border-radius: 6px;
-                padding: 4px 8px;
-                font-family: '微软雅黑';
-                font-size: 12px;
-                color: #333;
-            }
-            QPushButton:hover {
-                background-color: #D6D6D6;
-            }
-        """)
+        from ui.styles import StyleManager
+        style_manager = StyleManager()
+        self.setStyleSheet(style_manager.get_stylesheet("warning_popup"))
+
+
+class DeleteConfirmDialog(QDialog):
+    """删除确认对话框 - 白底红按钮设计"""
+    def __init__(self, parent=None, message="确定要删除这个任务吗？\n删除后无法恢复。"):
+        super().__init__(parent)
+        self.result = False
+        self._setup_ui(message)
+        self._apply_style()
+    
+    def _setup_ui(self, message):
+        """设置UI"""
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setFixedSize(320, 180)
+        
+        # 创建主布局
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # 创建面板
+        self.panel = QWidget()
+        self.panel.setObjectName("panel")
+        
+        # 创建面板布局
+        layout = QVBoxLayout(self.panel)
+        layout.setContentsMargins(25, 25, 25, 25)
+        layout.setSpacing(20)
+
+        # 标题
+        title_label = QLabel("确认删除")
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_label.setObjectName("title_label")
+
+        # 消息内容
+        message_label = QLabel(message)
+        message_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        message_label.setObjectName("message_label")
+        message_label.setWordWrap(True)
+
+        # 按钮布局
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(15)
+        
+        # 取消按钮
+        cancel_button = QPushButton("取消")
+        cancel_button.setObjectName("cancel_button")
+        cancel_button.clicked.connect(self._on_cancel)
+        cancel_button.setFixedSize(80, 35)
+        cancel_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        # 删除按钮
+        delete_button = QPushButton("删除")
+        delete_button.setObjectName("delete_button")
+        delete_button.clicked.connect(self._on_delete)
+        delete_button.setFixedSize(80, 35)
+        delete_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        button_layout.addStretch()
+        button_layout.addWidget(cancel_button)
+        button_layout.addWidget(delete_button)
+        button_layout.addStretch()
+
+        layout.addWidget(title_label)
+        layout.addWidget(message_label)
+        layout.addLayout(button_layout)
+        
+        # 将面板添加到主布局
+        main_layout.addWidget(self.panel)
+    
+    def _apply_style(self):
+        """应用样式 - 使用styles.py中的样式"""
+        from ui.styles import StyleManager
+        style_manager = StyleManager()
+        self.setStyleSheet(style_manager.get_stylesheet("delete_confirm_dialog"))
+    
+    def _on_cancel(self):
+        """取消操作"""
+        self.result = False
+        self.reject()
+    
+    def _on_delete(self):
+        """确认删除"""
+        self.result = True
+        self.accept()
+    
+    def get_result(self):
+        """获取用户选择结果"""
+        return self.result
 
 
 def apply_drop_shadow(target_widget: QWidget,

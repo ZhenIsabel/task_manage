@@ -564,6 +564,131 @@ class StyleManager:
                 border: 1px solid #ddd;
             }}
         """,
+        # 删除确认对话框样式
+        "delete_confirm_dialog": """
+            QWidget#panel {
+                background-color: white;        /* 面板背景色 */
+                border-radius: 15px;            /* 圆角 */
+            }
+            QDialog {
+                background-color: white;
+                border-radius: 12px;
+                border: 1px solid #e0e0e0;
+            }
+            QLabel#title_label {
+                background-color: transparent;
+                color: #333333;
+                font-family: '微软雅黑';
+                font-size: 16px;
+                font-weight: bold;
+                margin-bottom: 10px;
+            }
+            QLabel#message_label {
+                background-color: transparent;
+                color: #666666;
+                font-family: '微软雅黑';
+                font-size: 14px;
+                line-height: 1.4;
+                margin: 10px 0;
+            }
+            QPushButton#cancel_button {
+                background-color: #f5f5f5;
+                color: #666666;
+                border: 1px solid #d0d0d0;
+                border-radius: 8px;
+                font-family: '微软雅黑';
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton#cancel_button:hover {
+                background-color: #e8e8e8;
+                border-color: #c0c0c0;
+            }
+            QPushButton#cancel_button:pressed {
+                background-color: #d8d8d8;
+            }
+            QPushButton#delete_button {
+                background-color: #ff4757;
+                color: white;
+                border: 1px solid #ff3742;
+                border-radius: 8px;
+                font-family: '微软雅黑';
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton#delete_button:hover {
+                background-color: #ff3742;
+                border-color: #ff2f3a;
+            }
+            QPushButton#delete_button:pressed {
+                background-color: #e63946;
+                border-color: #d63031;
+            }
+        """,
+        # 警告弹窗样式
+        "warning_popup": """
+            QWidget#panel {
+                background-color: white;        /* 面板背景色 */
+                border-radius: 15px;            /* 圆角 */
+            }
+            QDialog {
+                background-color: #ECECEC;
+                border-radius: 10px;
+            }
+            QLabel {
+                background-color: transparent;
+                color: #333;
+                font-family: '微软雅黑';
+                font-size: 14px;
+            }
+            QPushButton {
+                background-color: #ECECEC;
+                border: 1px solid rgba(100, 100, 100, 0.5);
+                border-radius: 6px;
+                padding: 4px 8px;
+                font-family: '微软雅黑';
+                font-size: 12px;
+                color: #333;
+            }
+            QPushButton:hover {
+                background-color: #D6D6D6;
+            }
+        """,
+        # 颜色对话框样式
+        "color_dialog": """
+            QColorDialog {
+                background-color: #ECECEC;
+            }
+            QLabel {
+                color: #333;
+                font-family: '微软雅黑';
+                font-size: 12px;
+            }
+            QPushButton {
+                background-color: #ECECEC;
+                border: 1px solid rgba(100, 100, 100, 0.5);
+                border-radius: 6px;
+                padding: 4px 8px;
+                font-family: '微软雅黑';
+                font-size: 12px;
+                color: #333;
+            }
+            QPushButton:hover {
+                background-color: #D6D6D6;
+            }
+            QFrame {
+                background-color: #ECECEC;
+            }
+            QLineEdit {
+                background-color: white;
+                border: 1px solid rgba(100, 100, 100, 0.5);
+                border-radius: 4px;
+                padding: 2px 6px;
+                font-family: '微软雅黑';
+                font-size: 12px;
+                color: #333;
+            }
+        """
         }
 
     def get_stylesheet(self, component_name):
