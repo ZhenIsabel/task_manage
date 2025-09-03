@@ -21,6 +21,12 @@ DEFAULT_CONFIG = {
         'q3': {'color': '#FFE66D', 'opacity': 0.8},  # 不重要但紧急 - 柔和的黄色
         'q4': {'color': '#6D8EA0', 'opacity': 0.7},  # 不重要不紧急 - 灰蓝色
     },
+    'color_ranges': {
+        'q1': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+        'q2': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+        'q3': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+        'q4': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+    },
     'size': {'width': 800, 'height': 600},
     'position': {'x': 100, 'y': 100},
     'edit_mode': False,

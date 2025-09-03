@@ -572,6 +572,8 @@ class QuadrantWidget(QWidget):
     
     def get_quadrant_at_position(self, pos):
         """根据位置确定象限和颜色"""
+        from .color_utils import ColorUtils
+        
         width = self.width()
         height = self.height()
         h_line_y = height // 2
@@ -579,16 +581,20 @@ class QuadrantWidget(QWidget):
         
         if pos.x() >= v_line_x and pos.y() < h_line_y:
             # 第一象限：重要且紧急（右上）
-            return 'q1', self.config['quadrants']['q1']['color']
+            quadrant = 'q1'
         elif pos.x() < v_line_x and pos.y() < h_line_y:
             # 第二象限：重要不紧急（左上）
-            return 'q2', self.config['quadrants']['q2']['color']
+            quadrant = 'q2'
         elif pos.x() >= v_line_x and pos.y() >= h_line_y:
             # 第三象限：不重要但紧急（右下）
-            return 'q3', self.config['quadrants']['q3']['color']
+            quadrant = 'q3'
         else:
             # 第四象限：不重要不紧急（左下）
-            return 'q4', self.config['quadrants']['q4']['color']
+            quadrant = 'q4'
+        
+        # 使用颜色工具类生成随机颜色
+        color = ColorUtils.get_quadrant_random_color(quadrant, self.config)
+        return quadrant, color
     
     def delete_task(self, task):
         """逻辑删除任务（从界面隐藏，但保留在数据文件中）"""
@@ -719,23 +725,63 @@ class QuadrantWidget(QWidget):
         logger.debug(f"撤销完成，剩余撤销栈大小: {len(self.undo_stack)}")
     
     def show_settings(self):
-        """显示设置对话框 - 美化版"""
-        dialog = QDialog(self)
-        dialog.setWindowTitle("设置")
-        dialog.setMinimumWidth(550)  # 增加宽度
+        """显示设置对话框 - 采用add_task_dialog样式"""
+        # ❶ 直接把 QDialog 设为「无边框」窗口
+        dialog = QDialog(self, flags=Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
+        # ❷ 允许窗口背景透明（才能配合圆角 + 阴影）
+        dialog.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         
+        # ------- 外层透明壳，什么都不画 ------- #
+        
+        # ❸ 真正的白色圆角面板
+        panel = QWidget(dialog)
+        panel.setObjectName("panel")
+        panel_layout = QVBoxLayout(panel)
+        panel_layout.setContentsMargins(30, 30, 30, 30)
+        panel_layout.setSpacing(20)
+        
+        # 样式改为用 styles.py 的 StyleManager 管理
         style_manager = StyleManager()
-        # 设置对话框样式 - 白色主题
-        dialog.setStyleSheet(style_manager.get_stylesheet("settings_panel").format())
+        # 使用 add_task_dialog 的样式表
+        add_task_dialog_stylesheet = style_manager.get_stylesheet("add_task_dialog").format()
+        panel.setStyleSheet(add_task_dialog_stylesheet)
+        
+        # 阴影
+        apply_drop_shadow(panel, blur_radius=8, color=QColor(0, 0, 0, 60), offset_x=0, offset_y=0)
         
         # 创建标签页
         tab_widget = QTabWidget()
+        # 为标签页添加样式
+        tab_widget.setStyleSheet("""
+            QTabWidget::pane {
+                border: 1px solid #dddddd;
+                background-color: white;
+                border-radius: 8px;
+            }
+            QTabBar::tab {
+                background-color: #f5f5f5;
+                color: #333;
+                border: 1px solid #dddddd;
+                border-bottom: none;
+                padding: 10px 20px;
+                margin-right: 2px;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+                font-family: '微软雅黑';
+                font-size: 13px;
+            }
+            QTabBar::tab:selected {
+                background-color: white;
+                color: #4ECDC4;
+                font-weight: bold;
+            }
+        """)
         
         # 创建颜色设置页
         color_widget = QWidget()
         color_layout = QFormLayout(color_widget)
-        color_layout.setSpacing(20)  # 增加间距
-        color_layout.setContentsMargins(30, 30, 30, 30)  # 增加边距
+        color_layout.setSpacing(15)
+        color_layout.setContentsMargins(20, 20, 20, 20)
         
         # 为每个象限创建颜色选择器和透明度滑块
         quadrant_names = {
@@ -747,6 +793,9 @@ class QuadrantWidget(QWidget):
         
         color_buttons = {}
         opacity_sliders = {}
+        hue_range_spins = {}
+        saturation_range_spins = {}
+        value_range_spins = {}
         
         for q_id, q_name in quadrant_names.items():
             # 颜色选择按钮
@@ -765,15 +814,39 @@ class QuadrantWidget(QWidget):
             opacity_slider.valueChanged.connect(lambda value, qid=q_id: self.change_quadrant_opacity(qid, value / 100))
             opacity_sliders[q_id] = opacity_slider
             
+            # 色相范围设置
+            hue_range_spin = QSlider(Qt.Orientation.Horizontal)
+            hue_range_spin.setRange(0, 180)
+            hue_range_spin.setValue(self.config.get('color_ranges', {}).get(q_id, {}).get('hue_range', 30))
+            hue_range_spin.valueChanged.connect(lambda value, qid=q_id: self.change_color_range(qid, 'hue_range', value))
+            hue_range_spins[q_id] = hue_range_spin
+            
+            # 饱和度范围设置
+            saturation_range_spin = QSlider(Qt.Orientation.Horizontal)
+            saturation_range_spin.setRange(0, 255)
+            saturation_range_spin.setValue(self.config.get('color_ranges', {}).get(q_id, {}).get('saturation_range', 20))
+            saturation_range_spin.valueChanged.connect(lambda value, qid=q_id: self.change_color_range(qid, 'saturation_range', value))
+            saturation_range_spins[q_id] = saturation_range_spin
+            
+            # 明度范围设置
+            value_range_spin = QSlider(Qt.Orientation.Horizontal)
+            value_range_spin.setRange(0, 255)
+            value_range_spin.setValue(self.config.get('color_ranges', {}).get(q_id, {}).get('value_range', 20))
+            value_range_spin.valueChanged.connect(lambda value, qid=q_id: self.change_color_range(qid, 'value_range', value))
+            value_range_spins[q_id] = value_range_spin
+            
             # 添加到布局
             color_layout.addRow(f"{q_name} 颜色:", color_btn)
             color_layout.addRow(f"{q_name} 透明度:", opacity_slider)
+            color_layout.addRow(f"{q_name} 色相范围:", hue_range_spin)
+            color_layout.addRow(f"{q_name} 饱和度范围:", saturation_range_spin)
+            color_layout.addRow(f"{q_name} 明度范围:", value_range_spin)
         
         # 创建大小设置页
         size_widget = QWidget()
         size_layout = QFormLayout(size_widget)
-        size_layout.setSpacing(20)  # 增加间距
-        size_layout.setContentsMargins(30, 30, 30, 30)  # 增加边距
+        size_layout.setSpacing(15)
+        size_layout.setContentsMargins(20, 20, 20, 20)
         
         # 宽度设置
         width_spin = QSpinBox()
@@ -790,8 +863,8 @@ class QuadrantWidget(QWidget):
         # UI设置
         ui_widget = QWidget()
         ui_layout = QFormLayout(ui_widget)
-        ui_layout.setSpacing(20)  # 增加间距
-        ui_layout.setContentsMargins(30, 30, 30, 30)  # 增加边距
+        ui_layout.setSpacing(15)
+        ui_layout.setContentsMargins(20, 20, 20, 20)
         
         # 圆角设置
         border_radius_spin = QSpinBox()
@@ -809,10 +882,8 @@ class QuadrantWidget(QWidget):
         tab_widget.addTab(size_widget, "大小设置")
         tab_widget.addTab(ui_widget, "界面设置")
         
-        # 创建对话框布局
-        dialog_layout = QVBoxLayout(dialog)
-        dialog_layout.setContentsMargins(15, 15, 15, 15)
-        dialog_layout.addWidget(tab_widget)
+        # 将标签页添加到面板布局
+        panel_layout.addWidget(tab_widget)
         
         # 添加确定按钮
         button_layout = QHBoxLayout()
@@ -820,11 +891,21 @@ class QuadrantWidget(QWidget):
         ok_button.clicked.connect(dialog.accept)
         button_layout.addStretch()
         button_layout.addWidget(ok_button)
-        dialog_layout.addLayout(button_layout)
+        panel_layout.addLayout(button_layout)
         
+        # ❹ 自动根据内容调大小，再把"壳"和"面板"都居中放
+        shadow_margin = 60  # 阴影空间
+        # 让 panel 先自适应内容
+        panel.setMinimumWidth(600)
+        panel_layout.activate()
+        panel.adjustSize()
+        # 让壳比面板大一圈
+        dialog.resize(panel.width() + shadow_margin * 2, panel.height() + shadow_margin * 2)
+        # 把面板居中放到壳里
+        panel.move(shadow_margin, shadow_margin)
         
-        # 添加对话框阴影
-        apply_drop_shadow(dialog, blur_radius=10, color=QColor(0, 0, 0, 60), offset_x=0, offset_y=0)
+        # ❺ 实现拖动窗口（因为没了系统标题栏）
+        dialog._drag_pos = None
         
         # 设置对话框在父窗口中居中显示
         dialog.move(
@@ -835,6 +916,19 @@ class QuadrantWidget(QWidget):
         # 显示对话框
         dialog.exec()
     
+    def mousePressEvent(self, e):
+        """拖动实现 - 鼠标按下"""
+        if e.button() == Qt.MouseButton.LeftButton:
+            self._drag_pos = e.globalPosition().toPoint() - self.pos()
+
+    def mouseMoveEvent(self, e):
+        """拖动实现 - 鼠标移动"""
+        if self._drag_pos and e.buttons() & Qt.MouseButton.LeftButton:
+            self.move(e.globalPosition().toPoint() - self._drag_pos)
+
+    def mouseReleaseEvent(self, e):
+        """拖动实现 - 鼠标释放"""
+        self._drag_pos = None
 
     def export_unfinished_tasks(self):
         """导出未完成的任务到文本文件"""
@@ -1011,6 +1105,20 @@ class QuadrantWidget(QWidget):
         self.config['quadrants'][quadrant_id]['opacity'] = opacity
         self.save_config()
         self.update()
+    
+    def change_color_range(self, quadrant_id, range_type, value):
+        """更改颜色范围设置"""
+        # 确保color_ranges配置存在
+        if 'color_ranges' not in self.config:
+            self.config['color_ranges'] = {}
+        if quadrant_id not in self.config['color_ranges']:
+            self.config['color_ranges'][quadrant_id] = {}
+        
+        # 更新范围值
+        self.config['color_ranges'][quadrant_id][range_type] = value
+        self.save_config()
+        
+        logger.info(f"更新象限 {quadrant_id} 的 {range_type} 范围为 {value}")
     
     def change_size(self, dimension, value):
         """更改窗口大小"""
