@@ -74,7 +74,6 @@ def tasks():
             "start": start,
             "end": end,
             "progress": progress,
-            # 可选：自定义样式 class，或直接把 color 放到 popup 用
             "custom_class": "",
             "notes": r["notes"] or "",
             "color": r["color"] or "#4ECDC4",

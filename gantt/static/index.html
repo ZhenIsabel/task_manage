@@ -23,11 +23,65 @@
         .task-name {
             font-weight: 600;
         }
+
+        button {
+            background-color: #f4f4f4;
+            color: #333;
+            border: 0px solid #ddd;
+            border-radius: 6px;
+            padding: 2px 8px;
+            margin-right: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background-color: #e5e5e5;
+            border-color: #ccc;
+        }
+
+        button:active {
+            background-color: #dcdcdc;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ddd;
+            -webkit-transition: 0.2s;
+            transition: 0.2s;
+            border: 1px solid #37352f;
+            scale: 0.75;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: '';
+            height: 12px;
+            width: 12px;
+            left: 4px;
+            bottom: 3px;
+            background-color: white;
+            -webkit-transition: 0.2s;
+            transition: 0.2s;
+        }
+
+        .slider.round {
+            border-radius: 25px;
+        }
+
+        .slider.round:before {
+            border-radius: 50%;
+        }
     </style>
 </head>
 
 <body>
-    <h2>甘特图</h2>
     <div style="margin-bottom: 10px;">
         <button id="day">日</button>
         <button id="week">周</button>
@@ -58,19 +112,49 @@
             const gantt = new Gantt("#gantt", tasks, {
                 view_mode: "Week",
                 auto_move_label: true,
-                container_height: 410,
+                container_height: 480,
+                bar_height: 20,
+                holidays: { 'var(--g-weekend-highlight-color)': 'weekend' },
                 infinite_padding: false,
                 language: "zh-CN",
+                readonly: true,
                 date_format: "YYYY-MM-DD",
-                custom_popup_html: (task) => {
-                    return `
-            <div class="details-container">
-              <div class="task-name">${task.name}</div>
-              <div>起止：${task.start} → ${task.end}</div>
-              <div>进度：${task.progress}%</div>
-              ${task.notes ? `<div>备注：${task.notes}</div>` : ""}
-            </div>
-          `;
+                popup: (ctx) => {
+                    ctx.set_title(ctx.task.name);
+                    let title = ctx.get_title();
+                    if (ctx.task.description) ctx.set_subtitle(ctx.task.description);
+                    else ctx.set_subtitle('');
+                    ctx.set_details(`
+                    <div style="
+                        max-width: 320px;
+                    ">
+                        <div>Duration:${ctx.task.actual_duration} days</div>
+                        <div>${ctx.task._start.toLocaleDateString('zh-CN')} - ${ctx.task._end.toLocaleDateString('zh-CN')}</div>
+                        ${ctx.task.notes ? `<div style="
+                                background:#f8f9fa;
+                                padding:6px;
+                                border-radius:6px;
+                                border:1px solid #e5e7eb;
+                            ">
+                                <span style="white-space: pre-wrap; word-wrap: break-word;">${ctx.task.notes}</span>
+                            </div>`
+                            : ""
+                        }
+                    </div>
+                    `);
+                    let details = ctx.get_details();
+                    details.style.lineHeight = '1.75';
+                    details.style.margin = '10px 4px';
+                    if (!ctx.chart.options.readonly) {
+                        if (!ctx.chart.options.readonly_progress) {
+                            ctx.add_action('Set Color', (task, chart) => {
+                                const bar = chart.bars.find(
+                                    ({ task: t }) => t.id === task.id,
+                                ).$bar;
+                                bar.style.fill = `hsla(${~~(360 * Math.random())}, 70%,  72%, 0.8)`;
+                            });
+                        }
+                    }
                 },
                 on_click: (task) => console.log("click", task),
                 on_date_change: (task, start, end) => console.log("date change", task, start, end),
