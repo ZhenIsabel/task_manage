@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8" />
+    <title>我的甘特图</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- frappe-gantt 样式 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt/dist/frappe-gantt.css">
+    <style>
+        body {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+            padding: 5px;
+        }
+
+        #gantt {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 8px;
+            min-height: 410px;
+        }
+
+        .task-name {
+            font-weight: 600;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>甘特图</h2>
+    <div style="margin-bottom: 10px;">
+        <button id="day">日</button>
+        <button id="week">周</button>
+        <button id="month">月</button>
+        <button id="year">年</button>
+    </div>
+    <div id="gantt"></div>
+
+    <!-- frappe-gantt 脚本 -->
+    <script src="https://cdn.jsdelivr.net/npm/frappe-gantt/dist/frappe-gantt.umd.js"></script>
+    <script>
+        window.addEventListener("error", function (event) {
+            // 只拦截 clientWidth 报错
+            if (event.message && event.message.includes("clientWidth")) {
+                event.preventDefault();  // 阻止浏览器控制台打印红色错误
+                return true;             // 告诉浏览器“这个错误已处理”
+            }
+        });
+    </script>
+    <script>
+        document.addEventListener("DOMContentLoaded", async function () {
+            // 等 DOM 渲染完再执行
+            const resp = await fetch("/tasks");
+            const tasks = await resp.json();
+
+            // frappe-gantt 的任务对象支持更多字段，但基本这几个就可以
+            // 如果你想自定义气泡内容，可以用 custom_popup_html
+            const gantt = new Gantt("#gantt", tasks, {
+                view_mode: "Week",
+                auto_move_label: true,
+                container_height: 410,
+                infinite_padding: false,
+                language: "zh-CN",
+                date_format: "YYYY-MM-DD",
+                custom_popup_html: (task) => {
+                    return `
+            <div class="details-container">
+              <div class="task-name">${task.name}</div>
+              <div>起止：${task.start} → ${task.end}</div>
+              <div>进度：${task.progress}%</div>
+              ${task.notes ? `<div>备注：${task.notes}</div>` : ""}
+            </div>
+          `;
+                },
+                on_click: (task) => console.log("click", task),
+                on_date_change: (task, start, end) => console.log("date change", task, start, end),
+                on_progress_change: (task, progress) => console.log("progress change", task, progress),
+            });
+
+            // 视图切换
+            document.getElementById("day").onclick = () => gantt.change_view_mode("Day");
+            document.getElementById("week").onclick = () => gantt.change_view_mode("Week");
+            document.getElementById("month").onclick = () => gantt.change_view_mode("Month");
+            document.getElementById("year").onclick = () => gantt.change_view_mode("Year");
+
+        });
+    </script>
+
+</body>
+
+</html>

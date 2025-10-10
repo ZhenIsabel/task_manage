@@ -1,11 +1,21 @@
 import json
 import os
+import webbrowser
+import socket
+import time
+import threading
 from datetime import datetime
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QColorDialog, QSlider,  QMessageBox, QDialog,
                             QTabWidget, QFormLayout, QSpinBox,  QMenu)
-from PyQt6.QtCore import Qt, QPoint,  QRect, QTimer
+from PyQt6.QtCore import Qt, QPoint,  QRect, QTimer,QUrl
 from PyQt6.QtWidgets import QApplication,QFileDialog
 from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont,  QPainterPath, QLinearGradient, QAction
+try:
+    from PyQt6.QtWebEngineWidgets import QWebEngineView
+    HAS_WEBENGINE = True
+except Exception:
+    HAS_WEBENGINE = False
+
 
 from .task_label import TaskLabel
 from config.config_manager import save_config, save_tasks
@@ -13,6 +23,7 @@ from .add_task_dialog import AddTaskDialog
 from ui.styles import StyleManager
 from database.database_manager import get_db_manager
 from ui.ui import apply_drop_shadow
+from gantt.app import gantt_app
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
 
@@ -109,6 +120,10 @@ class QuadrantWidget(QWidget):
         # self.undo_button.setVisible(False)  # 初始隐藏
         # self.undo_button.setCursor(Qt.CursorShape.PointingHandCursor)
         
+        self.gantt_button = QPushButton("甘特", self)
+        self.gantt_button.clicked.connect(self.show_gantt_dialog)
+        self.gantt_button.setCursor(Qt.CursorShape.PointingHandCursor)
+
         self.settings_button = QPushButton("设置", self)
         self.settings_button.clicked.connect(self.show_settings)
         self.settings_button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -122,6 +137,7 @@ class QuadrantWidget(QWidget):
         self.control_layout.addWidget(self.add_task_button)
         self.control_layout.addWidget(self.export_tasks_button)
         # self.control_layout.addWidget(self.undo_button)
+        self.control_layout.addWidget(self.gantt_button)
         self.control_layout.addWidget(self.settings_button)
         self.control_layout.addWidget(self.exit_button)
         
@@ -1089,7 +1105,8 @@ class QuadrantWidget(QWidget):
                 '目录': task_data.get('directory'),
                 '创建日期': task_data.get('created_at'),
                 '完成状态': '已完成' if task_data.get('completed', False) else '未完成',
-                '完成日期': task_data.get('completed_date', '')
+                '完成日期': task_data.get('completed_date', ''),
+                '删除状态': '已删除' if task_data.get('deleted', False) else ''
             }
             rows.append(row)
 
@@ -1101,7 +1118,7 @@ class QuadrantWidget(QWidget):
         # 定义列的顺序
         column_order = [
             '任务名', '到期日期', '优先级', '备注', '目录', '创建日期',
-            '完成状态', '完成日期', 
+            '完成状态', '完成日期', '删除状态'
         ]
 
         try:
@@ -1120,6 +1137,108 @@ class QuadrantWidget(QWidget):
             QMessageBox.critical(self, "导出失败", f"导出任务时发生错误:\n{str(e)}")
             logger.error(f"导出任务时发生错误: {str(e)}")
 
+    def _is_port_open(self, host='127.0.0.1', port=5000) -> bool:
+        '''
+        检测gantt服务是否启动
+        '''
+        
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(0.2)
+        try:
+            s.connect((host, port))
+            s.close()
+            return True
+        except OSError:
+            return False
+
+    def _start_gantt_server_if_needed(self) -> bool:
+        """
+        如果 127.0.0.1:5000 没在跑，则启动 gantt/app.py 里的 Flask。
+        同时设置 DB_PATH，指向项目内的 database/tasks.db
+        """
+        # 计算项目根目录（quadrant_widget.py 在 core/，根目录是其上一级）
+        root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        # 指定数据库路径（你的 app.py 里默认就是 ./database/tasks.db）
+        db_path = os.path.join(root_dir, 'database', 'tasks.db')
+        os.environ.setdefault('DB_PATH', db_path)
+
+        if self._is_port_open():
+            return True
+        def _run():
+            # 不用调试/不重载；放后台线程跑
+            
+            gantt_app.run(host='127.0.0.1', port=5000, debug=False, use_reloader=False)
+
+        t = threading.Thread(target=_run, daemon=True)
+        t.start()
+
+        # 简单等待最多 3 秒让服务起来（不强制，起不来也会回退到浏览器）
+        for _ in range(30):
+            if self._is_port_open():
+                return True
+            time.sleep(0.1)
+        return self._is_port_open()
+
+
+    def show_gantt_dialog(self):
+        """
+        打开一个弹窗，上面嵌入本地 index.html（frappe-gantt 页面），下方有“关闭”按钮。
+        - 优先使用 QWebEngineView 内嵌；如果未安装，则回退到系统浏览器打开。
+        - index.html 路径可按需修改 / 做成配置项。
+        """
+        # 启动gantt服务
+        url = "http://127.0.0.1:5000/"
+        self._start_gantt_server_if_needed()
+        if not HAS_WEBENGINE:
+            # 没有 WebEngine 就直接用系统浏览器打开
+            webbrowser.open_new_tab(url)
+            return
+        # 无边框 + 透明背景
+        dlg = QDialog(self, flags=Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
+        dlg.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        dlg.setWindowTitle("甘特图")
+        dlg.setModal(True)
+        
+        # 外层透明壳
+        outer_layout = QVBoxLayout(dlg)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+
+        # 白色圆角面板
+        panel = QWidget(dlg)
+        panel.setObjectName("panel")
+        panel_layout = QVBoxLayout(panel)
+        panel_layout.setContentsMargins(10, 10, 10, 10)
+        panel_layout.setSpacing(10)
+        
+        # 使用统一样式
+        style_manager = StyleManager()
+        add_task_dialog_stylesheet = style_manager.get_stylesheet("add_task_dialog").format()
+        panel.setStyleSheet(add_task_dialog_stylesheet)
+        
+        # 内部内容
+        view = QWebEngineView(dlg)
+        view.setUrl(QUrl(url))
+        view.setMinimumSize(900, 600)
+        panel_layout.addWidget(view)
+
+        # 下方按钮行
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        close_btn = QPushButton("关闭", panel)
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.clicked.connect(dlg.accept)
+        btn_row.addWidget(close_btn)
+
+        # 组装布局
+        panel_layout.addWidget(view, stretch=1)
+        panel_layout.addLayout(btn_row)
+
+        # 将 panel 放入外层 layout
+        outer_layout.addWidget(panel)
+
+        dlg.resize(1000, 600)
+        dlg.exec()
 
     def update_ui_config(self, key, value):
         """更新UI配置"""
