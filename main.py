@@ -1,10 +1,11 @@
 import sys
 from PyQt6.QtWidgets import QApplication, QMessageBox
+import os,threading
 
 from config.config_manager import load_config
 from core.quadrant_widget import QuadrantWidget
 from ui.ui import UIManager
-
+from gantt.app import gantt_app
 from core.utils import init_logging
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
@@ -116,10 +117,27 @@ class TaskManagerApp:
             if self.ui_manager:
                 self.ui_manager.cleanup()
 
+
+
+def start_gantt_server():
+    # 彻底静音 stdout/stderr，避免 click.echo flush 失败
+    sys.stdout = open(os.devnull, "w")
+    sys.stderr = open(os.devnull, "w")
+
+    # 禁掉 Flask 的启动横幅
+    try:
+        from flask import cli as flask_cli
+        flask_cli.show_server_banner = lambda *a, **k: None
+    except Exception:
+        pass
+
+    gantt_app.run(host="127.0.0.1", port=5000, debug=False, use_reloader=False)
+
+
 if __name__ == "__main__":
     # 初始化日志
     init_logging()
-    
+    threading.Thread(target=start_gantt_server, daemon=True).start()
     # 创建并运行应用
     app = TaskManagerApp()
     sys.exit(app.run())
