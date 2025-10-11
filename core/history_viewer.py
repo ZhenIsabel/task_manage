@@ -1,12 +1,10 @@
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
                             QTableWidget, QTableWidgetItem, QPushButton, 
-                            QHeaderView, QFrame, QScrollArea, QWidget,
+                            QHeaderView, QAbstractItemView, QWidget,
                             QAbstractScrollArea)
 from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QColor, QFont
 from datetime import datetime
-import json
-import os
 
 from ui.styles import StyleManager
 from ui.ui import apply_drop_shadow
@@ -42,6 +40,7 @@ class HistoryViewer(QDialog):
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(20,20,20,20)
         panel_layout.setSpacing(15)
+        panel.setMaximumWidth(600)
         
         # 样式表
         panel.setStyleSheet(style_manager.get_stylesheet("add_task_dialog").format())
@@ -53,21 +52,8 @@ class HistoryViewer(QDialog):
             text_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             panel_layout.addWidget(text_label)
         
-        # 创建滚动区域
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setStyleSheet(style_manager.get_stylesheet("scroll_area_transparent"))
-        
-        scroll_content = QWidget()
-        scroll_content.setStyleSheet(style_manager.get_stylesheet("scroll_content_panel"))
-        scroll_layout = QVBoxLayout(scroll_content)
-        scroll_layout.setSpacing(5)
-        
         # 加载历史记录
-        self.load_history_records(scroll_layout)
-        
-        scroll_area.setWidget(scroll_content)
-        panel_layout.addWidget(scroll_area)
+        self.load_history_records(panel_layout)
         
         # 关闭和导出按钮布局
         button_layout = QHBoxLayout()
@@ -185,21 +171,31 @@ class HistoryViewer(QDialog):
             value_item.setFlags(value_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             table.setItem(row, 3, value_item)
 
-        # 调整列宽
+        # 按内容自动调整列宽
         header = table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)  # 关键：不要用 Stretch
+        for i in range(table.columnCount()):
+            header.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
 
+        # 不拉伸最后一列
+        header.setStretchLastSection(False)
+        # 启用自动换行
+        table.setWordWrap(True)
+        # 按内容调整行高
+        table.resizeRowsToContents()
+        # 关闭省略策略：
+        table.setTextElideMode(Qt.TextElideMode.ElideNone)
+        table.horizontalHeader().setTextElideMode(Qt.TextElideMode.ElideNone)
+        # 允许滚动
         table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         table.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
+        # 按行选择
+        table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
 
         table.setMaximumHeight(400)
         # 应用美化样式
         style_manager = StyleManager()
-        table.setStyleSheet(style_manager.get_stylesheet("history_table"))
+        table.setStyleSheet(style_manager.get_stylesheet("history_table").format())
         layout.addWidget(table)
     
     def center_on_parent(self):

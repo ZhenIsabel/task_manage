@@ -497,26 +497,26 @@ class StyleManager:
         # 历史记录表格美化样式
         "history_table": """
             QTableWidget {{
-                border: none;
-                border-radius: 10px;
-                font-family: '微软雅黑', 'Microsoft YaHei', sans-serif;
-                font-size: 13px;
-                color: #333;
-                gridline-color: #F0F0F0;
+                border: 1px solid #ddd;
+                border-radius: 8px;
+                background-color: white;
+                gridline-color: #eee;
             }}
             QTableWidget::item {{
                 border: none;
-                padding: 8px 6px;
+                padding: 8px;
+            }}
+            QTableWidget::item:selected {{
+                background-color: #4ECDC4;
             }}
             QHeaderView::section {{
-                color: #666;
+                background-color: white;
+                padding: 5px;
                 border: none;
+                border-right: 1px solid #ddd;
                 font-weight: bold;
-                font-size: 13px;
-                padding: 8px 0;
-            }}
-            QTableCornerButton::section {{
-                border: none;
+                color: #333;
+                gridline-color: #eee;
             }}
             """ + BASE_SCROLLBAR_STYLE,
         # 通用：小号灰色标签

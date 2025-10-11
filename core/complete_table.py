@@ -47,8 +47,6 @@ class CompleteTableDialog(QDialog):
         style_manager = StyleManager()
         self.panel.setStyleSheet(style_manager.get_stylesheet("add_task_dialog").format())
         
-        # 添加阴影效果
-        apply_drop_shadow(self.panel, blur_radius=8, color=QColor(0, 0, 0, 60))
         
         # 标题
         title_label = QLabel("已完成任务")
@@ -69,48 +67,20 @@ class CompleteTableDialog(QDialog):
         # 设置表格属性
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        
+        # 允许滚动
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         # 设置列宽
-        self.table.setColumnWidth(0, 60)  # 选择列
+        self.table.setColumnWidth(0, 40)  # 选择列
         
         # 设置表格样式
-        self.table.setStyleSheet("""
-            QTableWidget {
-                border: 1px solid #ddd;
-                border-radius: 8px;
-                background-color: white;
-                gridline-color: #eee;
-            }
-            QTableWidget::item {
-                padding: 8px;
-                border: none;
-            }
-            QTableWidget::item:selected {
-                background-color: #e3f2fd;
-            }
-            QHeaderView::section {
-                background-color: #f5f5f5;
-                padding: 10px;
-                border: none;
-                border-right: 1px solid #ddd;
-                font-weight: bold;
-                color: #333;
-            }
-            QHeaderView::section:first {
-                border-top-left-radius: 8px;
-            }
-            QHeaderView::section:last {
-                border-top-right-radius: 8px;
-                border-right: none;
-            }
-        """)
+        self.table.setStyleSheet(style_manager.get_stylesheet("history_table").format())
         
         panel_layout.addWidget(self.table)
         
