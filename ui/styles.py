@@ -217,6 +217,7 @@ class StyleManager:
             selection-background-color: #dddddd;
             selection-color: white;
             outline: none;
+            border-radius:8px;
         }}
         QDateEdit::drop-down {{
             subcontrol-origin: padding;
@@ -688,7 +689,101 @@ class StyleManager:
                 font-size: 12px;
                 color: #333;
             }
-        """
+        """,
+        # 日历样式
+        "calender":'''
+            /*顶部导航区域*/
+            #qt_calendar_navigationbar {
+                background-color: #4ECDC4;
+                min-height: 10px;
+            }
+
+
+            /*上一个月按钮和下一个月按钮(从源码里找到的objectName)*/
+            #qt_calendar_prevmonth, #qt_calendar_nextmonth {
+                border: none; /*去掉边框*/
+                margin-top: 5px;
+                color: white;
+                min-width: 16px;
+                max-width: 36px;
+                min-height: 10px;
+                max-height: 36px;
+                border-radius: 10px; /*看来近似椭圆*/
+                font-weight: bold; /*字体加粗*/
+                qproperty-icon: none; /*去掉默认的方向键图片，当然也可以自定义*/
+                background-color: transparent;/*背景颜色透明*/
+            }
+            #qt_calendar_prevmonth {
+                qproperty-text: "<"; /*修改按钮的文字*/
+            }
+            #qt_calendar_nextmonth {
+                qproperty-text: ">";
+            }
+            #qt_calendar_prevmonth:hover, #qt_calendar_nextmonth:hover {
+                background-color: rgba(225, 225, 225, 100);
+                border-radius: 10px;
+            }
+            #qt_calendar_prevmonth:pressed, #qt_calendar_nextmonth:pressed {
+                background-color: rgba(235, 235, 235, 100);
+                border-radius: 10px;
+            }
+
+
+            /*年,月控件*/
+            #qt_calendar_yearbutton, #qt_calendar_monthbutton {
+                color: white;
+                margin: 8px;
+                min-width: 60px;
+                border-radius: 15px;
+            }
+            #qt_calendar_yearbutton:hover, #qt_calendar_monthbutton:hover {
+                background-color: rgba(225, 225, 225, 100);
+            }
+            #qt_calendar_yearbutton:pressed, #qt_calendar_monthbutton:pressed {
+                background-color: rgba(235, 235, 235, 100);
+            }
+
+
+            /*年份输入框*/
+            #qt_calendar_yearedit {
+                min-width: 65px;
+                color: white;
+                background: transparent;/*让输入框背景透明*/
+            }
+            #qt_calendar_yearedit::up-button { /*往上的按钮*/
+                width: 20px;
+                subcontrol-position: right;/*移动到右边*/
+            }
+            #qt_calendar_yearedit::down-button { /*往下的按钮*/
+                width: 20px;
+                subcontrol-position: left; /*移动到左边去*/
+            }
+
+
+            /*月份选择菜单*/
+            CalendarWidget QToolButton QMenu {
+                background-color: white;
+            }
+            CalendarWidget QToolButton QMenu::item {
+                padding: 10px;
+            }
+            CalendarWidget QToolButton QMenu::item:selected:enabled {
+                background-color: #4ECDC4;
+                color:#4ECDC4;
+            }
+            CalendarWidget QToolButton::menu-indicator {
+                /*image: none;去掉月份选择下面的小箭头*/
+                subcontrol-position: right center;/*右边居中*/
+            }
+
+
+            /*下方的日历表格*/
+            #qt_calendar_calendarview {
+                outline: 0px;/*去掉选中后的虚线框*/
+                selection-background-color: #4ECDC4; /*选中背景颜色*/
+                border-radius: 10px;
+            }
+        '''
         }
 
     def get_stylesheet(self, component_name):

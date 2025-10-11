@@ -46,6 +46,7 @@ class AddTaskDialog(QDialog):
             # 根据字段类型创建不同的控件
             if f['type'] == 'date':
                 w = QDateEdit()
+                w.setStyleSheet(style_manager.get_stylesheet("calender"))
                 w.setCalendarPopup(True)
                 w.setDisplayFormat("yyyy-MM-dd")
                 # 如果有默认值则设置日期，否则保持原逻辑

@@ -130,6 +130,7 @@ class QuadrantWidget(QWidget):
 
         self.settings_button = QPushButton("设置", self)
         self.settings_button.clicked.connect(self.show_settings)
+        self.settings_button.setVisible(False)  # 初始隐藏
         self.settings_button.setCursor(Qt.CursorShape.PointingHandCursor)
         
         self.exit_button = QPushButton("退出", self)
@@ -559,7 +560,7 @@ class QuadrantWidget(QWidget):
         
         # 使用UI管理器的通用批量操作方法
         # 定义需要切换的子控件
-        edit_mode_children = ["add_task_button", "export_tasks_button"]
+        edit_mode_children = ["add_task_button", "export_tasks_button","settings_button"]
         # if len(self.undo_stack) > 0:
         #     edit_mode_children.append("undo_button")
         
