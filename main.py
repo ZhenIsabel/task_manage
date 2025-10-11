@@ -60,6 +60,10 @@ class TaskManagerApp:
             if hasattr(self.main_window, 'settings_button'):
                 self.ui_manager.register_widget("settings_button", self.main_window.settings_button, "visible")
             
+            # 注册完成按钮
+            if hasattr(self.main_window, 'complete_button'):
+                self.ui_manager.register_widget("complete_button", self.main_window.complete_button, "visible")
+            
             # 注册退出按钮
             if hasattr(self.main_window, 'exit_button'):
                 self.ui_manager.register_widget("exit_button", self.main_window.exit_button, "visible")
@@ -137,7 +141,7 @@ def start_gantt_server():
 if __name__ == "__main__":
     # 初始化日志
     init_logging()
-    threading.Thread(target=start_gantt_server, daemon=True).start()
+    # threading.Thread(target=start_gantt_server, daemon=True).start()
     # 创建并运行应用
     app = TaskManagerApp()
     sys.exit(app.run())

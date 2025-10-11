@@ -120,9 +120,13 @@ class QuadrantWidget(QWidget):
         # self.undo_button.setVisible(False)  # 初始隐藏
         # self.undo_button.setCursor(Qt.CursorShape.PointingHandCursor)
         
-        self.gantt_button = QPushButton("甘特", self)
-        self.gantt_button.clicked.connect(self.show_gantt_dialog)
-        self.gantt_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        # self.gantt_button = QPushButton("甘特", self)
+        # self.gantt_button.clicked.connect(self.show_gantt_dialog)
+        # self.gantt_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        self.complete_button = QPushButton("完成", self)
+        self.complete_button.clicked.connect(self.show_complete_dialog)
+        self.complete_button.setCursor(Qt.CursorShape.PointingHandCursor)
 
         self.settings_button = QPushButton("设置", self)
         self.settings_button.clicked.connect(self.show_settings)
@@ -137,7 +141,8 @@ class QuadrantWidget(QWidget):
         self.control_layout.addWidget(self.add_task_button)
         self.control_layout.addWidget(self.export_tasks_button)
         # self.control_layout.addWidget(self.undo_button)
-        self.control_layout.addWidget(self.gantt_button)
+        # self.control_layout.addWidget(self.gantt_button)
+        self.control_layout.addWidget(self.complete_button)
         self.control_layout.addWidget(self.settings_button)
         self.control_layout.addWidget(self.exit_button)
         
@@ -1239,6 +1244,13 @@ class QuadrantWidget(QWidget):
 
         dlg.resize(1000, 600)
         dlg.exec()
+
+    def show_complete_dialog(self):
+        """显示已完成任务对话框"""
+        from .complete_table import CompleteTableDialog
+        
+        dialog = CompleteTableDialog(self)
+        dialog.exec()
 
     def update_ui_config(self, key, value):
         """更新UI配置"""
