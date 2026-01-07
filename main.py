@@ -68,6 +68,10 @@ class TaskManagerApp:
             if hasattr(self.main_window, 'exit_button'):
                 self.ui_manager.register_widget("exit_button", self.main_window.exit_button, "visible")
 
+            # 注册定时任务按钮
+            if hasattr(self.main_window,'scheduled_task_button'):
+                self.ui_manager.register_widget("scheduled_task_button", self.main_window.scheduled_task_button, "hidden")
+
             # 加载任务
             self.main_window.load_tasks()
             logger.info("任务加载完毕")

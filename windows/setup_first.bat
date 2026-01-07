@@ -11,7 +11,7 @@ if errorlevel 1 (
 
 REM 创建虚拟环境
 echo 创建虚拟环境...
-python -m venv venv
+python -m venv ..\venv
 if errorlevel 1 (
     echo 错误：创建虚拟环境失败
     pause
@@ -20,7 +20,7 @@ if errorlevel 1 (
 
 REM 激活虚拟环境
 echo 激活虚拟环境...
-call venv\Scripts\activate.bat
+call ..\venv\Scripts\activate.bat
 
 REM 升级pip
 echo 升级pip...
@@ -28,7 +28,7 @@ python -m pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple/
 
 REM 安装依赖
 echo 安装项目依赖...
-pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple/
+pip install -r ..\requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple/
 
 if errorlevel 1 (
     echo 错误：安装依赖失败

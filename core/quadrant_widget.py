@@ -24,7 +24,7 @@ from ui.styles import StyleManager
 from database.database_manager import get_db_manager
 from ui.ui import apply_drop_shadow
 from gantt.app import gantt_app
-from .scheduler import ScheduledTaskDialog
+
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
 
@@ -1372,6 +1372,7 @@ class QuadrantWidget(QWidget):
 
     def scheduled_task(self):
         """定时任务"""
+        from .scheduler import ScheduledTaskDialog
         logger.info("定时任务")
         scheduled_task_dialog = ScheduledTaskDialog(self)
         scheduled_task_dialog.exec()
