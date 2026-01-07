@@ -10,6 +10,7 @@ import json
 from datetime import datetime
 from typing import Dict, List, Any
 import os
+import traceback
 
 app = Flask(__name__)
 CORS(app)  # 允许跨域请求
@@ -134,7 +135,7 @@ def get_tasks():
         result = []
         for task in tasks:
             task_dict = dict(zip([col[0] for col in cursor.description], task))
-            task_dict['position'] = {'x': task['position_x'], 'y': task['position_y']}
+            task_dict['position'] = {'x': task_dict['position_x'], 'y': task_dict['position_y']}
             result.append(task_dict)
         
         conn.close()
@@ -145,6 +146,7 @@ def get_tasks():
         })
         
     except Exception as e:
+        traceback.print_exc()  # 打印堆栈
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/tasks', methods=['POST'])
@@ -232,6 +234,7 @@ def create_or_update_task():
         })
         
     except Exception as e:
+        traceback.print_exc()  # 打印堆栈
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/tasks/<task_id>', methods=['DELETE'])
@@ -265,6 +268,7 @@ def delete_task(task_id):
         })
         
     except Exception as e:
+        traceback.print_exc()  # 打印堆栈
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/tasks/<task_id>/history', methods=['GET'])
@@ -349,6 +353,7 @@ def create_user():
     except sqlite3.IntegrityError:
         return jsonify({'error': 'Username or API token already exists'}), 409
     except Exception as e:
+        traceback.print_exc()  # 打印堆栈
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

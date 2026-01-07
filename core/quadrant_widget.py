@@ -24,6 +24,7 @@ from ui.styles import StyleManager
 from database.database_manager import get_db_manager
 from ui.ui import apply_drop_shadow
 from gantt.app import gantt_app
+from .scheduler import ScheduledTaskDialog
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
 
@@ -97,6 +98,11 @@ class QuadrantWidget(QWidget):
         self.add_task_button.clicked.connect(self.add_task)
         self.add_task_button.setVisible(False)  # 初始隐藏
         self.add_task_button.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        self.scheduled_task_button = QPushButton("定时任务", self)
+        self.scheduled_task_button.clicked.connect(self.scheduled_task)
+        self.scheduled_task_button.setVisible(False)  # 初始隐藏
+        self.scheduled_task_button.setCursor(Qt.CursorShape.PointingHandCursor)
         
         # 添加导出未完成任务按钮
         self.export_tasks_button = QPushButton("导出任务", self)
@@ -140,6 +146,7 @@ class QuadrantWidget(QWidget):
         # 添加按钮到布局
         self.control_layout.addWidget(self.edit_button)
         self.control_layout.addWidget(self.add_task_button)
+        self.control_layout.addWidget(self.scheduled_task_button)
         self.control_layout.addWidget(self.export_tasks_button)
         # self.control_layout.addWidget(self.undo_button)
         # self.control_layout.addWidget(self.gantt_button)
@@ -560,7 +567,7 @@ class QuadrantWidget(QWidget):
         
         # 使用UI管理器的通用批量操作方法
         # 定义需要切换的子控件
-        edit_mode_children = ["add_task_button", "export_tasks_button","settings_button"]
+        edit_mode_children = ["add_task_button", "export_tasks_button","settings_button","scheduled_task_button"]
         # if len(self.undo_stack) > 0:
         #     edit_mode_children.append("undo_button")
         
@@ -1362,6 +1369,12 @@ class QuadrantWidget(QWidget):
     def save_tasks(self, task=None):
         """保存任务到文件"""
         save_tasks(self.tasks, self)
+
+    def scheduled_task(self):
+        """定时任务"""
+        logger.info("定时任务")
+        scheduled_task_dialog = ScheduledTaskDialog(self)
+        scheduled_task_dialog.exec()
 
     def closeEvent(self, event):
         """关闭事件"""

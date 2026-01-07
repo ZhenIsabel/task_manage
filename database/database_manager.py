@@ -7,6 +7,7 @@ from typing import Dict, List, Any, Optional
 import logging
 import threading
 import copy
+import calendar
 
 # 获取logger并确保配置正确
 logger = logging.getLogger(__name__)
@@ -148,6 +149,26 @@ class DatabaseManager:
                 )
             ''')
             logger.debug("同步状态表创建/检查完成")
+            # 创建定时任务表
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS scheduled_tasks (
+                    id TEXT PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    priority TEXT,
+                    notes TEXT,
+                    due_date TEXT,
+                    frequency TEXT NOT NULL,
+                    week_day INTEGER,
+                    month_day INTEGER,
+                    quarter_day INTEGER,
+                    year_month INTEGER,
+                    year_day INTEGER,
+                    next_run_at TIMESTAMP,
+                    active BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
             
             # 创建索引以提高查询性能
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(completed)')
@@ -155,6 +176,9 @@ class DatabaseManager:
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_tasks_sync_status ON tasks(sync_status)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_task_history_task_id ON task_history(task_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_task_history_timestamp ON task_history(timestamp)')
+            
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_scheduled_active ON scheduled_tasks(active)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_scheduled_next_run ON scheduled_tasks(next_run_at)')
             logger.debug("数据库索引创建/检查完成")
             
             conn.commit()
@@ -670,6 +694,140 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"获取同步状态失败: {str(e)}")
             return {}
+
+    def create_scheduled_task(self, schedule_data: Dict[str, Any]) -> bool:
+        """创建定时任务"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT INTO scheduled_tasks 
+                (id, title, priority, notes, due_date, frequency, 
+                 week_day, month_day, quarter_day, year_month, year_day, 
+                 next_run_at, active, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                schedule_data['id'],
+                schedule_data['title'],
+                schedule_data.get('priority', '中'),
+                schedule_data.get('notes', ''),
+                schedule_data.get('due_date', ''),
+                schedule_data['frequency'],
+                schedule_data.get('week_day'),
+                schedule_data.get('month_day'),
+                schedule_data.get('quarter_day'),
+                schedule_data.get('year_month'),
+                schedule_data.get('year_day'),
+                schedule_data.get('next_run_at'),
+                schedule_data.get('active', True),
+                datetime.now().isoformat(),
+                datetime.now().isoformat()
+            ))
+            
+            conn.commit()
+            logger.info(f"创建定时任务成功: {schedule_data['id']}")
+            return True
+        except Exception as e:
+            logger.error(f"创建定时任务失败: {str(e)}")
+            return False
+    
+    def list_scheduled_tasks(
+        self, 
+        active_only: bool = False, 
+        due_before: Optional[datetime] = None
+    ) -> List[Dict[str, Any]]:
+        """列出定时任务"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            query = 'SELECT * FROM scheduled_tasks WHERE 1=1'
+            params = []
+            
+            if active_only:
+                query += ' AND active = ?'
+                params.append(True)
+            
+            if due_before:
+                query += ' AND next_run_at <= ?'
+                params.append(due_before.isoformat())
+            
+            query += ' ORDER BY next_run_at ASC'
+            
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            
+            schedules = [dict(row) for row in rows]
+            return schedules
+        except Exception as e:
+            logger.error(f"查询定时任务失败: {str(e)}")
+            return []
+    
+    def get_scheduled_task(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """获取单个定时任务"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('SELECT * FROM scheduled_tasks WHERE id = ?', (task_id,))
+            row = cursor.fetchone()
+            
+            if row:
+                return dict(row)
+            return None
+        except Exception as e:
+            logger.error(f"获取定时任务失败: {str(e)}")
+            return None
+    
+    def update_scheduled_task(self, task_id: str, updates: Dict[str, Any]) -> bool:
+        """更新定时任务"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            # 构建更新语句
+            update_fields = []
+            values = []
+            
+            for key, value in updates.items():
+                if key != 'id':  # 不更新主键
+                    update_fields.append(f"{key} = ?")
+                    values.append(value)
+            
+            if not update_fields:
+                return True
+            
+            # 总是更新 updated_at
+            update_fields.append("updated_at = ?")
+            values.append(datetime.now().isoformat())
+            
+            values.append(task_id)
+            
+            query = f"UPDATE scheduled_tasks SET {', '.join(update_fields)} WHERE id = ?"
+            cursor.execute(query, values)
+            
+            conn.commit()
+            logger.info(f"更新定时任务成功: {task_id}")
+            return True
+        except Exception as e:
+            logger.error(f"更新定时任务失败: {str(e)}")
+            return False
+    
+    def delete_scheduled_task(self, task_id: str) -> bool:
+        """删除定时任务"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('DELETE FROM scheduled_tasks WHERE id = ?', (task_id,))
+            conn.commit()
+            
+            logger.info(f"删除定时任务成功: {task_id}")
+            return True
+        except Exception as e:
+            logger.error(f"删除定时任务失败: {str(e)}")
+            return False
 
     # ========== 定时同步相关 ==========
     def start_periodic_sync(self, interval_seconds: int):

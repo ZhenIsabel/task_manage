@@ -470,13 +470,16 @@ class StyleManager:
                 background: #e0e0e0;
                 border-radius: 4px;
             }}
-            QSlider::handle:horizontal {{
-                background: #4ECDC4;
-                width: 16px;
-                height: 16px;
-                margin: -4px 0;
-                border-radius: 8px;
-            }}
+            QSlider::handle:horizontal {
+                width: 10px;
+                margin-top: -5px;
+                margin-bottom: -5px;
+                border-radius: 5px;
+                background: qradialgradient(spread:reflect, cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5, stop:0.6 rgba(210, 210, 210, 255), stop:0.7 rgba(210, 210, 210, 100));
+            }
+            QSlider::handle:horizontal:hover {
+                background: qradialgradient(spread:reflect, cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5, stop:0.6 rgba(255, 255, 255, 255), stop:0.7 rgba(255, 255, 255, 100));
+            }
             QPushButton {{
                 background-color: #4ECDC4;
                 color: white;
@@ -734,7 +737,7 @@ class StyleManager:
                 color: white;
                 margin: 8px;
                 min-width: 60px;
-                border-radius: 15px;
+                border-radius: 10px;
             }
             #qt_calendar_yearbutton:hover, #qt_calendar_monthbutton:hover {
                 background-color: rgba(225, 225, 225, 100);
@@ -767,7 +770,7 @@ class StyleManager:
             CalendarWidget QToolButton QMenu::item {
                 padding: 10px;
             }
-            CalendarWidget QToolButton QMenu::item:selected:enabled {
+            CalendarWidget QToolButton QMenu::item:selected {
                 background-color: #4ECDC4;
                 color:#4ECDC4;
             }
