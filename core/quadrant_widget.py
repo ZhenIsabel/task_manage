@@ -6,8 +6,8 @@ import time
 import threading
 from datetime import datetime
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QColorDialog, QSlider,  QMessageBox, QDialog,
-                            QTabWidget, QFormLayout, QSpinBox,  QMenu)
-from PyQt6.QtCore import Qt, QPoint,  QRect, QTimer,QUrl
+                            QTabWidget, QFormLayout, QSpinBox,  QMenu, QTimeEdit, QLabel, QCheckBox)
+from PyQt6.QtCore import Qt, QPoint,  QRect, QTimer,QUrl, QTime
 from PyQt6.QtWidgets import QApplication,QFileDialog
 from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont,  QPainterPath, QLinearGradient, QAction
 try:
@@ -960,10 +960,36 @@ class QuadrantWidget(QWidget):
         border_radius_spin.setValue(self.config.get('ui', {}).get('border_radius', 15))
         border_radius_spin.valueChanged.connect(lambda value: self.update_ui_config('border_radius', value))
         
+        # 自动刷新设置
+        auto_refresh_checkbox = QCheckBox("启用自动刷新")
+        auto_refresh_config = self.config.get('auto_refresh', {})
+        auto_refresh_checkbox.setChecked(auto_refresh_config.get('enabled', True))
+        auto_refresh_checkbox.stateChanged.connect(lambda state: self.update_auto_refresh_config('enabled', state == Qt.CheckState.Checked.value))
+        
+        # 刷新时间设置
+        refresh_time_edit = QTimeEdit()
+        refresh_time_edit.setDisplayFormat("HH:mm:ss")
+        refresh_time_str = auto_refresh_config.get('refresh_time', '00:02:00')
+        try:
+            hour, minute, second = map(int, refresh_time_str.split(':'))
+            refresh_time_edit.setTime(QTime(hour, minute, second))
+        except:
+            refresh_time_edit.setTime(QTime(0, 2, 0))
+        refresh_time_edit.timeChanged.connect(lambda time: self.update_auto_refresh_config('refresh_time', time.toString("HH:mm:ss")))
+        
+        # 添加说明标签
+        refresh_label = QLabel("每天在设定时间自动刷新页面并检查定时任务")
+        refresh_label.setStyleSheet("color: #666; font-size: 11px;")
+        refresh_label.setWordWrap(True)
+        
         # 添加到布局
         size_layout.addRow("宽度:", width_spin)
         size_layout.addRow("高度:", height_spin)
         ui_layout.addRow("圆角半径:", border_radius_spin)
+        ui_layout.addRow("", QLabel(""))  # 添加空行分隔
+        ui_layout.addRow(auto_refresh_checkbox)
+        ui_layout.addRow("刷新时间:", refresh_time_edit)
+        ui_layout.addRow("", refresh_label)
         
         # 添加标签页
         tab_widget.addTab(color_widget, "颜色设置")
@@ -1270,6 +1296,14 @@ class QuadrantWidget(QWidget):
         # 如果更改了圆角半径，立即更新界面
         if key == 'border_radius':
             self.update()
+    
+    def update_auto_refresh_config(self, key, value):
+        """更新自动刷新配置"""
+        if 'auto_refresh' not in self.config:
+            self.config['auto_refresh'] = {}
+        self.config['auto_refresh'][key] = value
+        self.save_config()
+        logger.info(f"自动刷新配置已更新: {key} = {value}")
     
     def change_quadrant_color(self, quadrant_id):
         """更改象限颜色"""

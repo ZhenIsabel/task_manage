@@ -26,13 +26,13 @@ logger = logging.getLogger(__name__)
 class TaskScheduler:
     """定时任务调度器"""
     
-    def __init__(self, db_manager):
+    def __init__(self):
         """
         初始化调度器
         
         :param db_manager: 数据库管理器实例
         """
-        self.db_manager = db_manager
+        self.db_manager = get_db_manager()
     
     @staticmethod
     def calculate_next_run_time(
@@ -242,7 +242,7 @@ class TaskScheduler:
         quarter_day: Optional[int] = None,
         year_month: Optional[int] = None,
         year_day: Optional[int] = None,
-        start_time: Optional[datetime] = None
+        start_time: str = ''
     ) -> Optional[str]:
         """
         创建新的定时任务
@@ -260,8 +260,16 @@ class TaskScheduler:
         :param start_time: 开始时间，默认为当前时间
         :return: 创建的任务ID，失败返回None
         """
-        if start_time is None:
+        # 处理 start_time 参数：可能是字符串、None 或 datetime 对象
+        if start_time is None or start_time == '':
             start_time = datetime.now()
+        elif isinstance(start_time, str):
+            # 尝试解析字符串日期
+            try:
+                start_time = datetime.strptime(start_time, '%Y-%m-%d')
+            except ValueError:
+                # 如果解析失败，使用当前时间
+                start_time = datetime.now()
         
         # 生成任务ID
         task_id = f"sched_{start_time.strftime('%Y%m%d%H%M%S%f')}"
@@ -307,10 +315,13 @@ class ScheduledTaskDialog(QDialog):
     def __init__(self,  parent=None):
         logger.info("初始化定时任务面板")
         super().__init__(parent)
-        self.setup_ui()
+        
+        # 先初始化必需的属性，再调用 setup_ui
         self.selected_tasks = set()  # 存储选中的任务ID
         self.db_manager = get_db_manager()
-
+        self.task_scheduler = TaskScheduler()  # 初始化任务调度器
+        self.setup_ui()
+        pass
     def setup_ui(self):
         """设置UI"""
         self.setWindowTitle("定时任务")
@@ -394,63 +405,8 @@ class ScheduledTaskDialog(QDialog):
         
     def load_scheduled_tasks(self,layout):
         """加载定时任务"""
-        
-        mock_scheduled_tasks = [
-    {
-        "id": "task-001",
-        "title": "每周生成物业巡查报告",
-        "priority": "high",
-        "notes": "自动汇总上周巡查数据并生成 PDF",
-        "due_date": None,
-        "frequency": "weekly",
-        "week_day": 1,          # 周一
-        "month_day": None,
-        "quarter_day": None,
-        "year_month": None,
-        "year_day": None,
-        "next_run_at": "2026-01-12T09:00:00",
-        "active": True,
-        "created_at": "2025-12-20T10:15:00",
-        "updated_at": "2026-01-05T09:30:00",
-    },
-    {
-        "id": "task-002",
-        "title": "月度租金对账",
-        "priority": "medium",
-        "notes": "与财务系统核对租金收缴情况",
-        "due_date": None,
-        "frequency": "monthly",
-        "week_day": None,
-        "month_day": 5,          # 每月 5 号
-        "quarter_day": None,
-        "year_month": None,
-        "year_day": None,
-        "next_run_at": "2026-02-05T08:30:00",
-        "active": True,
-        "created_at": "2025-11-01T09:00:00",
-        "updated_at": "2026-01-01T08:00:00",
-    },
-    {
-        "id": "task-003",
-        "title": "历史档案清理任务",
-        "priority": "low",
-        "notes": "一次性清理历史测试数据",
-        "due_date": "2026-01-01",
-        "frequency": "once",
-        "week_day": None,
-        "month_day": None,
-        "quarter_day": None,
-        "year_month": None,
-        "year_day": None,
-        "next_run_at": "2026-01-01T00:10:00",
-        "active": False,
-        "created_at": "2024-12-15T14:20:00",
-        "updated_at": "2025-01-01T00:10:00",
-    }
-]
         try:
-            # scheduled_tasks = self.db_manager.list_scheduled_tasks()
-            scheduled_tasks=mock_scheduled_tasks
+            scheduled_tasks = self.db_manager.list_scheduled_tasks()
             if not scheduled_tasks:
                 layout.addWidget(QLabel("没有定时任务"))
                 logger.info("没有定时任务")
@@ -580,6 +536,24 @@ class ScheduledTaskDialog(QDialog):
                 QMessageBox.warning(self, "提示", f"{f['label']} 为必填项")
                 return
         # 创建任务
+        try:
+            result_id = self.task_scheduler.create_scheduled_task(
+                title=task_data['title'],
+                frequency=task_data['frequency'],
+                priority=task_data['priority'],
+                notes=task_data['notes'],
+                due_date=task_data['due_date'],
+                start_time=task_data.get('start_time')
+            )
+            if result_id:
+                QMessageBox.information(self, "成功", f"定时任务创建成功")
+                # 刷新任务列表
+                self.close()
+            else:
+                QMessageBox.warning(self, "失败", "定时任务创建失败，请查看日志")
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"创建定时任务时发生错误: {str(e)}")
+            logger.error(f"创建定时任务异常: {str(e)}", exc_info=True)
 
 
     def on_selection_changed(self):

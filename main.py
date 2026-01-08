@@ -1,12 +1,15 @@
 import sys
 from PyQt6.QtWidgets import QApplication, QMessageBox
+from PyQt6.QtCore import QTimer
 import os,threading
+from datetime import datetime, time
 
 from config.config_manager import load_config
 from core.quadrant_widget import QuadrantWidget
 from ui.ui import UIManager
 from gantt.app import gantt_app
 from core.utils import init_logging
+from core.scheduler import TaskScheduler
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
 
@@ -17,6 +20,9 @@ class TaskManagerApp:
         self.ui_manager = UIManager()
         self.main_window = None
         self.config = None
+        self.refresh_timer = None
+        self.task_scheduler = None
+        self.last_refresh_date = None
         
     def initialize(self):
         """初始化应用"""
@@ -76,6 +82,13 @@ class TaskManagerApp:
             self.main_window.load_tasks()
             logger.info("任务加载完毕")
             
+            # 初始化任务调度器
+            self.task_scheduler = TaskScheduler()
+            logger.info("任务调度器初始化完成")
+            
+            # 启动定时刷新定时器
+            self.setup_auto_refresh()
+            
             # 连接UI管理器的信号
             self.ui_manager.widget_state_changed.connect(self.on_widget_state_changed)
             self.ui_manager.animation_finished.connect(self.on_animation_finished)
@@ -102,6 +115,75 @@ class TaskManagerApp:
         """动画完成回调"""
         logger.debug(f"动画完成: {widget_name}")
     
+    def setup_auto_refresh(self):
+        """设置自动刷新定时器"""
+        try:
+            auto_refresh_config = self.config.get('auto_refresh', {})
+            enabled = auto_refresh_config.get('enabled', True)
+            
+            if not enabled:
+                logger.info("自动刷新功能已禁用")
+                return
+            
+            # 创建定时器，每分钟检查一次
+            self.refresh_timer = QTimer()
+            self.refresh_timer.timeout.connect(self.check_auto_refresh)
+            self.refresh_timer.start(60000)  # 每60秒检查一次
+            
+            logger.info("自动刷新定时器已启动")
+        except Exception as e:
+            logger.error(f"设置自动刷新失败: {str(e)}")
+    
+    def check_auto_refresh(self):
+        """检查是否需要自动刷新"""
+        try:
+            auto_refresh_config = self.config.get('auto_refresh', {})
+            if not auto_refresh_config.get('enabled', True):
+                return
+            
+            refresh_time_str = auto_refresh_config.get('refresh_time', '00:02:00')
+            
+            # 解析刷新时间
+            try:
+                hour, minute, second = map(int, refresh_time_str.split(':'))
+                refresh_time = time(hour, minute, second)
+            except Exception as e:
+                logger.error(f"解析刷新时间失败: {refresh_time_str}, 错误: {str(e)}")
+                return
+            
+            now = datetime.now()
+            current_time = now.time()
+            current_date = now.date()
+            
+            # 检查是否到达刷新时间且今天还未刷新过
+            if (current_time.hour == refresh_time.hour and 
+                current_time.minute == refresh_time.minute and
+                self.last_refresh_date != current_date):
+                
+                logger.info(f"到达刷新时间: {refresh_time_str}，开始刷新页面并检查定时任务")
+                self.do_auto_refresh()
+                self.last_refresh_date = current_date
+        
+        except Exception as e:
+            logger.error(f"检查自动刷新失败: {str(e)}")
+    
+    def do_auto_refresh(self):
+        """执行自动刷新和定时任务检查"""
+        try:
+            # 1. 检查并生成到期的定时任务
+            if self.task_scheduler:
+                spawned_count = self.task_scheduler.check_and_spawn_scheduled_tasks()
+                if spawned_count > 0:
+                    logger.info(f"自动刷新：生成了 {spawned_count} 个定时任务")
+            
+            # 2. 刷新页面
+            if self.main_window:
+                self.main_window.load_tasks()
+                logger.info("自动刷新：页面已刷新")
+        
+        except Exception as e:
+            logger.error(f"执行自动刷新失败: {str(e)}")
+    
     def run(self):
         """运行应用"""
         if not self.initialize():
@@ -122,6 +204,8 @@ class TaskManagerApp:
             return 1
         finally:
             # 清理资源
+            if self.refresh_timer:
+                self.refresh_timer.stop()
             if self.ui_manager:
                 self.ui_manager.cleanup()
 
