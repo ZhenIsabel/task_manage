@@ -112,12 +112,15 @@ class QuadrantWidget(QWidget):
         self.export_menu.setStyleSheet(style_manager.get_stylesheet("menu"))
         self.action_export_unfinished = QAction("导出在办", self)
         self.action_export_all = QAction("导出所有", self)
+        self.action_export_summary = QAction("导出概要", self)
         self.export_menu.addAction(self.action_export_unfinished)
         self.export_menu.addAction(self.action_export_all)
+        self.export_menu.addAction(self.action_export_summary)
         self.export_tasks_button.setMenu(self.export_menu)
         # 绑定动作
         self.action_export_unfinished.triggered.connect(self.export_unfinished_tasks)
         self.action_export_all.triggered.connect(self.export_all_tasks)
+        self.action_export_summary.triggered.connect(self.export_summary)
         self.export_tasks_button.setVisible(False)  # 初始隐藏
         self.export_tasks_button.setCursor(Qt.CursorShape.PointingHandCursor)
 
@@ -1410,6 +1413,13 @@ class QuadrantWidget(QWidget):
         logger.info("定时任务")
         scheduled_task_dialog = ScheduledTaskDialog(self)
         scheduled_task_dialog.exec()
+
+    def export_summary(self):
+        """导出概要"""
+        from .export_summary_dialog import ExportSummaryDialog
+        logger.info("打开导出概要对话框")
+        dialog = ExportSummaryDialog(self)
+        dialog.exec()
 
     def closeEvent(self, event):
         """关闭事件"""

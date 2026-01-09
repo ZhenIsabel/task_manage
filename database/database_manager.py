@@ -369,7 +369,7 @@ class DatabaseManager:
                 VALUES (?, ?, ?)
             ''', ('upload', 'success', f'同步了 {len(unsynced_tasks)} 个任务'))
             conn.commit()
-            # logger.info(f"成功同步 {len(unsynced_tasks)} 个任务到服务器")
+            logger.info(f"成功同步 {len(unsynced_tasks)} 个任务到服务器")
             return True
         except Exception as e:
             logger.error(f"同步到服务器失败: {str(e)}")
