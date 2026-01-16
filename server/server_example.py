@@ -50,6 +50,8 @@ def init_server_database():
             notes TEXT DEFAULT '',
             due_date TEXT DEFAULT '',
             priority TEXT DEFAULT '',
+            urgency TEXT DEFAULT '低',
+            importance TEXT DEFAULT '低',
             directory TEXT DEFAULT '',
             create_date TEXT DEFAULT '',
             FOREIGN KEY (user_id) REFERENCES users(id)
@@ -69,10 +71,38 @@ def init_server_database():
         )
     ''')
     
+    # 创建定时任务表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS scheduled_tasks (
+            id TEXT PRIMARY KEY,
+            user_id INTEGER,
+            title TEXT NOT NULL,
+            priority TEXT,
+            urgency TEXT DEFAULT '低',
+            importance TEXT DEFAULT '低',
+            notes TEXT,
+            due_date TEXT,
+            frequency TEXT NOT NULL,
+            week_day INTEGER,
+            month_day INTEGER,
+            quarter_day INTEGER,
+            year_month INTEGER,
+            year_day INTEGER,
+            next_run_at TIMESTAMP,
+            active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    ''')
+    
     # 创建索引
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_tasks_updated_at ON tasks(updated_at)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_task_history_task_id ON task_history(task_id)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_scheduled_user_id ON scheduled_tasks(user_id)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_scheduled_active ON scheduled_tasks(active)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_scheduled_next_run ON scheduled_tasks(next_run_at)')
     
     conn.commit()
     conn.close()
@@ -179,8 +209,8 @@ def create_or_update_task():
                 UPDATE tasks SET
                     color = ?, position_x = ?, position_y = ?, completed = ?,
                     completed_date = ?, deleted = ?, text = ?, notes = ?,
-                    due_date = ?, priority = ?, directory = ?, create_date = ?,
-                    updated_at = ?
+                    due_date = ?, priority = ?, urgency = ?, importance = ?, 
+                    directory = ?, create_date = ?, updated_at = ?
                 WHERE id = ? AND user_id = ?
             ''', (
                 task_data.get('color', '#4ECDC4'),
@@ -192,6 +222,8 @@ def create_or_update_task():
                 task_data.get('notes', ''),
                 task_data.get('due_date', ''),
                 task_data.get('priority', ''),
+                task_data.get('urgency', '低'),
+                task_data.get('importance', '低'),
                 task_data.get('directory', ''),
                 task_data.get('create_date', ''),
                 datetime.now().isoformat(),
@@ -204,8 +236,8 @@ def create_or_update_task():
                 INSERT INTO tasks (
                     id, user_id, color, position_x, position_y, completed,
                     completed_date, deleted, text, notes, due_date, priority,
-                    directory, create_date, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    urgency, importance, directory, create_date, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 task_id, user_id,
                 task_data.get('color', '#4ECDC4'),
@@ -217,6 +249,8 @@ def create_or_update_task():
                 task_data.get('notes', ''),
                 task_data.get('due_date', ''),
                 task_data.get('priority', ''),
+                task_data.get('urgency', '低'),
+                task_data.get('importance', '低'),
                 task_data.get('directory', ''),
                 task_data.get('create_date', ''),
                 datetime.now().isoformat(),
@@ -354,6 +388,168 @@ def create_user():
         return jsonify({'error': 'Username or API token already exists'}), 409
     except Exception as e:
         traceback.print_exc()  # 打印堆栈
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/scheduled_tasks', methods=['GET'])
+def get_scheduled_tasks():
+    """获取用户的定时任务列表"""
+    user_id = authenticate_request()
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT * FROM scheduled_tasks 
+            WHERE user_id = ?
+            ORDER BY next_run_at ASC
+        ''', (user_id,))
+        
+        tasks = cursor.fetchall()
+        
+        # 转换为字典格式
+        result = []
+        for task in tasks:
+            task_dict = dict(zip([col[0] for col in cursor.description], task))
+            result.append(task_dict)
+        
+        conn.close()
+        
+        return jsonify({
+            'scheduled_tasks': result,
+            'count': len(result)
+        })
+        
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/scheduled_tasks', methods=['POST'])
+def create_or_update_scheduled_task():
+    """创建或更新定时任务"""
+    user_id = authenticate_request()
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    try:
+        task_data = request.json
+        task_id = task_data.get('id')
+        
+        if not task_id:
+            return jsonify({'error': 'Task ID is required'}), 400
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # 检查任务是否存在
+        cursor.execute('SELECT id FROM scheduled_tasks WHERE id = ? AND user_id = ?', (task_id, user_id))
+        existing_task = cursor.fetchone()
+        
+        if existing_task:
+            # 更新现有任务
+            cursor.execute('''
+                UPDATE scheduled_tasks SET
+                    title = ?, priority = ?, urgency = ?, importance = ?,
+                    notes = ?, due_date = ?, frequency = ?,
+                    week_day = ?, month_day = ?, quarter_day = ?,
+                    year_month = ?, year_day = ?, next_run_at = ?,
+                    active = ?, updated_at = ?
+                WHERE id = ? AND user_id = ?
+            ''', (
+                task_data.get('title'),
+                task_data.get('priority', ''),
+                task_data.get('urgency', '低'),
+                task_data.get('importance', '低'),
+                task_data.get('notes', ''),
+                task_data.get('due_date', ''),
+                task_data.get('frequency'),
+                task_data.get('week_day'),
+                task_data.get('month_day'),
+                task_data.get('quarter_day'),
+                task_data.get('year_month'),
+                task_data.get('year_day'),
+                task_data.get('next_run_at'),
+                task_data.get('active', True),
+                datetime.now().isoformat(),
+                task_id, user_id
+            ))
+            action = 'updated'
+        else:
+            # 创建新任务
+            cursor.execute('''
+                INSERT INTO scheduled_tasks (
+                    id, user_id, title, priority, urgency, importance,
+                    notes, due_date, frequency, week_day, month_day,
+                    quarter_day, year_month, year_day, next_run_at,
+                    active, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                task_id, user_id,
+                task_data.get('title'),
+                task_data.get('priority', ''),
+                task_data.get('urgency', '低'),
+                task_data.get('importance', '低'),
+                task_data.get('notes', ''),
+                task_data.get('due_date', ''),
+                task_data.get('frequency'),
+                task_data.get('week_day'),
+                task_data.get('month_day'),
+                task_data.get('quarter_day'),
+                task_data.get('year_month'),
+                task_data.get('year_day'),
+                task_data.get('next_run_at'),
+                task_data.get('active', True),
+                datetime.now().isoformat(),
+                datetime.now().isoformat()
+            ))
+            action = 'created'
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'action': action,
+            'task_id': task_id
+        })
+        
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/scheduled_tasks/<task_id>', methods=['DELETE'])
+def delete_scheduled_task(task_id):
+    """删除定时任务"""
+    user_id = authenticate_request()
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # 删除定时任务
+        cursor.execute('''
+            DELETE FROM scheduled_tasks
+            WHERE id = ? AND user_id = ?
+        ''', (task_id, user_id))
+        
+        if cursor.rowcount == 0:
+            conn.close()
+            return jsonify({'error': 'Scheduled task not found'}), 404
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Scheduled task deleted successfully'
+        })
+        
+    except Exception as e:
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

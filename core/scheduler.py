@@ -178,7 +178,8 @@ class TaskScheduler:
                     task_data = {
                         'id': task_id,
                         'text': schedule['title'],
-                        'priority': schedule.get('priority', '中'),
+                        'urgency': schedule.get('urgency', '低'),
+                        'importance': schedule.get('importance', '低'),
                         'notes': schedule.get('notes', ''),
                         'due_date': schedule.get('due_date', ''),
                         'completed': False,
@@ -234,7 +235,8 @@ class TaskScheduler:
         self,
         title: str,
         frequency: str,
-        priority: str = '中',
+        urgency: str = '低',
+        importance: str = '低',
         notes: str = '',
         due_date: str = '',
         week_day: Optional[int] = None,
@@ -249,7 +251,8 @@ class TaskScheduler:
         
         :param title: 任务标题
         :param frequency: 频率 (daily, weekly, monthly, quarterly, yearly)
-        :param priority: 优先级
+        :param urgency: 紧急程度
+        :param importance: 重要程度
         :param notes: 备注
         :param due_date: 到期日期
         :param week_day: 周几 (weekly)
@@ -288,7 +291,8 @@ class TaskScheduler:
         schedule_data = {
             'id': task_id,
             'title': title,
-            'priority': priority,
+            'urgency': urgency,
+            'importance': importance,
             'notes': notes,
             'due_date': due_date,
             'frequency': frequency,
@@ -419,11 +423,11 @@ class ScheduledTaskDialog(QDialog):
 
     def create_table(self, layout, scheduled_tasks):
         """创建表格"""
-        logger.info(f"加载定时任务表条数{0}",len(scheduled_tasks))
+        logger.info(f"加载定时任务表条数{len(scheduled_tasks)}")
         self.table = QTableWidget()
         self.table.setRowCount(len(scheduled_tasks))
-        self.table.setColumnCount(6)
-        self.table.setHorizontalHeaderLabels(["选择", "任务内容", "频率", "下次运行","优先级", "备注"])
+        self.table.setColumnCount(7)
+        self.table.setHorizontalHeaderLabels(["选择", "任务内容", "频率", "下次运行","紧急程度", "重要程度", "备注"])
         header = self.table.verticalHeader()
         header.setMinimumSectionSize(35) 
         for row, scheduled_task in enumerate(scheduled_tasks):
@@ -435,8 +439,9 @@ class ScheduledTaskDialog(QDialog):
             self.table.setItem(row, 1, QTableWidgetItem(scheduled_task['title']))
             self.table.setItem(row, 2, QTableWidgetItem(scheduled_task['frequency']))
             self.table.setItem(row, 3, QTableWidgetItem(scheduled_task['next_run_at']))
-            self.table.setItem(row, 4, QTableWidgetItem(scheduled_task['priority']))
-            self.table.setItem(row, 5, QTableWidgetItem(scheduled_task['notes']))
+            self.table.setItem(row, 4, QTableWidgetItem(scheduled_task.get('urgency', '低')))
+            self.table.setItem(row, 5, QTableWidgetItem(scheduled_task.get('importance', '低')))
+            self.table.setItem(row, 6, QTableWidgetItem(scheduled_task['notes']))
         layout.addWidget(self.table)
         # 按内容自动调整列宽
         header = self.table.horizontalHeader()
@@ -540,7 +545,8 @@ class ScheduledTaskDialog(QDialog):
             result_id = self.task_scheduler.create_scheduled_task(
                 title=task_data['title'],
                 frequency=task_data['frequency'],
-                priority=task_data['priority'],
+                urgency=task_data.get('urgency', '低'),
+                importance=task_data.get('importance', '低'),
                 notes=task_data['notes'],
                 due_date=task_data['due_date'],
                 start_time=task_data.get('start_time')
@@ -586,7 +592,7 @@ class ScheduledTaskDialog(QDialog):
         """从配置中获取可编辑字段"""
         config = load_config()
         fields = config.get('schedule_task_fields', [])
-        logger.info(f"获取到字段了{0}",fields)
+        logger.info(f"获取到字段了{fields}")
         return fields
     
 

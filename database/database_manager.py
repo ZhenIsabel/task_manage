@@ -117,6 +117,8 @@ class DatabaseManager:
                     notes TEXT DEFAULT '',
                     due_date TEXT DEFAULT '',
                     priority TEXT DEFAULT '',
+                    urgency TEXT DEFAULT '低',
+                    importance TEXT DEFAULT '低',
                     directory TEXT DEFAULT '',
                     create_date TEXT DEFAULT '',
                     sync_status TEXT DEFAULT ''
@@ -155,6 +157,8 @@ class DatabaseManager:
                     id TEXT PRIMARY KEY,
                     title TEXT NOT NULL,
                     priority TEXT,
+                    urgency TEXT DEFAULT '低',
+                    importance TEXT DEFAULT '低',
                     notes TEXT,
                     due_date TEXT,
                     frequency TEXT NOT NULL,
@@ -269,8 +273,8 @@ class DatabaseManager:
                     cursor.execute('''
                         INSERT OR REPLACE INTO tasks 
                         (id, color, position_x, position_y, completed, completed_date, deleted, 
-                         text, notes, due_date, priority, directory, create_date, updated_at, sync_status, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         text, notes, due_date, priority, urgency, importance, directory, create_date, updated_at, sync_status, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (
                         task['id'],
                         task.get('color', '#4ECDC4'),
@@ -283,6 +287,8 @@ class DatabaseManager:
                         task.get('notes', ''),
                         task.get('due_date', ''),
                         task.get('priority', ''),
+                        task.get('urgency', '低'),
+                        task.get('importance', '低'),
                         task.get('directory', ''),
                         task.get('create_date', ''),
                         task.get('updated_at', datetime.now().isoformat()),
@@ -497,6 +503,8 @@ class DatabaseManager:
             'notes': field_values.get('notes', ''),
             'due_date': field_values.get('due_date', ''),
             'priority': field_values.get('priority', ''),
+            'urgency': field_values.get('urgency', task_data.get('urgency', '低')),
+            'importance': field_values.get('importance', task_data.get('importance', '低')),
             'directory': field_values.get('directory', ''),
             'create_date': field_values.get('create_date', ''),
             'updated_at': task_data.get('updated_at', datetime.now().isoformat()),
@@ -703,14 +711,16 @@ class DatabaseManager:
             
             cursor.execute('''
                 INSERT INTO scheduled_tasks 
-                (id, title, priority, notes, due_date, frequency, 
+                (id, title, priority, urgency, importance, notes, due_date, frequency, 
                  week_day, month_day, quarter_day, year_month, year_day, 
                  next_run_at, active, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 schedule_data['id'],
                 schedule_data['title'],
                 schedule_data.get('priority', '中'),
+                schedule_data.get('urgency', '低'),
+                schedule_data.get('importance', '低'),
                 schedule_data.get('notes', ''),
                 schedule_data.get('due_date', ''),
                 schedule_data['frequency'],
@@ -852,6 +862,93 @@ class DatabaseManager:
             self._sync_thread.join(timeout=5)
             logger.info("定时同步线程已停止")
 
+    def sync_scheduled_tasks_to_server(self) -> bool:
+        """同步定时任务到服务器"""
+        if not self.api_base_url:
+            return True
+        
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            # 获取所有定时任务
+            cursor.execute('SELECT * FROM scheduled_tasks')
+            scheduled_tasks = cursor.fetchall()
+            
+            synced_count = 0
+            for row in scheduled_tasks:
+                task = dict(row)
+                # 发送到服务器
+                result = self._make_api_request('POST', '/api/scheduled_tasks', task)
+                if result:
+                    synced_count += 1
+                else:
+                    logger.error(f"同步定时任务 {task['id']} 失败")
+            
+            logger.info(f"成功同步 {synced_count} 个定时任务到服务器")
+            return True
+        except Exception as e:
+            logger.error(f"同步定时任务到服务器失败: {str(e)}")
+            return False
+
+    def sync_scheduled_tasks_from_server(self) -> bool:
+        """从服务器同步定时任务到本地"""
+        if not self.api_base_url:
+            return True
+        
+        try:
+            result = self._make_api_request('GET', '/api/scheduled_tasks')
+            if not result:
+                logger.error("无法从服务器获取定时任务")
+                return False
+            
+            server_tasks = result.get('scheduled_tasks', [])
+            
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            updated_count = 0
+            for task_data in server_tasks:
+                # 检查本地是否存在
+                cursor.execute('SELECT updated_at FROM scheduled_tasks WHERE id = ?', (task_data['id'],))
+                local_task = cursor.fetchone()
+                
+                if not local_task or task_data.get('updated_at', '') > local_task[0]:
+                    # 插入或更新本地任务
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO scheduled_tasks 
+                        (id, title, priority, urgency, importance, notes, due_date, frequency,
+                         week_day, month_day, quarter_day, year_month, year_day,
+                         next_run_at, active, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        task_data['id'],
+                        task_data.get('title'),
+                        task_data.get('priority', ''),
+                        task_data.get('urgency', '低'),
+                        task_data.get('importance', '低'),
+                        task_data.get('notes', ''),
+                        task_data.get('due_date', ''),
+                        task_data.get('frequency'),
+                        task_data.get('week_day'),
+                        task_data.get('month_day'),
+                        task_data.get('quarter_day'),
+                        task_data.get('year_month'),
+                        task_data.get('year_day'),
+                        task_data.get('next_run_at'),
+                        task_data.get('active', True),
+                        task_data.get('created_at', datetime.now().isoformat()),
+                        task_data.get('updated_at', datetime.now().isoformat())
+                    ))
+                    updated_count += 1
+            
+            conn.commit()
+            logger.info(f"成功从服务器同步 {updated_count} 个定时任务")
+            return True
+        except Exception as e:
+            logger.error(f"从服务器同步定时任务失败: {str(e)}")
+            return False
+
     def _periodic_sync_worker(self):
         """
         定时同步线程的工作函数。
@@ -859,10 +956,15 @@ class DatabaseManager:
         logger.info("定时同步线程工作函数启动")
         while not self._stop_sync_event.is_set():
             try:
-                logger.info("定时同步：开始同步到服务器")
+                logger.info("定时同步：开始同步普通任务到服务器")
                 self.sync_to_server()
-                logger.info("定时同步：开始从服务器同步")
+                logger.info("定时同步：开始从服务器同步普通任务")
                 self.sync_from_server()
+                
+                logger.info("定时同步：开始同步定时任务到服务器")
+                self.sync_scheduled_tasks_to_server()
+                logger.info("定时同步：开始从服务器同步定时任务")
+                self.sync_scheduled_tasks_from_server()
             except Exception as e:
                 logger.error(f"定时同步异常: {str(e)}")
             # 等待下一个周期或直到被停止

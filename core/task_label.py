@@ -34,7 +34,8 @@ class TaskLabel(QWidget):
             fields = [
                 {"name": "text",      "label": "任务内容", "type": "text",  "required": True},
                 {"name": "due_date",  "label": "到期日期", "type": "date",  "required": False},
-                {"name": "priority",  "label": "优先级",   "type": "select", "required": False, "options": ["高", "中", "低"]},
+                {"name": "urgency",   "label": "紧急程度", "type": "select", "required": False, "options": ["高", "低"]},
+                {"name": "importance","label": "重要程度", "type": "select", "required": False, "options": ["高", "低"]},
                 {"name": "notes",     "label": "备注",     "type": "multiline",  "required": False},
                 {"name": "directory","label": "目录","type": "file", "required": False},
                 {"name":"create_date","label":"创建日期","type":"date","required":False},
@@ -214,6 +215,8 @@ class TaskLabel(QWidget):
         """鼠标释放事件"""
         if event.button() == Qt.MouseButton.LeftButton and self.dragging:
             self.dragging = False
+            # 触发状态改变信号，以便保存位置和更新urgency/importance
+            self.statusChanged.emit(self)
     
     def mouseDoubleClickEvent(self, event):
         """鼠标双击事件"""
@@ -460,9 +463,14 @@ class TaskLabel(QWidget):
             due_date_label = QLabel(f"<b>到期日期:</b> {self.due_date}")
             layout.addWidget(due_date_label)
         
-        if self.priority:
-            priority_label = QLabel(f"<b>优先级:</b> {self.priority}")
-            layout.addWidget(priority_label)
+        # 显示紧急程度和重要程度
+        if hasattr(self, 'urgency') and self.urgency:
+            urgency_label = QLabel(f"<b>紧急程度:</b> {self.urgency}")
+            layout.addWidget(urgency_label)
+        
+        if hasattr(self, 'importance') and self.importance:
+            importance_label = QLabel(f"<b>重要程度:</b> {self.importance}")
+            layout.addWidget(importance_label)
         
         if self.notes:
             notes_html = self.notes.replace('\n', '<br>')

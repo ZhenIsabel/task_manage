@@ -84,12 +84,37 @@ def save_tasks(tasks, parent=None):
     try:
         db_manager = get_db_manager()
         
+        # 获取父窗口的中心坐标用于判断象限
+        center_x = parent.width() // 2 if parent else 500
+        center_y = parent.height() // 2 if parent else 400
+        
         # 处理当前任务列表
         current_task_ids = set()
         for task in tasks:
             task_data = task.get_data()
             task_id = task_data.get('id')
             current_task_ids.add(task_id)
+            
+            # 根据坐标自动判断并更新紧急程度和重要程度
+            position = task_data.get('position', {'x': 100, 'y': 100})
+            position_x = position['x']
+            position_y = position['y']
+            
+            # x轴判断紧急程度：右侧=高，左侧=低
+            urgency = "高" if position_x > center_x else "低"
+            
+            # y轴判断重要程度：上方=高，下方=低
+            importance = "高" if position_y < center_y else "低"
+            
+            task_data['urgency'] = urgency
+            task_data['importance'] = importance
+            
+            # 同时更新任务对象本身的属性
+            task.urgency = urgency
+            task.importance = importance
+            
+            # 移除旧的priority字段（向后兼容）
+            task_data.pop('priority', None)
             
             # 保存任务到数据库
             success = db_manager.save_task(task_data)
