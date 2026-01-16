@@ -85,10 +85,10 @@ class SummaryWorker(QThread):
                     history = []
                     for hist_row in cursor.fetchall():
                         history.append({
-                            'field': hist_row[0],
-                            'value': hist_row[1],
-                            'action': hist_row[2],
-                            'timestamp': hist_row[3]
+                            '任务名称': hist_row[0],
+                            '任务详情': hist_row[1],
+                            '修改动作': hist_row[2],
+                            '时间': hist_row[3]
                         })
                     
                     task_dict['history'] = history
@@ -125,13 +125,6 @@ class SummaryWorker(QThread):
                 
                 # 使用线程池并行处理
                 max_workers = min(10, total_tasks)  # 最多10个并发线程
-                
-                # #region agent log
-                import json as _json; _log_file = r"d:\solutions\task_manage\.cursor\debug.log"; _log_data = {"sessionId":"debug-session","runId":"initial","hypothesisId":"B","location":"export_summary_dialog.py:128","message":"thread pool starting","data":{"max_workers":max_workers,"total_tasks":total_tasks,"thread_id":__import__('threading').current_thread().ident},"timestamp":__import__('time').time()*1000}
-                try:
-                    with open(_log_file, "a", encoding="utf-8") as _f: _f.write(_json.dumps(_log_data, ensure_ascii=False) + "\n")
-                except: pass
-                # #endregion
                 
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
                     # 提交所有任务到线程池
@@ -194,13 +187,6 @@ class SummaryWorker(QThread):
         Returns:
             tuple: (summary_text, is_success)
         """
-        # #region agent log
-        import json as _json; _log_file = r"d:\solutions\task_manage\.cursor\debug.log"; _log_data = {"sessionId":"debug-session","runId":"initial","hypothesisId":"B","location":"export_summary_dialog.py:190","message":"single task summary start","data":{"task_id":task.get('id'),"thread_id":__import__('threading').current_thread().ident},"timestamp":__import__('time').time()*1000}
-        try:
-            with open(_log_file, "a", encoding="utf-8") as _f: _f.write(_json.dumps(_log_data, ensure_ascii=False) + "\n")
-        except: pass
-        # #endregion
-        
         try:
             # 构建提示词
             messages = self._build_single_task_summary_prompt(task)
@@ -236,13 +222,34 @@ class SummaryWorker(QThread):
         Returns:
             消息列表 [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}]
         """
-        system_content = """你是一个任务总结助手。你会收到一个任务的信息和它的变更历史记录。
+        system_content = """你是一名【工作总结撰写助手】，擅长将零散的任务记录和变更历史，
+整理为可直接用于【工作总结】中的正式表述。
 
-            你的任务是：
-            1. 分析任务的变更历史，理解任务的执行情况，无需关注截止时间的调整
-            2. 生成简洁的工作概要（200-400字）
-            3. 概要应突出关键进展、重要变更和最终状态。
-            4. 用中文回答
+你将收到：
+- 一个任务的基本信息
+- 该任务的多条历史变更记录（包括状态、内容调整、推进过程）
+
+你的任务是：
+
+一、分析任务执行过程  
+- 重点关注任务在推进过程中体现出的工作内容、协调情况、处理事项和结果  
+- 不要关注或复述：创建时间、完成时间、优先级、任务ID、负责人姓名等元信息  
+- 即使变更记录较少，也要从“实际完成了什么工作”角度进行概括，不得简单写“无显著变更”
+- 不得编造没有在原文中体现的事项
+
+二、生成一段【部门可直接使用的工作完成情况表述】  
+- 字数控制在 100–400 个汉字内
+- 采用正式、公文风格
+- 表述应体现：  
+  1. 做了哪些具体工作  
+  2. 推进或协调了哪些事项  
+  3. 最终形成了什么成果或状态  
+
+三、语言与格式要求  
+- 必须全程使用中文
+- 不得以“任务X于某日完成”这类流水账方式开头
+
+请直接输出最终总结内容，不要解释你的分析过程。
             """
         
         # 构建用户内容

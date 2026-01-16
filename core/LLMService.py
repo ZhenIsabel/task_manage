@@ -47,15 +47,16 @@ class LLMService:
     async def generate_response(
         self,
         messages: List[Dict[str, str]],
-        schema:dict
+        schema:dict,
+        max_retries: int = 2
     ) -> Optional[str]:
         """
         发送消息并获取响应（异步）
         
         Args:
             messages: 消息列表，格式为 [{"role": "system/user/assistant", "content": "..."}]
-            temperature: 温度参数，控制生成的随机性 (0-1)
-            max_tokens: 最大生成token数
+            schema: JSON Schema配置
+            max_retries: 最大重试次数
             
         Returns:
             LLM的响应文本，失败返回None
@@ -68,35 +69,62 @@ class LLMService:
             logger.warning("消息列表为空")
             return None
         
-        try:
-            logger.debug(f"发送消息到LLM，消息数量: {len(messages)}")
-            
-            # 构建JSON Schema格式的response_format
-            response_format = {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "summary",
-                    "schema": schema,
-                    "strict": True
-                }
+        # 构建JSON Schema格式的response_format
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "summary",
+                "schema": schema,
+                "strict": True
             }
-            
-            # 调用API
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                response_format=response_format
-            )
-            
-            # 获取响应内容
-            content = response.choices[0].message.content
-            logger.debug(f"LLM响应内容长度: {len(content) if content else 0} 字符")
-            
-            return content
+        }
+        
+        # 重试逻辑
+        last_exception = None
+        for attempt in range(max_retries + 1):
+            try:
+                if attempt > 0:
+                    # 重试前等待一小段时间
+                    await asyncio.sleep(1 * attempt)
+                    logger.info(f"第 {attempt + 1} 次尝试调用LLM API")
+                else:
+                    logger.debug(f"发送消息到LLM，消息数量: {len(messages)}")
                 
-        except Exception as e:
-            logger.error(f"LLM API调用失败: {str(e)}", exc_info=True)
-            return None
+                # 调用API
+                response = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    response_format=response_format
+                )
+                
+                # 获取响应内容
+                content = response.choices[0].message.content
+                logger.debug(f"LLM响应内容长度: {len(content) if content else 0} 字符")
+                
+                if attempt > 0:
+                    logger.info(f"重试成功，第 {attempt + 1} 次尝试获得响应")
+                
+                return content
+                    
+            except Exception as e:
+                last_exception = e
+                error_str = str(e)
+                
+                # 判断是否是可重试的错误
+                is_retryable = (
+                    "Connection error" in error_str or
+                    "timeout" in error_str.lower() or
+                    "Timeout" in error_str
+                )
+                
+                if is_retryable and attempt < max_retries:
+                    logger.warning(f"LLM API调用失败(第 {attempt + 1} 次): {error_str}，将重试")
+                    continue
+                else:
+                    logger.error(f"LLM API调用失败: {str(e)}", exc_info=True)
+                    break
+        
+        return None
     
     def generate_response_sync(
         self,
@@ -114,99 +142,30 @@ class LLMService:
         Returns:
             LLM的响应文本，失败返回None
         """
-        # #region agent log
-        import json as _json; _log_file = r"d:\solutions\task_manage\.cursor\debug.log"; _log_data = {"sessionId":"debug-session","runId":"initial","hypothesisId":"A","location":"LLMService.py:101","message":"generate_response_sync entry","data":{"thread_id":__import__('threading').current_thread().ident,"has_client":self.client is not None},"timestamp":__import__('time').time()*1000}
-        try:
-            with open(_log_file, "a", encoding="utf-8") as _f: _f.write(_json.dumps(_log_data, ensure_ascii=False) + "\n")
-        except: pass
-        # #endregion
-        
         try:
             # 创建新的事件循环
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            
-            # #region agent log
-            import json as _json; _log_file = r"d:\solutions\task_manage\.cursor\debug.log"; _log_data = {"sessionId":"debug-session","runId":"initial","hypothesisId":"A","location":"LLMService.py:120","message":"event loop created","data":{"loop_id":id(loop),"is_running":loop.is_running(),"is_closed":loop.is_closed()},"timestamp":__import__('time').time()*1000}
-            try:
-                with open(_log_file, "a", encoding="utf-8") as _f: _f.write(_json.dumps(_log_data, ensure_ascii=False) + "\n")
-            except: pass
-            # #endregion
             
             try:
                 result = loop.run_until_complete(
                     self.generate_response(messages, schema)
                 )
                 
-                # #region agent log
-                import json as _json; _log_file = r"d:\solutions\task_manage\.cursor\debug.log"; _log_data = {"sessionId":"debug-session","runId":"initial","hypothesisId":"A","location":"LLMService.py:130","message":"API call completed","data":{"loop_id":id(loop),"has_result":result is not None,"result_length":len(result) if result else 0},"timestamp":__import__('time').time()*1000}
-                try:
-                    with open(_log_file, "a", encoding="utf-8") as _f: _f.write(_json.dumps(_log_data, ensure_ascii=False) + "\n")
-                except: pass
-                # #endregion
-                
-                # 确保客户端的所有待处理任务都已完成
-                if self.client and hasattr(self.client, '_client'):
-                    # #region agent log
-                    import json as _json; _log_file = r"d:\solutions\task_manage\.cursor\debug.log"; _log_data = {"sessionId":"debug-session","runId":"initial","hypothesisId":"D","location":"LLMService.py:138","message":"before client cleanup","data":{"loop_id":id(loop),"client_type":type(self.client).__name__},"timestamp":__import__('time').time()*1000}
-                    try:
-                        with open(_log_file, "a", encoding="utf-8") as _f: _f.write(_json.dumps(_log_data, ensure_ascii=False) + "\n")
-                    except: pass
-                    # #endregion
-                    
-                    # 关闭底层的httpx客户端
-                    try:
-                        loop.run_until_complete(self.client._client.aclose())
-                    except Exception as cleanup_error:
-                        logger.warning(f"清理httpx客户端时出错: {str(cleanup_error)}")
-                    
-                    # #region agent log
-                    import json as _json; _log_file = r"d:\solutions\task_manage\.cursor\debug.log"; _log_data = {"sessionId":"debug-session","runId":"initial","hypothesisId":"D","location":"LLMService.py:150","message":"after client cleanup","data":{"loop_id":id(loop)},"timestamp":__import__('time').time()*1000}
-                    try:
-                        with open(_log_file, "a", encoding="utf-8") as _f: _f.write(_json.dumps(_log_data, ensure_ascii=False) + "\n")
-                    except: pass
-                    # #endregion
-                
-                # 等待所有待处理的任务完成
+                # 等待当前事件循环中所有待处理的任务完成
                 pending = asyncio.all_tasks(loop)
                 if pending:
-                    # #region agent log
-                    import json as _json; _log_file = r"d:\solutions\task_manage\.cursor\debug.log"; _log_data = {"sessionId":"debug-session","runId":"initial","hypothesisId":"C","location":"LLMService.py:161","message":"pending tasks found","data":{"loop_id":id(loop),"pending_count":len(pending),"tasks":[str(t) for t in pending]},"timestamp":__import__('time').time()*1000}
-                    try:
-                        with open(_log_file, "a", encoding="utf-8") as _f: _f.write(_json.dumps(_log_data, ensure_ascii=False) + "\n")
-                    except: pass
-                    # #endregion
-                    
                     for task in pending:
                         task.cancel()
                     loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
                 
                 return result
             finally:
-                # #region agent log
-                import json as _json; _log_file = r"d:\solutions\task_manage\.cursor\debug.log"; _log_data = {"sessionId":"debug-session","runId":"initial","hypothesisId":"C","location":"LLMService.py:175","message":"before loop close","data":{"loop_id":id(loop),"is_running":loop.is_running(),"is_closed":loop.is_closed()},"timestamp":__import__('time').time()*1000}
-                try:
-                    with open(_log_file, "a", encoding="utf-8") as _f: _f.write(_json.dumps(_log_data, ensure_ascii=False) + "\n")
-                except: pass
-                # #endregion
-                
+                # 只关闭事件循环,不关闭共享的httpx客户端
+                # 因为LLMService是单例,多个线程共享同一个客户端
                 loop.close()
                 
-                # #region agent log
-                import json as _json; _log_file = r"d:\solutions\task_manage\.cursor\debug.log"; _log_data = {"sessionId":"debug-session","runId":"initial","hypothesisId":"C","location":"LLMService.py:185","message":"after loop close","data":{"loop_id":id(loop),"is_closed":loop.is_closed()},"timestamp":__import__('time').time()*1000}
-                try:
-                    with open(_log_file, "a", encoding="utf-8") as _f: _f.write(_json.dumps(_log_data, ensure_ascii=False) + "\n")
-                except: pass
-                # #endregion
-                
         except Exception as e:
-            # #region agent log
-            import json as _json; _log_file = r"d:\solutions\task_manage\.cursor\debug.log"; _log_data = {"sessionId":"debug-session","runId":"initial","hypothesisId":"E","location":"LLMService.py:195","message":"exception in generate_response_sync","data":{"error_type":type(e).__name__,"error_msg":str(e),"thread_id":__import__('threading').current_thread().ident},"timestamp":__import__('time').time()*1000}
-            try:
-                with open(_log_file, "a", encoding="utf-8") as _f: _f.write(_json.dumps(_log_data, ensure_ascii=False) + "\n")
-            except: pass
-            # #endregion
-            
             logger.error(f"同步调用LLM失败: {str(e)}", exc_info=True)
             return None
     

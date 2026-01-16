@@ -1,7 +1,7 @@
 import sys
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtCore import QTimer
-import os,threading
+import os
 from datetime import datetime, time
 
 from config.config_manager import load_config
