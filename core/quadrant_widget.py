@@ -616,14 +616,6 @@ class QuadrantWidget(QWidget):
         # 确定象限和颜色
         quadrant, color = self.get_quadrant_at_position(local_pos)
 
-        # 根据象限确定优先级
-        if task_data['priority']=="default":
-            if quadrant in ["q1"]:
-                task_data['priority'] = "高"
-            elif quadrant in ["q2","q3"]:
-                task_data['priority'] = "中"
-            else:
-                task_data['priority'] = "低"
         
         # 创建任务ID
         task_id = f"task_{len(self.tasks)}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
