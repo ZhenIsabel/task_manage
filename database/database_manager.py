@@ -833,6 +833,17 @@ class DatabaseManager:
             cursor.execute('DELETE FROM scheduled_tasks WHERE id = ?', (task_id,))
             conn.commit()
             
+            # 如果配置了远程服务器，同步删除到服务器
+            if self.api_base_url:
+                try:
+                    result = self._make_api_request('DELETE', f'/api/scheduled_tasks/{task_id}')
+                    if result:
+                        logger.info(f"删除定时任务已同步到服务器: {task_id}")
+                    else:
+                        logger.warning(f"删除定时任务未能同步到服务器: {task_id}")
+                except Exception as e:
+                    logger.error(f"同步删除到服务器时出错: {str(e)}")
+            
             logger.info(f"删除定时任务成功: {task_id}")
             return True
         except Exception as e:

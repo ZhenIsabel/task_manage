@@ -275,7 +275,18 @@ class TaskScheduler:
                 start_time = datetime.now()
         
         # 生成任务ID
-        task_id = f"sched_{start_time.strftime('%Y%m%d%H%M%S%f')}"
+        base_task_id = f"sched_{start_time.strftime('%Y%m%d%H%M%S%f')}"
+        task_id = base_task_id
+        
+        # 检查ID是否重复，如果重复则添加区别符
+        counter = 1
+        while self.db_manager.get_scheduled_task(task_id) is not None:
+            task_id = f"{base_task_id}_{counter}"
+            counter += 1
+            # 为防止无限循环，设置最大尝试次数
+            if counter > 100:
+                logger.error(f"生成唯一任务ID失败: 尝试次数超过100次")
+                return None
         
         # 计算首次运行时间
         next_run = self.calculate_next_run_time(
@@ -509,12 +520,16 @@ class ScheduledTaskDialog(QDialog):
                 result=self.db_manager.delete_scheduled_task(task_id)
                 if result:
                     deleted_count+=1
-                
-                QMessageBox.information(
-                    self, 
-                    "删除成功", 
-                    f"成功删除 {deleted_count} 个定时任务"
-                )
+            
+            # 显示成功消息
+            QMessageBox.information(
+                self, 
+                "删除成功", 
+                f"成功删除 {deleted_count} 个定时任务"
+            )
+            
+            # 刷新任务列表 - 关闭对话框以触发父窗口刷新
+            self.close()
 
         except Exception as e:
             logger.error(f"删除任务失败: {str(e)}")
@@ -574,20 +589,6 @@ class ScheduledTaskDialog(QDialog):
                 if task_id:
                     self.selected_tasks.add(task_id)
         
-        # 更新还原按钮状态
-        self.restore_button.setEnabled(len(self.selected_tasks) > 0)
-        
-        # 更新全选按钮文本
-        total_checkboxes = self.table.rowCount()
-        checked_count = len(self.selected_tasks)
-        
-        if checked_count == 0:
-            self.select_all_button.setText("全选")
-        elif checked_count == total_checkboxes:
-            self.select_all_button.setText("取消全选")
-        else:
-            self.select_all_button.setText(f"全选 ({checked_count}/{total_checkboxes})")
-    
     def get_editable_fields(self):
         """从配置中获取可编辑字段"""
         config = load_config()
