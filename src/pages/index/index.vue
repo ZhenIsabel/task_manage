@@ -8,7 +8,7 @@
     </view>
 
     <view class="app-window">
-      <view v-if="view === 'matrix'" class="view-container matrix-view">
+      <view class="view-container matrix-view">
         <view class="header">
           <view>
             <text class="main-title">不想干活</text>
@@ -36,7 +36,7 @@
                   v-for="task in quadrantData.tl"
                   :key="task.id"
                   class="task-item"
-                  @click="navigateTo('edit', task)"
+                  @click="goEdit(task)"
                 >
                   <view class="checkbox" :class="{ checked: task.isCompleted }" @click.stop="handleToggleTask(task.id)">
                     <uni-icons v-if="task.isCompleted" type="checkmarkempty" size="12" color="white" />
@@ -62,7 +62,7 @@
                   v-for="task in quadrantData.tr"
                   :key="task.id"
                   class="task-item"
-                  @click="navigateTo('edit', task)"
+                  @click="goEdit(task)"
                 >
                   <view class="checkbox" :class="{ checked: task.isCompleted }" @click.stop="handleToggleTask(task.id)">
                     <uni-icons v-if="task.isCompleted" type="checkmarkempty" size="12" color="white" />
@@ -88,7 +88,7 @@
                   v-for="task in quadrantData.bl"
                   :key="task.id"
                   class="task-item"
-                  @click="navigateTo('edit', task)"
+                  @click="goEdit(task)"
                 >
                   <view class="checkbox" :class="{ checked: task.isCompleted }" @click.stop="handleToggleTask(task.id)">
                     <uni-icons v-if="task.isCompleted" type="checkmarkempty" size="12" color="white" />
@@ -114,7 +114,7 @@
                   v-for="task in quadrantData.br"
                   :key="task.id"
                   class="task-item"
-                  @click="navigateTo('edit', task)"
+                  @click="goEdit(task)"
                 >
                   <view class="checkbox" :class="{ checked: task.isCompleted }" @click.stop="handleToggleTask(task.id)">
                     <uni-icons v-if="task.isCompleted" type="checkmarkempty" size="12" color="white" />
@@ -127,121 +127,6 @@
           </view>
         </view>
 
-      </view>
-
-      <view v-if="view === 'create' || view === 'edit'" class="view-container editor-view slide-in-up">
-        <view class="nav-header">
-          <view class="btn-icon glass-btn" @click="navigateTo('matrix')">
-            <uni-icons type="back" size="24" color="inherit" />
-          </view>
-          <text class="nav-title">{{ currentTask ? '编辑任务' : '创建任务' }}</text>
-          <view v-if="currentTask" class="btn-icon glass-btn red-theme" @click="handleDeleteTask(currentTask.id)">
-            <uni-icons type="trash" size="20" color="#dc2626" />
-          </view>
-          <view v-else class="placeholder-box"></view>
-        </view>
-
-        <scroll-view scroll-y="true" class="form-content":show-scrollbar="false">
-          <view class="glass-card form-section">
-            <text class="label">任务标题</text>
-            <input 
-              v-model="formData.title" 
-              placeholder="做什么？" 
-              placeholder-class="input-placeholder"
-              class="input-title"
-            />
-          </view>
-
-          <view class="row-2-col">
-            <view class="glass-card form-section">
-              <text class="label flex-label"><uni-icons type="info" size="12" color="inherit" /> 重要程度</text>
-              <view class="toggle-group">
-                <view 
-                  class="toggle-btn" 
-                  :class="{ active: formData.importance === 'low' }"
-                  @click="formData.importance = 'low'"
-                >一般</view>
-                <view 
-                  class="toggle-btn red" 
-                  :class="{ active: formData.importance === 'high' }"
-                  @click="formData.importance = 'high'"
-                >重要</view>
-              </view>
-            </view>
-
-            <view class="glass-card form-section">
-              <text class="label flex-label"><uni-icons type="notification" size="12" color="inherit" /> 紧急程度</text>
-              <view class="toggle-group">
-                <view 
-                  class="toggle-btn" 
-                  :class="{ active: formData.urgency === 'low' }"
-                  @click="formData.urgency = 'low'"
-                >不急</view>
-                <view 
-                  class="toggle-btn orange" 
-                  :class="{ active: formData.urgency === 'high' }"
-                  @click="formData.urgency = 'high'"
-                >紧急</view>
-              </view>
-            </view>
-          </view>
-
-          <view class="glass-card form-section row-between">
-            <text class="label-row"><uni-icons type="calendar" size="16" color="inherit" /> 截止日期</text>
-            <picker mode="date" :value="formatDateForPicker(formData.dueDate)" @change="handleDateChange">
-               <view class="picker-value">
-                 {{ formData.dueDate ? formatDate(formData.dueDate) : '选择日期' }}
-               </view>
-            </picker>
-          </view>
-
-          <view class="glass-card form-section h-large">
-            <text class="label">备注</text>
-            <textarea 
-              v-model="formData.note" 
-              placeholder="添加详细描述..." 
-              placeholder-class="input-placeholder"
-              class="input-area"
-              maxlength="-1"
-            />
-          </view>
-        </scroll-view>
-
-        <view class="bottom-action">
-          <button 
-            class="btn-save" 
-            :disabled="!formData.title.trim()" 
-            @click="handleSaveTask"
-          >保 存</button>
-        </view>
-      </view>
-
-      <view v-if="view === 'archive'" class="view-container archive-view fade-in">
-        <view class="nav-header">
-          <view class="btn-icon glass-btn" @click="navigateTo('matrix')">
-            <uni-icons type="back" size="24" color="inherit" />
-          </view>
-          <view class="header-text-col">
-            <text class="nav-title">已完成任务</text>
-            <text class="nav-sub">共 {{ archivedTasks.length }} 项历史记录</text>
-          </view>
-        </view>
-
-        <scroll-view scroll-y="true" class="archive-list":show-scrollbar="false">
-          <view v-if="archivedTasks.length === 0" class="empty-archive">
-            <uni-icons type="checkmarkempty" size="48" color="#ccc" />
-            <text>暂无已完成任务</text>
-          </view>
-          <view v-else v-for="task in archivedTasks" :key="task.id" class="glass-card archive-item">
-            <view class="archive-info">
-              <text class="archive-title">{{ task.title }}</text>
-              <text class="archive-date">{{ formatDate(task.completedAt) }} 完成</text>
-            </view>
-            <view class="btn-restore" @click="handleToggleTask(task.id)">
-              <uni-icons type="redo" size="16" color="#15803d" />
-            </view>
-          </view>
-        </scroll-view>
       </view>
 
       <!-- 底部 Dock 液态玻璃风格 -->
@@ -274,13 +159,13 @@
             </view>
           </view>
 
-          <view class="dock-item" @click="navigateTo('archive')">
+          <view class="dock-item" @click="goArchive">
             <view class="dock-icon-wrap">
               <uni-icons type="checkmarkempty" size="20" color="inherit" />
             </view>
           </view>
 
-          <view class="dock-item" @click="navigateTo('create')">
+          <view class="dock-item" @click="goCreate">
             <view class="dock-icon-wrap">
               <uni-icons type="plus" size="20" color="inherit" />
             </view>
@@ -293,12 +178,11 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted, getCurrentInstance } from 'vue';
-import { onShow } from '@dcloudio/uni-app';
+import { ref, computed, onMounted, getCurrentInstance } from 'vue';
+import { onShow, onBackPress } from '@dcloudio/uni-app';
 import dataManager from '@/services/dataManager.js';
 
 // --- Utils ---
-const generateId = () => Math.random().toString(36).substr(2, 9);
 const isToday = (dateString) => {
   if (!dateString) return false;
   const date = new Date(dateString);
@@ -307,40 +191,10 @@ const isToday = (dateString) => {
     date.getMonth() === today.getMonth() &&
     date.getFullYear() === today.getFullYear();
 };
-const formatDate = (dateString) => {
-  if (!dateString) return '';
-  const d = new Date(dateString);
-  return `${d.getMonth() + 1}/${d.getDate()}`;
-};
-const formatDateForPicker = (isoString) => {
-    if (!isoString) return '';
-    return isoString.split('T')[0];
-}
-const pickEditable = (t) => ({
-  title: t?.title ?? '',
-  note: t?.note ?? '',
-  createdAt: t?.createdAt ?? new Date().toISOString(),
-  dueDate: t?.dueDate ?? null,
-  importance: t?.importance ?? 'low',
-  urgency: t?.urgency ?? 'low',
-});
-
 // --- Data ---
 const tasks = ref([]);
-const view = ref('matrix');
-const currentTask = ref(null);
 const loading = ref(false);
 const syncStatus = ref(null);
-
-const defaultForm = {
-    title: '',
-    note: '',
-    createdAt: '',
-    dueDate: '',
-    importance: 'low',
-    urgency: 'low'
-};
-const formData = reactive({ ...defaultForm });
 
 // --- Computed ---
 const currentDay = computed(() => new Date().getDate());
@@ -365,8 +219,6 @@ const quadrantData = computed(() => ({
   bl: getQuadrantTasks('low', 'low'),
   br: getQuadrantTasks('low', 'high'),
 }));
-
-const archivedTasks = computed(() => tasks.value.filter(t => t.isCompleted));
 
 // --- 数据加载与同步 ---
 function loadTasks() {
@@ -417,6 +269,20 @@ onShow(() => {
   loadTasks();
 });
 
+// 物理返回：首页时确认退出
+onBackPress(() => {
+  uni.showModal({
+    title: '提示',
+    content: '是否退出应用？',
+    success: (res) => {
+      if (res.confirm && typeof plus !== 'undefined') {
+        plus.runtime.quit();
+      }
+    }
+  });
+  return true;
+});
+
 // --- Methods ---
 const handleToggleTask = (id) => {
   const idx = tasks.value.findIndex(t => t.id === id);
@@ -433,59 +299,15 @@ const handleToggleTask = (id) => {
   }
 };
 
-const navigateTo = (screen, task = null) => {
-  currentTask.value = task;
-  if (screen === 'create') {
-      Object.assign(formData, { ...defaultForm, createdAt: new Date().toISOString(), dueDate: new Date().toISOString() });
-  } else if (screen === 'edit' && task) {
-      Object.assign(formData, pickEditable(task));
-  }
-  view.value = screen;
-};
-
-const handleSaveTask = () => {
-  const payload = { ...pickEditable(formData) };
-
-  if (currentTask.value) {
-    const idx = tasks.value.findIndex(t => t.id === currentTask.value.id);
-    if (idx !== -1) {
-      const updated = {
-        ...tasks.value[idx],
-        ...payload,
-      };
-      tasks.value[idx] = updated;
-      dataManager.saveTask(updated, true).then((res) => {
-        if (res && res.tasks) tasks.value = res.tasks;
-      }).catch(() => {});
-    }
-  } else {
-    const newTask = {
-      id: generateId(),
-      ...payload,
-      isCompleted: false,
-      completedAt: null,
-    };
-    tasks.value.push(newTask);
-    dataManager.saveTask(newTask, true).then((res) => {
-      if (res && res.tasks) tasks.value = res.tasks;
-    }).catch(() => {});
-  }
-
-  navigateTo('matrix');
-};
-
-const handleDeleteTask = (id) => {
-  tasks.value = tasks.value.filter(t => t.id !== id);
-  dataManager.deleteTask(id, true).then((res) => {
-    if (res && res.tasks) tasks.value = res.tasks;
-  }).catch(() => {});
-  navigateTo('matrix');
-};
-
-const handleDateChange = (e) => {
-    formData.dueDate = new Date(e.detail.value).toISOString();
-};
-
+function goEdit(task) {
+  uni.navigateTo({ url: '/pages/edit/edit?id=' + encodeURIComponent(task.id) });
+}
+function goCreate() {
+  uni.navigateTo({ url: '/pages/edit/edit' });
+}
+function goArchive() {
+  uni.navigateTo({ url: '/pages/archive/archive' });
+}
 function goSettings() {
   uni.navigateTo({ url: '/pages/settings/settings' });
 }
@@ -771,136 +593,4 @@ view, text, button, scroll-view, input, textarea {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 1);
 }
 
-/* --- 编辑/新建页面 (Editor) --- */
-.editor-view, .archive-view {
-  background: rgba(245, 245, 247, 0.85); /* 稍微不透明一点，防止背景干扰 */
-  backdrop-filter: blur(20px);
-  z-index: 20;
-}
-
-.nav-header {
-  padding: 50px 20px 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-shrink: 0;
-}
-
-.glass-btn {
-  width: 36px; height: 36px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.6);
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-  
-  &.red-theme { background: rgba(254, 226, 226, 0.8); color: #dc2626; }
-}
-.placeholder-box { width: 36px; }
-
-.nav-title { font-size: 17px; font-weight: 600; color: #111827; }
-
-.form-content {
-  flex: 1;
-  height: 0;
-  padding: 0 20px;
-}
-
-.form-section {
-  padding: 16px;
-  margin-bottom: 16px;
-  background: rgba(255,255,255,0.6);
-}
-
-.label {
-  display: block;
-  font-size: 11px;
-  font-weight: 700;
-  color: #9ca3af;
-  text-transform: uppercase;
-  margin-bottom: 8px;
-}
-.flex-label { display: flex; align-items: center; gap: 4px; }
-
-.input-title {
-  width: 100%;
-  height: 30px;
-  font-size: 18px;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.row-2-col {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 16px;
-  .form-section { flex: 1; margin-bottom: 0; }
-}
-
-.toggle-group { display: flex; gap: 6px; }
-.toggle-btn {
-  flex: 1;
-  padding: 6px 0;
-  text-align: center;
-  font-size: 12px;
-  font-weight: 500;
-  border-radius: 8px;
-  background: rgba(0,0,0,0.03);
-  color: #6b7280;
-  
-  &.active {
-    background: #3b82f6; color: white;
-    &.red { background: #ef4444; }
-    &.orange { background: #f97316; }
-  }
-}
-
-.row-between { display: flex; justify-content: space-between; align-items: center; }
-.label-row { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; color: #4b5563; }
-.picker-value { font-size: 14px; color: #1f2937; }
-
-.h-large { height: 140px; }
-.input-area { width: 100%; height: 100%; font-size: 14px; line-height: 1.5; }
-
-.bottom-action {
-  padding: 16px 20px 40px;
-  background: linear-gradient(to top, rgba(242,242,247, 1), rgba(242,242,247, 0));
-  flex-shrink: 0;
-}
-
-.btn-save {
-  width: 100%; height: 50px; line-height: 50px;
-  background: #1f2937; color: white;
-  border-radius: 14px; font-weight: 600; font-size: 16px;
-  
-  &[disabled] { opacity: 0.5; }
-}
-
-/* --- Archive View --- */
-.header-text-col { flex: 1; margin-left: 12px; }
-.nav-sub { font-size: 11px; color: #6b7280; }
-
-.archive-list { flex: 1; height: 0; padding: 0 20px 20px; }
-.empty-archive { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 50%; color: #9ca3af; gap: 10px; font-size: 13px; }
-
-.archive-item {
-  padding: 14px; margin-bottom: 10px;
-  display: flex; justify-content: space-between; align-items: center;
-  background: rgba(255,255,255,0.6);
-}
-.archive-info { flex: 1; overflow: hidden; margin-right: 10px; }
-.archive-title { font-size: 14px; color: #374151; text-decoration: line-through; opacity: 0.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.archive-date { font-size: 11px; color: #9ca3af; margin-top: 2px; }
-
-.btn-restore {
-  padding: 6px; border-radius: 50%;
-  background: #dcfce7; color: #15803d;
-  display: flex; align-items: center; justify-content: center;
-}
-
-/* 动画 */
-.slide-in-up { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
-.fade-in { animation: fadeIn 0.2s ease-out; }
-
-@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-@keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
 </style>

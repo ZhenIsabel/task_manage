@@ -12,6 +12,20 @@
 			}
 		},
 		{
+			"path": "pages/edit/edit",
+			"style": {
+				"navigationBarTitleText": "任务",
+				"navigationStyle": "custom"
+			}
+		},
+		{
+			"path": "pages/archive/archive",
+			"style": {
+				"navigationBarTitleText": "已完成任务",
+				"navigationStyle": "custom"
+			}
+		},
+		{
 			"path": "pages/settings/settings",
 			"style": {
 				"navigationBarTitleText": "设置",
