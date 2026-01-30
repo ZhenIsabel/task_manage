@@ -15,8 +15,8 @@
           </view>
           <view class="header-right">
             <view class="date-display">
-              <text class="day">{{ currentDay }}</text>
-              <text class="month">{{ currentMonth }}</text>
+              <text class="day">{{ currentWeekday }}</text>
+              <text class="month">{{ currentDateStr }}</text>
             </view>
           </view>
         </view>
@@ -197,11 +197,14 @@ const loading = ref(false);
 const syncStatus = ref(null);
 
 // --- Computed ---
-const currentDay = computed(() => new Date().getDate());
-const currentMonth = computed(() => {
-    const m = new Date().getMonth() + 1;
-    const week = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][new Date().getDay()];
-    return `${m}月 · ${week}`;
+const currentWeekday = computed(() => {
+  return ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][new Date().getDay()];
+});
+const currentDateStr = computed(() => {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${m}.${day}`;
 });
 
 const getQuadrantTasks = (imp, urg) => {
@@ -403,7 +406,7 @@ view, text, button, scroll-view, input, textarea {
   padding: 50px 24px 10px; /* 顶部留出状态栏空间 */
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: stretch;
   flex-shrink: 0; /* 防止头部被压缩 */
   
   .sub-title { font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 4px; }
@@ -417,8 +420,8 @@ view, text, button, scroll-view, input, textarea {
     &.loading { opacity: 0.7; }
   }
   .btn-settings { padding: 6px; }
-  .date-display { text-align: right; margin-left: 4px; }
-  .day { font-size: 24px; font-weight: 700; display: block; line-height: 1; color: #1f2937; }
+  .date-display { text-align: right; margin-left: 4px;height: 28px; }
+  .day { font-size: 16px; font-weight: 700; display: block; line-height: 1; color: #1f2937; }
   .month { font-size: 12px; color: #6b7280; font-weight: 500; margin-top: 4px; display: block; }
 }
 
