@@ -2,8 +2,8 @@
     "name" : "四象限管理",
     "appid" : "__UNI__F0B58D0",
     "description" : "",
-    "versionName" : "0.1.2",
-    "versionCode" : 102,
+    "versionName" : "0.1.4",
+    "versionCode" : 104,
     "transformPx" : false,
     /* 5+App特有相关 */
     "app-plus" : {
@@ -103,5 +103,6 @@
         "enable" : false
     },
     "vueVersion" : "3",
-    "locale" : "zh-Hans"
+    "fallbackLocale" : "zh-Hans",
+    "locale" : "auto"
 }

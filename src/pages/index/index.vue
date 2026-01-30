@@ -134,17 +134,17 @@
         <view class="dock-bar">
         <view class="dock-item" @click="goSettings">
             <view class="dock-icon-wrap">
-              <uni-icons type="gear" size="20" color="inherit" />
+              <uni-icons type="gear" size="30" color="inherit" />
             </view>
           </view>
           <view 
             v-if="dataManager.hasRemoteConfig()"
             class="dock-item" 
-            :class="{ loading }"
-            @click="doSyncToServer"
+            :class="{ loading, disabled: uploadDisabled }"
+            @click="!uploadDisabled && doSyncToServer()"
           >
             <view class="dock-icon-wrap">
-              <uni-icons type="cloud-upload" size="20" color="inherit" />
+              <uni-icons type="cloud-upload" size="30" color="inherit" />
             </view>
           </view>
 
@@ -155,19 +155,19 @@
             @click="doSyncFromServer"
           >
             <view class="dock-icon-wrap">
-              <uni-icons type="cloud-download" size="20" color="inherit" />
+              <uni-icons type="cloud-download" size="30" color="inherit" />
             </view>
           </view>
 
           <view class="dock-item" @click="goArchive">
             <view class="dock-icon-wrap">
-              <uni-icons type="checkmarkempty" size="20" color="inherit" />
+              <uni-icons type="checkmarkempty" size="30" color="inherit" />
             </view>
           </view>
 
           <view class="dock-item" @click="goCreate">
             <view class="dock-icon-wrap">
-              <uni-icons type="plus" size="20" color="inherit" />
+              <uni-icons type="plus" size="30" color="inherit" />
             </view>
           </view>
           
@@ -178,23 +178,16 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, getCurrentInstance } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { onShow, onBackPress } from '@dcloudio/uni-app';
 import dataManager from '@/services/dataManager.js';
+import { isToday } from '@/utils/date.js';
 
-// --- Utils ---
-const isToday = (dateString) => {
-  if (!dateString) return false;
-  const date = new Date(dateString);
-  const today = new Date();
-  return date.getDate() === today.getDate() &&
-    date.getMonth() === today.getMonth() &&
-    date.getFullYear() === today.getFullYear();
-};
 // --- Data ---
 const tasks = ref([]);
 const loading = ref(false);
 const syncStatus = ref(null);
+const uploadDisabled = ref(true);
 
 // --- Computed ---
 const currentWeekday = computed(() => {
@@ -254,18 +247,6 @@ function doSyncToServer() {
 onMounted(() => {
   loadTasks();
   if (dataManager.hasRemoteConfig()) doSyncFromServer();
-  // #region agent log
-  setTimeout(() => {
-    const hasRemote = dataManager.hasRemoteConfig();
-    fetch('http://127.0.0.1:7244/ingest/dc396521-042c-48ee-aa0f-06555631d63b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.vue:onMounted',message:'Dock debug',data:{hasRemoteConfig:hasRemote},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
-    const q = uni.createSelectorQuery().in(getCurrentInstance());
-    q.select('.dock-bar').boundingClientRect();
-    q.select('.dock-icon-wrap').boundingClientRect();
-    q.exec((res) => {
-      fetch('http://127.0.0.1:7244/ingest/dc396521-042c-48ee-aa0f-06555631d63b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.vue:onMounted',message:'Dock dimensions',data:{dockBar:res[0],iconWrap:res[1]},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2'})}).catch(()=>{});
-    });
-  }, 500);
-  // #endregion
 });
 
 onShow(() => {
@@ -370,8 +351,12 @@ view, text, button, scroll-view, input, textarea {
   width: 100%;
   height: 100%;
   z-index: 1;
-  display: flex; /* 使用 Flex 纵向布局 */
+  display: flex;
   flex-direction: column;
+  /* 底部留白避让固定 dock，避免四象限与 dock 重叠 */
+  padding-bottom: calc(72px + constant(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
 }
 
 /* 通用视图容器 */
@@ -432,7 +417,7 @@ view, text, button, scroll-view, input, textarea {
   flex-wrap: wrap;
   gap: 12px;
   padding: 12px 16px;
-  padding-bottom: 72px;
+  padding-bottom: 16px;
   min-height: 0;
 }
 .grid-item {
@@ -562,7 +547,7 @@ view, text, button, scroll-view, input, textarea {
   align-items: stretch;
   justify-content: center;
   padding: 4px 2px;
-  border-radius: 14px;
+  border-radius: 20px;
   color: #374151;
   transition: all 0.2s ease;
   min-width: 0;
@@ -576,15 +561,29 @@ view, text, button, scroll-view, input, textarea {
     opacity: 0.6;
     pointer-events: none;
   }
-}
 
+  &.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+}
+.btn-action.disabled {
+  opacity: 0.5;
+  color: #9ca3af;
+  border-color: rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.04);
+}
+.btn-action.danger.disabled {
+  color: #d1d5db;
+  border-color: rgba(0, 0, 0, 0.06);
+}
 .dock-icon-wrap {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 36px;
-  border-radius: 12px;
+  height: 50px;
+  border-radius: 15px;
   background: rgba(255, 255, 255, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.6);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);

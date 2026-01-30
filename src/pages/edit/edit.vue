@@ -1,5 +1,5 @@
 <template>
-  <view class="edit-page">
+  <view class="edit-page page-with-nav">
     <view class="nav-header">
       <view class="glass-btn" @click="goBack">
         <uni-icons type="back" size="24" color="inherit" />
@@ -11,7 +11,8 @@
       <view v-else class="placeholder-box"></view>
     </view>
 
-    <scroll-view scroll-y class="form-content" :show-scrollbar="false">
+    <view class="form-content-wrap">
+      <scroll-view scroll-y class="form-content" :style="scrollViewHeight ? { height: scrollViewHeight } : {}" :show-scrollbar="false">
       <view class="glass-card form-section">
         <text class="label">任务标题</text>
         <input
@@ -56,20 +57,24 @@
           maxlength="-1"
         />
       </view>
-    </scroll-view>
+      <view class="bottom-spacer" />
+      </scroll-view>
+    </view>
 
-    <view class="bottom-action">
+    <view class="bottom-action" data-agent="bottom-action-wrap">
       <button class="btn-save" :disabled="!form.title.trim()" @click="handleSave">保 存</button>
     </view>
   </view>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, nextTick, getCurrentInstance } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import dataManager from '@/services/dataManager.js';
+import { formatDate, formatDateForPicker } from '@/utils/date.js';
 
 const taskId = ref('');
+const scrollViewHeight = ref('');
 const form = reactive({
   title: '',
   note: '',
@@ -87,19 +92,6 @@ const defaultForm = () => ({
   importance: 'low',
   urgency: 'low',
 });
-
-function formatDate(dateString) {
-  if (!dateString) return '';
-  const d = new Date(dateString);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-function formatDateForPicker(isoString) {
-  if (!isoString) return '';
-  return isoString.split('T')[0];
-}
 
 onLoad((options) => {
   if (options && options.id) taskId.value = options.id;
@@ -120,6 +112,27 @@ onMounted(() => {
   } else {
     Object.assign(form, defaultForm());
   }
+  try {
+    const sys = uni.getSystemInfoSync();
+    const winH = sys.windowHeight || sys.screenHeight || 0;
+    const top = 60 + 36 + 24;
+    const bottom = 50 + 16 + 40;
+    if (winH > top + bottom) scrollViewHeight.value = (winH - top - bottom) + 'px';
+  } catch (_) {}
+  // #region agent log
+  nextTick(() => {
+    const instance = getCurrentInstance();
+    if (!instance || !instance.proxy) return;
+    const q = uni.createSelectorQuery().in(instance.proxy);
+    q.select('.bottom-action').boundingClientRect();
+    q.select('.form-content').boundingClientRect();
+    q.selectViewport().fields({ size: true, scrollOffset: true });
+    q.exec((res) => {
+      const [bottomAction, formContent, viewport] = res || [];
+      fetch('http://127.0.0.1:7244/ingest/dc396521-042c-48ee-aa0f-06555631d63b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'edit.vue:onMounted',message:'layout query',data:{bottomAction:bottomAction||null,formContentHeight:formContent?.height,viewportHeight:viewport?.height,viewportScrollTop:viewport?.scrollTop},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,B,C,D'})}).catch(()=>{});
+    });
+  });
+  // #endregion
 });
 
 function goBack() {
@@ -131,6 +144,9 @@ function handleDateChange(e) {
 }
 
 function handleSave() {
+  // #region agent log
+  fetch('http://127.0.0.1:7244/ingest/dc396521-042c-48ee-aa0f-06555631d63b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'edit.vue:handleSave',message:'save clicked',data:{taskId:taskId.value},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'visible'})}).catch(()=>{});
+  // #endregion
   const payload = {
     title: form.title.trim(),
     note: form.note ?? '',
@@ -189,37 +205,32 @@ function handleDelete() {
   flex-direction: column;
 }
 .nav-header {
-  display: flex;
-  align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
 }
-.glass-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  &.red-theme {
-    background: rgba(254, 226, 226, 0.8);
-    color: #dc2626;
-  }
+.glass-btn.red-theme {
+  background: rgba(254, 226, 226, 0.8);
+  color: #dc2626;
 }
 .placeholder-box {
   width: 36px;
 }
-.nav-title {
-  font-size: 17px;
-  font-weight: 600;
-  color: #111827;
-}
 
+.form-content-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
 .form-content {
   flex: 1;
   min-height: 0;
+  height: 100%;
+  /* H5 隐藏滚动条，避免右侧白条 */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.form-content::-webkit-scrollbar {
+  display: none;
 }
 .glass-card {
   background: rgba(255, 255, 255, 0.5);
@@ -318,9 +329,21 @@ function handleDelete() {
   box-sizing: border-box;
 }
 
-.bottom-action {
-  padding: 16px 0 0;
+.bottom-spacer {
+  height: 90px;
   flex-shrink: 0;
+}
+.bottom-action {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 16px 20px;
+  padding-bottom: calc(16px + constant(safe-area-inset-bottom, 0));
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0));
+  background: linear-gradient(to top, #f0f4ff 0%, rgba(240, 244, 255, 0.98) 80%, transparent);
+  z-index: 10;
+  box-sizing: border-box;
 }
 .btn-save {
   width: 100%;

@@ -1,5 +1,5 @@
 <template>
-  <view class="archive-page">
+  <view class="archive-page page-with-nav">
     <view class="nav-header">
       <view class="glass-btn" @click="goBack">
         <uni-icons type="back" size="24" color="inherit" />
@@ -18,7 +18,7 @@
       <view v-else v-for="task in list" :key="task.id" class="glass-card archive-item">
         <view class="archive-info">
           <text class="archive-title">{{ task.title }}</text>
-          <text class="archive-date">{{ formatDate(task.completedAt) }} 完成</text>
+          <text class="archive-date">{{ formatDateShort(task.completedAt) }} 完成</text>
         </view>
         <view class="btn-restore" @click="handleRestore(task.id)">
           <uni-icons type="redo" size="16" color="#15803d" />
@@ -32,16 +32,11 @@
 import { ref, computed, onMounted } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import dataManager from '@/services/dataManager.js';
+import { formatDateShort } from '@/utils/date.js';
 
 const tasks = ref([]);
 
 const list = computed(() => tasks.value.filter((t) => t.isCompleted));
-
-function formatDate(dateString) {
-  if (!dateString) return '';
-  const d = new Date(dateString);
-  return `${d.getMonth() + 1}/${d.getDate()}`;
-}
 
 function loadTasks() {
   tasks.value = dataManager.loadTasksFromStorage();
@@ -77,31 +72,6 @@ function handleRestore(id) {
   background: linear-gradient(180deg, #f0f4ff 0%, #fff 40%);
   display: flex;
   flex-direction: column;
-}
-.nav-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 24px;
-}
-.glass-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-.header-text-col {
-  flex: 1;
-  margin-left: 12px;
-}
-.nav-title {
-  font-size: 17px;
-  font-weight: 600;
-  color: #111827;
 }
 .nav-sub {
   font-size: 11px;

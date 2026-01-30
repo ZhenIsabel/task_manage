@@ -1,5 +1,5 @@
 <template>
-  <view class="settings-page">
+  <view class="settings-page page-with-nav">
     <view class="nav-header">
       <view class="btn-back glass-btn" @click="goBack">
         <uni-icons type="back" size="24" color="inherit" />
@@ -137,21 +137,12 @@ function clearAndUpload() {
   padding: 60px 20px 40px;
   background: linear-gradient(180deg, #f0f4ff 0%, #fff 40%);
 }
-.nav-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 24px;
-}
-.glass-btn {
+.settings-page.page-with-nav .glass-btn {
   width: 40px;
   height: 40px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 .nav-title {
   font-size: 20px;
@@ -232,8 +223,8 @@ function clearAndUpload() {
   background: rgba(0, 0, 0, 0.04);
 }
 .btn-action.danger.disabled {
-  color: #d1d5db;
-  border-color: rgba(0, 0, 0, 0.06);
+  color: #9ca3af;
+  border-color: rgba(0, 0, 0, 0.08);
 }
 .sync-info {
   margin-top: 12px;
