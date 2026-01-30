@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>四象限任务管理</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "react": "https://esm.sh/react@18?dev",
+      "react-dom/client": "https://esm.sh/react-dom@18/client?dev"
+    }
+  }
+  </script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="m-0 p-0">
+  <div id="root"></div>
+  <script type="text/babel" data-type="module">
+import React, { useState } from 'react';
+import { createRoot } from 'react-dom/client';
+
+// 内联 SVG 图标 (替代 lucide-react，避免 CDN 兼容性问题)
+const Icon = ({ size = 24, strokeWidth = 2, children, className = '' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className}>
+    {children}
+  </svg>
+);
+const PlusIcon = (p) => <Icon {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></Icon>;
+const CheckIcon = (p) => <Icon {...p}><polyline points="20 6 9 17 4 12"/></Icon>;
+const ChevronLeftIcon = (p) => <Icon {...p}><polyline points="15 18 9 12 15 6"/></Icon>;
+const CalendarIcon = (p) => <Icon {...p}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></Icon>;
+const ClockIcon = (p) => <Icon {...p}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></Icon>;
+const AlertCircleIcon = (p) => <Icon {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></Icon>;
+const ZapIcon = (p) => <Icon {...p}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></Icon>;
+const Trash2Icon = (p) => <Icon {...p}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></Icon>;
+const MenuIcon = (p) => <Icon {...p}><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></Icon>;
+const RotateCcwIcon = (p) => <Icon {...p}><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></Icon>;
+
+// --- Helper Functions ---
+const generateId = () => Math.random().toString(36).substr(2, 9);
+
+const isToday = (dateString) => {
+  if (!dateString) return false;
+  const date = new Date(dateString);
+  const today = new Date();
+  return date.getDate() === today.getDate() &&
+    date.getMonth() === today.getMonth() &&
+    date.getFullYear() === today.getFullYear();
+};
+
+const formatDate = (dateString) => {
+  if (!dateString) return '';
+  return new Date(dateString).toLocaleDateString('zh-CN', {
+    month: 'numeric',
+    day: 'numeric',
+  });
+};
+
+// --- Initial Data ---
+const initialTasks = [
+  {
+    id: '1',
+    title: '准备项目汇报PPT',
+    note: '包含Q3季度数据分析，重点讲增长点。',
+    createdAt: new Date().toISOString(),
+    dueDate: new Date().toISOString(),
+    importance: 'high',
+    urgency: 'high',
+    isCompleted: false,
+    completedAt: null
+  },
+  {
+    id: '2',
+    title: '学习 Vue 3 新特性',
+    note: '阅读官方文档，特别是 Composition API 部分。',
+    createdAt: new Date().toISOString(),
+    dueDate: new Date(Date.now() + 86400000 * 2).toISOString(),
+    importance: 'high',
+    urgency: 'low',
+    isCompleted: false,
+    completedAt: null
+  },
+  {
+    id: '3',
+    title: '回复客户邮件',
+    note: '关于合同细节的确认。',
+    createdAt: new Date().toISOString(),
+    dueDate: new Date().toISOString(),
+    importance: 'low',
+    urgency: 'high',
+    isCompleted: false,
+    completedAt: null
+  },
+  {
+    id: '4',
+    title: '整理电脑桌面文件',
+    note: '归档上个月的设计稿。',
+    createdAt: new Date().toISOString(),
+    dueDate: null,
+    importance: 'low',
+    urgency: 'low',
+    isCompleted: false,
+    completedAt: null
+  },
+  {
+    id: '5',
+    title: '早起晨跑',
+    note: '5公里',
+    createdAt: new Date().toISOString(),
+    dueDate: new Date().toISOString(),
+    importance: 'high',
+    urgency: 'high',
+    isCompleted: true,
+    completedAt: new Date().toISOString()
+  }
+];
+
+// --- Components ---
+const GlassCard = ({ children, className = '', onClick }) => (
+  <div 
+    onClick={onClick}
+    className={`
+      backdrop-blur-xl 
+      bg-white/40 
+      dark:bg-black/30 
+      border border-white/40 
+      shadow-lg 
+      rounded-2xl 
+      overflow-hidden
+      transition-all duration-200
+      active:scale-[0.98]
+      ${className}
+    `}
+  >
+    {children}
+  </div>
+);
+
+const Quadrant = ({ title, icon: Icon, tasks, colorClass, onTaskClick, onToggle }) => (
+  <GlassCard className="h-full flex flex-col p-3 relative overflow-hidden group">
+    <div className={`absolute -top-10 -right-10 w-32 h-32 rounded-full opacity-20 blur-2xl pointer-events-none ${colorClass}`}></div>
+    
+    <div className="flex items-center gap-2 mb-3 z-10 opacity-70">
+      <Icon size={16} />
+      <span className="text-xs font-bold uppercase tracking-wider">{title}</span>
+    </div>
+    
+    <div className="flex-1 overflow-y-auto space-y-2 z-10 scrollbar-hide">
+      {tasks.length === 0 ? (
+        <div className="h-full flex items-center justify-center opacity-30 text-xs">
+          无任务
+        </div>
+      ) : (
+        tasks.map(task => (
+          <div key={task.id} className="flex items-start gap-2 p-2 bg-white/20 rounded-xl hover:bg-white/40 transition-colors">
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggle(task.id); }}
+              className={`
+                mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all
+                ${task.isCompleted 
+                  ? 'bg-gray-700/50 border-transparent text-white' 
+                  : 'border-gray-500/50 hover:border-gray-700'
+                }
+              `}
+            >
+              {task.isCompleted && <CheckIcon size={12} strokeWidth={3} />}
+            </button>
+            <span 
+              onClick={() => onTaskClick(task)}
+              className={`text-sm font-medium leading-tight truncate w-full cursor-pointer ${task.isCompleted ? 'line-through opacity-50' : 'text-gray-800'}`}
+            >
+              {task.title}
+            </span>
+          </div>
+        ))
+      )}
+    </div>
+  </GlassCard>
+);
+
+export default function App() {
+  const [tasks, setTasks] = useState(initialTasks);
+  const [view, setView] = useState('matrix');
+  const [currentTask, setCurrentTask] = useState(null);
+  const [animating, setAnimating] = useState(false);
+
+  const getQuadrantTasks = (imp, urg) => {
+    return tasks.filter(t => {
+      const isVisible = !t.isCompleted || (t.isCompleted && isToday(t.completedAt));
+      const matchImp = imp === 'high' ? t.importance === 'high' : t.importance !== 'high';
+      const matchUrg = urg === 'high' ? t.urgency === 'high' : t.urgency !== 'high';
+      return isVisible && matchImp && matchUrg;
+    });
+  };
+
+  const quadrantData = {
+    tl: getQuadrantTasks('high', 'low'),
+    tr: getQuadrantTasks('high', 'high'),
+    bl: getQuadrantTasks('low', 'low'),
+    br: getQuadrantTasks('low', 'high'),
+  };
+
+  const archivedTasks = tasks.filter(t => t.isCompleted);
+
+  const handleToggleTask = (id) => {
+    setTasks(prev => prev.map(t => {
+      if (t.id === id) {
+        const newState = !t.isCompleted;
+        return { 
+          ...t, 
+          isCompleted: newState, 
+          completedAt: newState ? new Date().toISOString() : null 
+        };
+      }
+      return t;
+    }));
+  };
+
+  const handleSaveTask = (taskData) => {
+    if (currentTask) {
+      setTasks(prev => prev.map(t => t.id === currentTask.id ? { ...taskData, id: currentTask.id } : t));
+    } else {
+      setTasks(prev => [...prev, { ...taskData, id: generateId(), isCompleted: false, completedAt: null }]);
+    }
+    navigateTo('matrix');
+  };
+
+  const handleDeleteTask = (id) => {
+    setTasks(prev => prev.filter(t => t.id !== id));
+    navigateTo('matrix');
+  };
+
+  const navigateTo = (screen, task = null) => {
+    setAnimating(true);
+    setCurrentTask(task);
+    setTimeout(() => {
+      setView(screen);
+      setAnimating(false);
+    }, 150);
+  };
+
+  const TaskEditor = ({ initialData, onSave, onCancel, onDelete }) => {
+    const [formData, setFormData] = useState(initialData || {
+      title: '',
+      note: '',
+      createdAt: new Date().toISOString(),
+      dueDate: new Date().toISOString(),
+      importance: 'low',
+      urgency: 'low'
+    });
+
+    const handleChange = (field, value) => {
+      setFormData(prev => ({ ...prev, [field]: value }));
+    };
+
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex items-center justify-between p-4 pt-12 pb-2">
+          <button onClick={onCancel} className="p-2 bg-white/30 rounded-full backdrop-blur-md">
+            <ChevronLeftIcon size={24} />
+          </button>
+          <span className="font-semibold text-lg">{initialData ? '编辑任务' : '创建任务'}</span>
+          {initialData ? (
+            <button onClick={() => onDelete(initialData.id)} className="p-2 text-red-600 bg-red-100/50 rounded-full backdrop-blur-md">
+              <Trash2Icon size={20} />
+            </button>
+          ) : <div className="w-10" />}
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+          <GlassCard className="p-4">
+            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">任务标题</label>
+            <input 
+              value={formData.title}
+              onChange={(e) => handleChange('title', e.target.value)}
+              placeholder="做什么？"
+              className="w-full bg-transparent text-xl font-bold placeholder-gray-400 border-none outline-none"
+            />
+          </GlassCard>
+
+          <div className="grid grid-cols-2 gap-4">
+            <GlassCard className="p-4">
+              <label className="block text-xs font-bold text-gray-500 mb-2 uppercase flex items-center gap-1">
+                <AlertCircleIcon size={12} /> 重要程度
+              </label>
+              <div className="flex gap-2">
+                {['low', 'high'].map((level) => (
+                  <button
+                    key={level}
+                    onClick={() => handleChange('importance', level)}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+                      formData.importance === level 
+                        ? (level === 'high' ? 'bg-red-500 text-white shadow-md' : 'bg-blue-500 text-white shadow-md')
+                        : 'bg-gray-100/50 hover:bg-white/80'
+                    }`}
+                  >
+                    {level === 'high' ? '重要' : '一般'}
+                  </button>
+                ))}
+              </div>
+            </GlassCard>
+
+            <GlassCard className="p-4">
+              <label className="block text-xs font-bold text-gray-500 mb-2 uppercase flex items-center gap-1">
+                <ClockIcon size={12} /> 紧急程度
+              </label>
+              <div className="flex gap-2">
+                {['low', 'high'].map((level) => (
+                  <button
+                    key={level}
+                    onClick={() => handleChange('urgency', level)}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+                      formData.urgency === level 
+                        ? 'bg-orange-500 text-white shadow-md' 
+                        : 'bg-gray-100/50 hover:bg-white/80'
+                    }`}
+                  >
+                    {level === 'high' ? '紧急' : '不急'}
+                  </button>
+                ))}
+              </div>
+            </GlassCard>
+          </div>
+
+          <GlassCard className="p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-600 flex items-center gap-2">
+                <CalendarIcon size={16} /> 截止日期
+              </span>
+              <input 
+                type="date" 
+                value={formData.dueDate ? formData.dueDate.split('T')[0] : ''}
+                onChange={(e) => handleChange('dueDate', e.target.value ? new Date(e.target.value).toISOString() : null)}
+                className="bg-transparent text-sm font-medium text-right outline-none text-gray-800"
+              />
+            </div>
+          </GlassCard>
+
+          <GlassCard className="p-4 h-40">
+            <label className="block text-xs font-bold text-gray-500 mb-2 uppercase">备注</label>
+            <textarea 
+              value={formData.note}
+              onChange={(e) => handleChange('note', e.target.value)}
+              placeholder="添加详细描述..."
+              className="w-full h-full bg-transparent text-sm leading-relaxed placeholder-gray-400 border-none outline-none resize-none"
+            />
+          </GlassCard>
+        </div>
+
+        <div className="p-4 bg-gradient-to-t from-white/80 to-transparent pb-8">
+          <button 
+            onClick={() => onSave(formData)}
+            disabled={!formData.title.trim()}
+            className="w-full py-4 rounded-2xl bg-black text-white font-bold text-lg shadow-xl active:scale-95 transition-transform disabled:opacity-50 disabled:scale-100"
+          >
+            保 存
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const ArchiveScreen = ({ list, onRestore, onBack }) => (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center p-4 pt-12 pb-4">
+        <button onClick={onBack} className="p-2 bg-white/30 rounded-full backdrop-blur-md mr-4">
+          <ChevronLeftIcon size={24} />
+        </button>
+        <div>
+          <h2 className="font-bold text-2xl">已完成任务</h2>
+          <p className="text-xs text-gray-500 font-medium">共 {list.length} 项历史记录</p>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
+        {list.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-64 text-gray-400 opacity-60">
+            <CheckIcon size={48} className="mb-2" />
+            <span className="text-sm">暂无已完成任务</span>
+          </div>
+        ) : (
+          list.map(task => (
+            <GlassCard key={task.id} className="p-4 flex items-center justify-between group">
+              <div className="flex-1 min-w-0 mr-4">
+                <h4 className="font-medium text-gray-800 line-through opacity-60 truncate">{task.title}</h4>
+                <div className="text-xs text-gray-500 mt-1 flex gap-2">
+                  <span>{formatDate(task.completedAt)} 完成</span>
+                </div>
+              </div>
+              <button 
+                onClick={() => onRestore(task.id)}
+                className="p-2 bg-green-100 text-green-700 rounded-full hover:bg-green-200 transition-colors"
+              >
+                <RotateCcwIcon size={16} />
+              </button>
+            </GlassCard>
+          ))
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="w-full h-screen bg-[#f2f2f7] flex items-center justify-center font-sans text-gray-900 overflow-hidden relative">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-blue-400/30 blur-[80px] animate-pulse"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full bg-purple-400/30 blur-[80px] animate-pulse" style={{ animationDelay: '1s' }}></div>
+        <div className="absolute top-[40%] left-[30%] w-[40%] h-[40%] rounded-full bg-pink-300/30 blur-[60px] animate-pulse" style={{ animationDelay: '2s' }}></div>
+      </div>
+
+      <div className="w-full h-full sm:w-[390px] sm:h-[844px] bg-white/10 backdrop-blur-sm sm:rounded-[3rem] sm:border-[8px] sm:border-white/20 sm:shadow-2xl relative overflow-hidden flex flex-col">
+        {view === 'matrix' && (
+          <>
+            <div className="px-6 pt-14 pb-4 flex justify-between items-end">
+              <div>
+                <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">我的日程</p>
+                <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600">
+                  四象限
+                </h1>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-bold">{new Date().getDate()}</p>
+                <p className="text-xs font-medium text-gray-500">{new Date().toLocaleDateString('zh-CN', { month: 'long', weekday: 'short' })}</p>
+              </div>
+            </div>
+
+            <div className="flex-1 p-3 grid grid-cols-2 grid-rows-2 gap-3 pb-24">
+              <div className="col-start-1 row-start-1 h-full">
+                <Quadrant 
+                  title="重要 · 不急" 
+                  icon={CalendarIcon} 
+                  tasks={quadrantData.tl} 
+                  colorClass="bg-blue-500"
+                  onTaskClick={(t) => navigateTo('edit', t)}
+                  onToggle={handleToggleTask}
+                />
+              </div>
+
+              <div className="col-start-2 row-start-1 h-full">
+                <Quadrant 
+                  title="重要 · 紧急" 
+                  icon={ZapIcon} 
+                  tasks={quadrantData.tr} 
+                  colorClass="bg-red-500"
+                  onTaskClick={(t) => navigateTo('edit', t)}
+                  onToggle={handleToggleTask}
+                />
+              </div>
+
+              <div className="col-start-1 row-start-2 h-full">
+                <Quadrant 
+                  title="不重 · 不急" 
+                  icon={MenuIcon} 
+                  tasks={quadrantData.bl} 
+                  colorClass="bg-gray-400"
+                  onTaskClick={(t) => navigateTo('edit', t)}
+                  onToggle={handleToggleTask}
+                />
+              </div>
+
+              <div className="col-start-2 row-start-2 h-full">
+                <Quadrant 
+                  title="不重 · 紧急" 
+                  icon={AlertCircleIcon} 
+                  tasks={quadrantData.br} 
+                  colorClass="bg-yellow-500"
+                  onTaskClick={(t) => navigateTo('edit', t)}
+                  onToggle={handleToggleTask}
+                />
+              </div>
+            </div>
+
+            <div className="absolute bottom-6 left-0 right-0 px-6 flex justify-between items-center pointer-events-none">
+              <button 
+                onClick={() => navigateTo('archive')}
+                className="pointer-events-auto flex items-center gap-2 px-5 py-3 bg-white/70 backdrop-blur-md rounded-2xl shadow-lg border border-white/50 text-sm font-semibold text-gray-700 active:scale-95 transition-transform"
+              >
+                <CheckIcon size={18} />
+                已完成
+              </button>
+
+              <button 
+                onClick={() => navigateTo('create')}
+                className="pointer-events-auto w-14 h-14 bg-black text-white rounded-full shadow-2xl flex items-center justify-center active:scale-90 transition-transform"
+              >
+                <PlusIcon size={28} />
+              </button>
+            </div>
+          </>
+        )}
+
+        {view === 'create' && (
+          <div className="h-full bg-white/30 backdrop-blur-xl">
+            <TaskEditor 
+              onSave={handleSaveTask} 
+              onCancel={() => navigateTo('matrix')} 
+            />
+          </div>
+        )}
+
+        {view === 'edit' && currentTask && (
+          <div className="h-full bg-white/30 backdrop-blur-xl">
+            <TaskEditor 
+              initialData={currentTask} 
+              onSave={handleSaveTask} 
+              onCancel={() => navigateTo('matrix')}
+              onDelete={handleDeleteTask}
+            />
+          </div>
+        )}
+
+        {view === 'archive' && (
+          <div className="h-full bg-white/30 backdrop-blur-xl">
+            <ArchiveScreen 
+              list={archivedTasks} 
+              onRestore={handleToggleTask}
+              onBack={() => navigateTo('matrix')}
+            />
+          </div>
+        )}
+      </div>
+      
+      <style>{`
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+      `}</style>
+    </div>
+  );
+}
+
+const root = createRoot(document.getElementById('root'));
+root.render(<App />);
+  </script>
+</body>
+</html>
