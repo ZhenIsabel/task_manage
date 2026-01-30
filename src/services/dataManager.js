@@ -40,6 +40,7 @@ export function saveTasksToStorage(tasks) {
     uni.setStorageSync(STORAGE_KEY_TASKS, JSON.stringify(tasks || []));
   } catch (e) {
     console.warn('[dataManager] saveTasksToStorage failed', e);
+    throw e;
   }
 }
 
@@ -123,10 +124,10 @@ export function clearServerAndUpload(localTasks) {
 }
 
 /**
- * 保存任务到本地并可选同步到服务器
+ * 保存任务：优先本地保存，成功后立即 resolve；远程同步在后台进行不阻塞。
  * @param {object} task - 前端任务对象（含 id, title, note, dueDate, importance, urgency, isCompleted, completedAt, createdAt）
- * @param {boolean} syncRemote - 是否立即上传到服务器
- * @returns {Promise<{ success: boolean, tasks: Array, error?: string }>}
+ * @param {boolean} syncRemote - 是否在后台同步到服务器（不阻塞返回）
+ * @returns {Promise<{ success: boolean, tasks: Array }>} 本地保存成功即 resolve；本地失败 reject
  */
 export function saveTask(task, syncRemote = true) {
   const list = loadTasksFromStorage();
@@ -141,14 +142,19 @@ export function saveTask(task, syncRemote = true) {
   } else {
     list.push(record);
   }
-  saveTasksToStorage(list);
+  try {
+    saveTasksToStorage(list);
+  } catch (e) {
+    return Promise.reject(e);
+  }
   if (syncRemote && hasRemoteConfig()) {
-    return createOrUpdateTaskOnServer(record).then((res) => ({
-      success: true,
-      tasks: list,
-      syncSuccess: res.success,
-      syncError: res.error,
-    }));
+    createOrUpdateTaskOnServer(record)
+      .then((res) => {
+        setLastSyncStatus('upload', res.success, res.error || '');
+      })
+      .catch(() => {
+        setLastSyncStatus('upload', false, '同步失败');
+      });
   }
   return Promise.resolve({ success: true, tasks: list });
 }

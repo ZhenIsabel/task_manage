@@ -547,7 +547,7 @@ view, text, button, scroll-view, input, textarea {
   align-items: stretch;
   justify-content: center;
   padding: 4px 2px;
-  border-radius: 15px;
+  border-radius: 20px;
   color: #374151;
   transition: all 0.2s ease;
   min-width: 0;
@@ -582,7 +582,7 @@ view, text, button, scroll-view, input, textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 45px;
+  height: 50px;
   border-radius: 15px;
   background: rgba(255, 255, 255, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.6);

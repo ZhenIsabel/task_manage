@@ -61,8 +61,12 @@
       </scroll-view>
     </view>
 
-    <view class="bottom-action" data-agent="bottom-action-wrap">
-      <button class="btn-save" :disabled="!form.title.trim()" @click="handleSave">保 存</button>
+    <view
+      class="bottom-action"
+      data-agent="bottom-action-wrap"
+      @tap.stop="onSaveTap"
+    >
+      <view class="btn-save" :class="{ disabled: !(form.title || '').trim() }">保 存</view>
     </view>
   </view>
 </template>
@@ -75,6 +79,7 @@ import { formatDate, formatDateForPicker } from '@/utils/date.js';
 
 const taskId = ref('');
 const scrollViewHeight = ref('');
+const saving = ref(false);
 const form = reactive({
   title: '',
   note: '',
@@ -143,10 +148,19 @@ function handleDateChange(e) {
   form.dueDate = e.detail.value ? new Date(e.detail.value).toISOString() : null;
 }
 
+function onSaveTap() {
+  if (saving.value) return;
+  const title = (form.title || '').trim();
+  if (!title) {
+    uni.showToast({ title: '请填写标题', icon: 'none' });
+    return;
+  }
+  handleSave();
+}
+
 function handleSave() {
-  // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/dc396521-042c-48ee-aa0f-06555631d63b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'edit.vue:handleSave',message:'save clicked',data:{taskId:taskId.value},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'visible'})}).catch(()=>{});
-  // #endregion
+  if (saving.value) return;
+  saving.value = true;
   const payload = {
     title: form.title.trim(),
     note: form.note ?? '',
@@ -165,8 +179,14 @@ function handleSave() {
     const updated = { ...task, ...payload };
     dataManager.saveTask(updated, true).then(() => {
       uni.showToast({ title: '已保存', icon: 'success' });
-      setTimeout(() => uni.navigateBack(), 300);
-    }).catch(() => {});
+      setTimeout(() => {
+        saving.value = false;
+        uni.navigateBack();
+      }, 300);
+    }).catch(() => {
+      saving.value = false;
+      uni.showToast({ title: '保存失败', icon: 'none' });
+    });
   } else {
     const newTask = {
       id: Math.random().toString(36).substr(2, 9),
@@ -176,8 +196,14 @@ function handleSave() {
     };
     dataManager.saveTask(newTask, true).then(() => {
       uni.showToast({ title: '已保存', icon: 'success' });
-      setTimeout(() => uni.navigateBack(), 300);
-    }).catch(() => {});
+      setTimeout(() => {
+        saving.value = false;
+        uni.navigateBack();
+      }, 300);
+    }).catch(() => {
+      saving.value = false;
+      uni.showToast({ title: '保存失败', icon: 'none' });
+    });
   }
 }
 
@@ -342,8 +368,9 @@ function handleDelete() {
   padding-bottom: calc(16px + constant(safe-area-inset-bottom, 0));
   padding-bottom: calc(16px + env(safe-area-inset-bottom, 0));
   background: linear-gradient(to top, #f0f4ff 0%, rgba(240, 244, 255, 0.98) 80%, transparent);
-  z-index: 10;
+  z-index: 100;
   box-sizing: border-box;
+  cursor: pointer;
 }
 .btn-save {
   width: 100%;
@@ -355,8 +382,13 @@ function handleDelete() {
   border-radius: 14px;
   font-weight: 600;
   font-size: 16px;
-  &[disabled] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  &.disabled {
     opacity: 0.5;
+    pointer-events: none;
   }
 }
 </style>

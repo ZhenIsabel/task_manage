@@ -23,7 +23,7 @@
         placeholder="与服务器配置的 token 一致"
         placeholder-class="placeholder"
       />
-      <button type="button" class="btn-save" @click.stop="saveConfig">保存配置</button>
+      <button class="btn-save" @click="saveConfig">保存配置</button>
     </view>
 
     <view v-if="hasRemote" class="actions-card glass-card">
