@@ -129,48 +129,31 @@
 
       </view>
 
-      <!-- 底部 Dock 液态玻璃风格 -->
+      <!-- 底部 Dock：仅保留高频操作；新建任务为 FAB -->
       <view class="bottom-dock">
         <view class="dock-bar">
-        <view class="dock-item" @click="goSettings">
+          <view class="dock-item" @click="goSettings">
             <view class="dock-icon-wrap">
-              <uni-icons type="gear" size="30" color="inherit" />
+              <uni-icons type="gear" size="28" color="inherit" />
             </view>
           </view>
-          <view 
-            v-if="dataManager.hasRemoteConfig()"
-            class="dock-item" 
-            :class="{ loading, disabled: uploadDisabled }"
-            @click="!uploadDisabled && doSyncToServer()"
-          >
-            <view class="dock-icon-wrap">
-              <uni-icons type="cloud-upload" size="30" color="inherit" />
-            </view>
-          </view>
-
-          <view 
-            v-if="dataManager.hasRemoteConfig()"
-            class="dock-item" 
-            :class="{ loading }"
-            @click="doSyncFromServer"
-          >
-            <view class="dock-icon-wrap">
-              <uni-icons type="cloud-download" size="30" color="inherit" />
-            </view>
-          </view>
-
+          <view class="dock-item dock-item-spacer" aria-hidden="true" />
           <view class="dock-item" @click="goArchive">
             <view class="dock-icon-wrap">
-              <uni-icons type="checkmarkempty" size="30" color="inherit" />
+              <uni-icons type="checkmarkempty" size="28" color="inherit" />
             </view>
           </view>
-
-          <view class="dock-item" @click="goCreate">
-            <view class="dock-icon-wrap">
-              <uni-icons type="plus" size="30" color="inherit" />
-            </view>
-          </view>
-          
+        </view>
+        <!-- FAB：新建任务，居中悬浮 -->
+        <view
+          class="fab"
+          :class="{ 'fab--pressed': fabPressed }"
+          @click="onFabTap"
+          @touchstart="fabPressed = true"
+          @touchend="fabPressed = false"
+          @touchcancel="fabPressed = false"
+        >
+          <uni-icons type="plus" size="36" color="#fff" />
         </view>
       </view>
     </view>
@@ -185,9 +168,9 @@ import { isToday } from '@/utils/date.js';
 
 // --- Data ---
 const tasks = ref([]);
-const loading = ref(false);
 const syncStatus = ref(null);
-const uploadDisabled = ref(true);
+const fabPressed = ref(false);
+const loading = ref(false);
 
 // --- Computed ---
 const currentWeekday = computed(() => {
@@ -231,16 +214,6 @@ function doSyncFromServer() {
     if (res.success && res.merged) tasks.value = res.merged;
     syncStatus.value = dataManager.getLastSyncStatus();
     if (res.error) uni.showToast({ title: res.error || '同步失败', icon: 'none' });
-  });
-}
-
-function doSyncToServer() {
-  if (!dataManager.hasRemoteConfig()) return;
-  loading.value = true;
-  dataManager.syncToServer(tasks.value).then((res) => {
-    loading.value = false;
-    syncStatus.value = dataManager.getLastSyncStatus();
-    if (res.error) uni.showToast({ title: res.error || '上传失败', icon: 'none' });
   });
 }
 
@@ -288,6 +261,9 @@ function goEdit(task) {
 }
 function goCreate() {
   uni.navigateTo({ url: '/pages/edit/edit' });
+}
+function onFabTap() {
+  goCreate();
 }
 function goArchive() {
   uni.navigateTo({ url: '/pages/archive/archive' });
@@ -353,9 +329,9 @@ view, text, button, scroll-view, input, textarea {
   z-index: 1;
   display: flex;
   flex-direction: column;
-  /* 底部留白避让固定 dock，避免四象限与 dock 重叠 */
-  padding-bottom: calc(72px + constant(safe-area-inset-bottom, 0px));
-  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  /* 底部留白避让 FAB + Dock，避免内容被遮挡 */
+  padding-bottom: calc(100px + constant(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
 }
 
@@ -516,7 +492,10 @@ view, text, button, scroll-view, input, textarea {
   }
 }
 
-/* --- 底部 Dock 液态玻璃风格 --- */
+/* --- 底部 Dock：仅设置 + 归档；FAB 居中悬浮 --- */
+$fab-size: 60px;
+$dock-bar-height: 56px;
+
 .bottom-dock {
   position: fixed;
   bottom: 0;
@@ -525,20 +504,29 @@ view, text, button, scroll-view, input, textarea {
   z-index: 100;
   padding: 8px 16px;
   padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: none;
+}
+.bottom-dock > * {
+  pointer-events: auto;
 }
 
 .dock-bar {
   width: 100%;
+  max-width: 320px;
   display: flex;
   align-items: stretch;
-  gap: 6px;
-  padding: 6px 6px;
+  gap: 0;
+  padding: 6px 8px;
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  box-shadow: 
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow:
     0 4px 20px rgba(31, 38, 135, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  min-height: $dock-bar-height;
 }
 
 .dock-item {
@@ -547,52 +535,68 @@ view, text, button, scroll-view, input, textarea {
   align-items: stretch;
   justify-content: center;
   padding: 4px 2px;
-  border-radius: 20px;
+  border-radius: 16px;
   color: #374151;
-  transition: all 0.2s ease;
+  transition: transform 0.2s ease, background 0.2s ease;
   min-width: 0;
 
   &:active {
-    transform: scale(0.92);
-    background: rgba(255, 255, 255, 0.3);
+    transform: scale(0.94);
+    background: rgba(255, 255, 255, 0.35);
   }
+}
+.dock-item-spacer {
+  flex: 0 0 $fab-size;
+  pointer-events: none;
+  padding: 0;
+}
 
-  &.loading {
-    opacity: 0.6;
-    pointer-events: none;
-  }
-
-  &.disabled {
-    opacity: 0.5;
-    pointer-events: none;
-  }
-}
-.btn-action.disabled {
-  opacity: 0.5;
-  color: #9ca3af;
-  border-color: rgba(0, 0, 0, 0.08);
-  background: rgba(0, 0, 0, 0.04);
-}
-.btn-action.danger.disabled {
-  color: #d1d5db;
-  border-color: rgba(0, 0, 0, 0.06);
-}
 .dock-icon-wrap {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 50px;
-  border-radius: 15px;
+  min-height: 44px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.6);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  transition: all 0.2s ease;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
 }
 
 .dock-item:active .dock-icon-wrap {
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.75);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 1);
+}
+
+/* FAB：新建任务，居中悬浮，层级高于 Dock */
+.fab {
+  position: absolute;
+  left: 50%;
+  bottom: calc(8px + env(safe-area-inset-bottom) + 14px);
+  transform: translate(-50%, 0);
+  width: $fab-size;
+  height: $fab-size;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+  box-shadow:
+    0 6px 20px rgba(99, 102, 241, 0.45),
+    0 2px 8px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 101;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:active,
+  &.fab--pressed {
+    transform: translate(-50%, 0) scale(0.92);
+    box-shadow:
+      0 2px 12px rgba(99, 102, 241, 0.4),
+      0 1px 4px rgba(0, 0, 0, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
 }
 
 </style>

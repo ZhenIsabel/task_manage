@@ -27,7 +27,7 @@
     </view>
 
     <view v-if="hasRemote" class="actions-card glass-card">
-      <text class="section-title">同步</text>
+      <text class="section-title">数据同步 / 备份</text>
       <button class="btn-action" @click="syncFrom">从服务器拉取任务</button>
       <button class="btn-action" :disabled="uploadDisabled" :class="{ disabled: uploadDisabled }" @click="syncTo">上传本地任务到服务器</button>
       <button class="btn-action danger" :disabled="clearDisabled" :class="{ disabled: clearDisabled }" @click="clearAndUpload">清空服务器并用本地覆盖</button>
