@@ -11,18 +11,9 @@
       <view v-if="view === 'matrix'" class="view-container matrix-view">
         <view class="header">
           <view>
-            <text class="sub-title">我的日程</text>
-            <text class="main-title">四象限</text>
+            <text class="main-title">不想干活</text>
           </view>
           <view class="header-right">
-            <view v-if="dataManager.hasRemoteConfig()" class="sync-wrap">
-              <view class="btn-sync glass-card" @click="doSyncFromServer" :class="{ loading }">
-                <uni-icons type="refresh" size="18" color="inherit" />
-              </view>
-            </view>
-            <view class="btn-settings glass-card" @click="goSettings">
-              <uni-icons type="gear" size="20" color="inherit" />
-            </view>
             <view class="date-display">
               <text class="day">{{ currentDay }}</text>
               <text class="month">{{ currentMonth }}</text>
@@ -136,15 +127,6 @@
           </view>
         </view>
 
-        <view class="floating-bar">
-          <view class="btn-archive glass-card" @click="navigateTo('archive')">
-            <uni-icons type="checkmarkempty" size="18" color="inherit" />
-            <text>已完成</text>
-          </view>
-          <view class="btn-add" @click="navigateTo('create')">
-            <uni-icons type="plus" size="28" color="white" />
-          </view>
-        </view>
       </view>
 
       <view v-if="view === 'create' || view === 'edit'" class="view-container editor-view slide-in-up">
@@ -262,12 +244,56 @@
         </scroll-view>
       </view>
 
+      <!-- 底部 Dock 液态玻璃风格 -->
+      <view class="bottom-dock">
+        <view class="dock-bar">
+        <view class="dock-item" @click="goSettings">
+            <view class="dock-icon-wrap">
+              <uni-icons type="gear" size="20" color="inherit" />
+            </view>
+          </view>
+          <view 
+            v-if="dataManager.hasRemoteConfig()"
+            class="dock-item" 
+            :class="{ loading }"
+            @click="doSyncToServer"
+          >
+            <view class="dock-icon-wrap">
+              <uni-icons type="cloud-upload" size="20" color="inherit" />
+            </view>
+          </view>
+
+          <view 
+            v-if="dataManager.hasRemoteConfig()"
+            class="dock-item" 
+            :class="{ loading }"
+            @click="doSyncFromServer"
+          >
+            <view class="dock-icon-wrap">
+              <uni-icons type="cloud-download" size="20" color="inherit" />
+            </view>
+          </view>
+
+          <view class="dock-item" @click="navigateTo('archive')">
+            <view class="dock-icon-wrap">
+              <uni-icons type="checkmarkempty" size="20" color="inherit" />
+            </view>
+          </view>
+
+          <view class="dock-item" @click="navigateTo('create')">
+            <view class="dock-icon-wrap">
+              <uni-icons type="plus" size="20" color="inherit" />
+            </view>
+          </view>
+          
+        </view>
+      </view>
     </view>
   </view>
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted } from 'vue';
+import { ref, computed, reactive, onMounted, getCurrentInstance } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import dataManager from '@/services/dataManager.js';
 
@@ -373,6 +399,18 @@ function doSyncToServer() {
 onMounted(() => {
   loadTasks();
   if (dataManager.hasRemoteConfig()) doSyncFromServer();
+  // #region agent log
+  setTimeout(() => {
+    const hasRemote = dataManager.hasRemoteConfig();
+    fetch('http://127.0.0.1:7244/ingest/dc396521-042c-48ee-aa0f-06555631d63b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.vue:onMounted',message:'Dock debug',data:{hasRemoteConfig:hasRemote},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
+    const q = uni.createSelectorQuery().in(getCurrentInstance());
+    q.select('.dock-bar').boundingClientRect();
+    q.select('.dock-icon-wrap').boundingClientRect();
+    q.exec((res) => {
+      fetch('http://127.0.0.1:7244/ingest/dc396521-042c-48ee-aa0f-06555631d63b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.vue:onMounted',message:'Dock dimensions',data:{dockBar:res[0],iconWrap:res[1]},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2'})}).catch(()=>{});
+    });
+  }, 500);
+  // #endregion
 });
 
 onShow(() => {
@@ -569,7 +607,7 @@ view, text, button, scroll-view, input, textarea {
   flex-wrap: wrap;
   gap: 12px;
   padding: 12px 16px;
-  padding-bottom: 90px;
+  padding-bottom: 72px;
   min-height: 0;
 }
 .grid-item {
@@ -631,7 +669,7 @@ view, text, button, scroll-view, input, textarea {
 
 .task-item {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
   padding: 8px;
   background: rgba(255,255,255,0.3);
@@ -646,7 +684,6 @@ view, text, button, scroll-view, input, textarea {
   border-radius: 5px;
   border: 1.5px solid rgba(107, 114, 128, 0.4);
   display: flex; align-items: center; justify-content: center;
-  margin-top: 2px;
   flex-shrink: 0;
   
   &.checked {
@@ -669,43 +706,69 @@ view, text, button, scroll-view, input, textarea {
   }
 }
 
-/* --- 底部悬浮栏 --- */
-.floating-bar {
-  position: absolute;
-  bottom: 24px; left: 0; right: 0;
-  padding: 0 24px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  pointer-events: none; /* 让点击穿透空白区域 */
-  z-index: 10;
+/* --- 底部 Dock 液态玻璃风格 --- */
+.bottom-dock {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 8px 16px;
+  padding-bottom: calc(8px + env(safe-area-inset-bottom));
 }
 
-.btn-archive {
-  pointer-events: auto;
+.dock-bar {
+  width: 100%;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
-  border-radius: 24px;
-  font-size: 13px;
-  font-weight: 600;
+  align-items: stretch;
+  gap: 6px;
+  padding: 6px 6px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 
+    0 4px 20px rgba(31, 38, 135, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.dock-item {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 4px 2px;
+  border-radius: 14px;
   color: #374151;
-  background: rgba(255,255,255,0.85);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-  backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
+  min-width: 0;
+
+  &:active {
+    transform: scale(0.92);
+    background: rgba(255, 255, 255, 0.3);
+  }
+
+  &.loading {
+    opacity: 0.6;
+    pointer-events: none;
+  }
 }
 
-.btn-add {
-  pointer-events: auto;
-  width: 52px; height: 52px;
-  background: #1f2937;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.25);
-  color: white;
-  
-  &:active { transform: scale(0.92); transition: 0.1s; }
+.dock-icon-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transition: all 0.2s ease;
+}
+
+.dock-item:active .dock-icon-wrap {
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 1);
 }
 
 /* --- 编辑/新建页面 (Editor) --- */
