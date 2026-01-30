@@ -42,36 +42,45 @@ class TaskScheduler:
         month_day: Optional[int] = None,
         quarter_day: Optional[int] = None,
         year_month: Optional[int] = None,
-        year_day: Optional[int] = None
+        year_day: Optional[int] = None,
+        created_time: Optional[datetime] = None
     ) -> datetime:
         """
         计算下次运行时间
         
         :param frequency: 频率 (daily, weekly, monthly, quarterly, yearly)
         :param base_time: 基准时间（通常是当前时间或上次运行时间）
-        :param week_day: 周几 (1=周一, 7=周日)，weekly 时使用
-        :param month_day: 每月第几天 (1-31)，monthly 时使用
-        :param quarter_day: 每季度第几天，quarterly 时使用（简化为每季度第一个月的第几天）
-        :param year_month: 每年第几月 (1-12)，yearly 时使用
-        :param year_day: 每年该月第几天，yearly 时使用
+        :param week_day: 周几 (1=周一, 7=周日)，weekly 时使用（如果为None则使用created_time的周几）
+        :param month_day: 每月第几天 (1-31)，monthly 时使用（如果为None则使用created_time的日期）
+        :param quarter_day: 每季度第几天，quarterly 时使用（如果为None则使用created_time的日期）
+        :param year_month: 每年第几月 (1-12)，yearly 时使用（如果为None则使用created_time的月份）
+        :param year_day: 每年该月第几天，yearly 时使用（如果为None则使用created_time的日期）
+        :param created_time: 创建时间，用于确定触发日期（如果为None则使用base_time）
         :return: 下次运行时间
         """
+        # 如果没有提供创建时间，使用base_time作为参考
+        reference_time = created_time if created_time is not None else base_time
+        
         if frequency == 'daily':
             # 每天：直接加1天
             next_run = base_time + timedelta(days=1)
             return next_run.replace(hour=0, minute=2, second=0, microsecond=0)
         
         elif frequency == 'weekly':
-            # 每周：找到下一个指定的周几
+            # 每周：使用创建时间的周几，如果创建时间未提供则使用base_time的周几
+            # 如果明确指定了week_day，则使用指定的（向后兼容）
             if week_day is None:
-                week_day = 1  # 默认周一
+                # 使用参考时间的周几 (1=周一, 7=周日)
+                target_weekday = reference_time.weekday() + 1
+            else:
+                target_weekday = week_day
             
             # 当前是周几 (0=周一, 6=周日)
             current_weekday = base_time.weekday()
-            target_weekday = week_day - 1  # 转换为 0-6
+            target_weekday_0based = target_weekday - 1  # 转换为 0-6
             
             # 计算到目标周几还有几天
-            days_ahead = target_weekday - current_weekday
+            days_ahead = target_weekday_0based - current_weekday
             if days_ahead <= 0:  # 如果已经过了或是今天，跳到下周
                 days_ahead += 7
             
@@ -79,9 +88,12 @@ class TaskScheduler:
             return next_run.replace(hour=0, minute=2, second=0, microsecond=0)
         
         elif frequency == 'monthly':
-            # 每月：指定每月的第几天
+            # 每月：使用创建时间的日期，如果创建时间未提供则使用base_time的日期
             if month_day is None:
-                month_day = 1  # 默认每月1号
+                # 使用参考时间的日期
+                target_day = reference_time.day
+            else:
+                target_day = month_day
             
             # 尝试下个月的同一天
             year = base_time.year
@@ -92,15 +104,18 @@ class TaskScheduler:
             
             # 处理月末溢出（如2月30日）
             max_day = monthrange(year, month)[1]
-            actual_day = min(month_day, max_day)
+            actual_day = min(target_day, max_day)
             
             next_run = datetime(year, month, actual_day, 0, 2, 0)
             return next_run
         
         elif frequency == 'quarterly':
-            # 每季度：以1/4/7/10月为季度起点
+            # 每季度：使用创建时间的日期
             if quarter_day is None:
-                quarter_day = 1  # 默认季度第1天
+                # 使用参考时间的日期
+                target_day = reference_time.day
+            else:
+                target_day = quarter_day
             
             # 季度起始月份
             quarter_months = [1, 4, 7, 10]
@@ -122,29 +137,37 @@ class TaskScheduler:
             
             # 处理日期溢出
             max_day = monthrange(year, next_quarter_month)[1]
-            actual_day = min(quarter_day, max_day)
+            actual_day = min(target_day, max_day)
             
             next_run = datetime(year, next_quarter_month, actual_day, 0, 2, 0)
             return next_run
         
         elif frequency == 'yearly':
-            # 每年：指定月份和日期
+            # 每年：使用创建时间的月份和日期
             if year_month is None:
-                year_month = 1  # 默认1月
+                # 使用参考时间的月份
+                target_month = reference_time.month
+            else:
+                target_month = year_month
+            
             if year_day is None:
-                year_day = 1  # 默认1号
+                # 使用参考时间的日期
+                target_day = reference_time.day
+            else:
+                target_day = year_day
             
             # 尝试今年的指定日期
             year = base_time.year
-            if base_time.month >= year_month and base_time.day >= year_day:
+            # 判断是否已经过了今年的目标日期
+            if base_time.month > target_month or (base_time.month == target_month and base_time.day >= target_day):
                 # 已经过了，跳到明年
                 year += 1
             
             # 处理闰年问题（2月29日）
-            max_day = monthrange(year, year_month)[1]
-            actual_day = min(year_day, max_day)
+            max_day = monthrange(year, target_month)[1]
+            actual_day = min(target_day, max_day)
             
-            next_run = datetime(year, year_month, actual_day, 0, 2, 0)
+            next_run = datetime(year, target_month, actual_day, 0, 2, 0)
             return next_run
         
         else:
@@ -194,6 +217,16 @@ class TaskScheduler:
                     success = self.db_manager.save_task(task_data)
                     
                     if success:
+                        # 获取创建时间，如果不存在则使用当前时间（向后兼容）
+                        created_time_str = schedule.get('created_at')
+                        if created_time_str:
+                            try:
+                                created_time = datetime.fromisoformat(created_time_str)
+                            except (ValueError, TypeError):
+                                created_time = None
+                        else:
+                            created_time = None
+                        
                         # 计算下次运行时间
                         next_run = self.calculate_next_run_time(
                             frequency=schedule['frequency'],
@@ -202,7 +235,8 @@ class TaskScheduler:
                             month_day=schedule.get('month_day'),
                             quarter_day=schedule.get('quarter_day'),
                             year_month=schedule.get('year_month'),
-                            year_day=schedule.get('year_day')
+                            year_day=schedule.get('year_day'),
+                            created_time=created_time  # 传入创建时间作为参考
                         )
                         
                         # 更新定时任务的下次运行时间
@@ -296,7 +330,8 @@ class TaskScheduler:
             month_day=month_day,
             quarter_day=quarter_day,
             year_month=year_month,
-            year_day=year_day
+            year_day=year_day,
+            created_time=start_time  # 传入创建时间作为参考
         )
         
         schedule_data = {
@@ -313,6 +348,7 @@ class TaskScheduler:
             'year_month': year_month,
             'year_day': year_day,
             'next_run_at': next_run.isoformat(),
+            'created_at': start_time.isoformat(),  # 保存创建时间
             'active': True
         }
         
@@ -557,13 +593,15 @@ class ScheduledTaskDialog(QDialog):
                 return
         # 创建任务
         try:
+            # 字段映射：配置中使用 'text'，但 create_scheduled_task 期望 'title'
+            title = task_data.get('title') or task_data.get('text', '')
             result_id = self.task_scheduler.create_scheduled_task(
-                title=task_data['title'],
+                title=title,
                 frequency=task_data['frequency'],
                 urgency=task_data.get('urgency', '低'),
                 importance=task_data.get('importance', '低'),
-                notes=task_data['notes'],
-                due_date=task_data['due_date'],
+                notes=task_data.get('notes', ''),
+                due_date=task_data.get('due_date', ''),
                 start_time=task_data.get('start_time')
             )
             if result_id:

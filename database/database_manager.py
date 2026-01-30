@@ -709,6 +709,11 @@ class DatabaseManager:
             conn = self.get_connection()
             cursor = conn.cursor()
             
+            # 使用传入的created_at，如果没有则使用当前时间
+            created_at = schedule_data.get('created_at')
+            if not created_at:
+                created_at = datetime.now().isoformat()
+            
             cursor.execute('''
                 INSERT INTO scheduled_tasks 
                 (id, title, priority, urgency, importance, notes, due_date, frequency, 
@@ -731,7 +736,7 @@ class DatabaseManager:
                 schedule_data.get('year_day'),
                 schedule_data.get('next_run_at'),
                 schedule_data.get('active', True),
-                datetime.now().isoformat(),
+                created_at,
                 datetime.now().isoformat()
             ))
             
