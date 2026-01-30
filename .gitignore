@@ -95,3 +95,4 @@ tasks_backup.json
 sqlite3.exe
 tasks.db
 *.db
+config/remote_config.json
