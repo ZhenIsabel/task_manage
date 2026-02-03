@@ -37,7 +37,7 @@
     </view>
 
     <view class="tip">
-      <text>与 task_manage 项目的 server_example 或自建 API 对接，需配置相同的 api_base_url 和 api_token。</text>
+      <text>与远程服务器上此前配置过的任务数据库对接，需配置相同的 api_base_url 和 api_token。</text>
     </view>
   </view>
 </template>
@@ -132,27 +132,23 @@ function clearAndUpload() {
 </script>
 
 <style lang="scss" scoped>
+@use '@/styles/variables.scss' as *;
 .settings-page {
   min-height: 100vh;
   padding: 60px 20px 40px;
   background: linear-gradient(180deg, #f0f4ff 0%, #fff 40%);
 }
 .settings-page.page-with-nav .glass-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
   background: rgba(255, 255, 255, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.6);
 }
 .nav-title {
-  font-size: 20px;
-  font-weight: 700;
-  color: #111827;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+  display: block;
 }
 .glass-card {
-  background: rgba(255, 255, 255, 0.5);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.6);
   padding: 20px;
   margin-bottom: 16px;
 }
@@ -191,6 +187,8 @@ function clearAndUpload() {
   border-radius: 12px;
   font-size: 15px;
   font-weight: 600;
+  box-shadow: $shadow;
+  border: 1px solid $glass-border;
 }
 .section-title {
   font-size: 14px;
