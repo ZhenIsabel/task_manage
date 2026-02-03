@@ -5,7 +5,7 @@
      
       <view class="archive-list-content">
         <view class="archive-header-row">
-          <view class="glass-btn" @click="goBack">
+          <view class="glass-btn" @tap="goBack">
             <uni-icons type="back" size="24" color="inherit" />
           </view>
           <view class="archive-list-title">
@@ -23,7 +23,7 @@
               <text class="archive-title">{{ task.title }}</text>
               <text class="archive-date">{{ formatDateShort(task.completedAt) }} 完成</text>
             </view>
-            <view class="btn-restore" @click="handleRestore(task.id)">
+            <view class="btn-restore" @tap="handleRestore(task.id)">
               <uni-icons type="redo" size="16" color="#15803d" />
             </view>
           </view>

@@ -1,7 +1,7 @@
 <template>
   <view class="settings-page page-with-nav">
     <view class="nav-header">
-      <view class="btn-back glass-btn" @click="goBack">
+      <view class="btn-back glass-btn" @tap="goBack">
         <uni-icons type="back" size="24" color="inherit" />
       </view>
       <text class="nav-title">设置</text>
@@ -23,14 +23,14 @@
         placeholder="与服务器配置的 token 一致"
         placeholder-class="placeholder"
       />
-      <button class="btn-save" @click="saveConfig">保存配置</button>
+      <button class="btn-save" @tap="saveConfig">保存配置</button>
     </view>
 
     <view v-if="hasRemote" class="actions-card glass-card">
       <text class="section-title">数据同步 / 备份</text>
-      <button class="btn-action" @click="syncFrom">从服务器拉取任务</button>
-      <button class="btn-action" :disabled="uploadDisabled" :class="{ disabled: uploadDisabled }" @click="syncTo">上传本地任务到服务器</button>
-      <button class="btn-action danger" :disabled="clearDisabled" :class="{ disabled: clearDisabled }" @click="clearAndUpload">清空服务器并用本地覆盖</button>
+      <button class="btn-action" @tap="syncFrom">从服务器拉取任务</button>
+      <button class="btn-action" :disabled="uploadDisabled" :class="{ disabled: uploadDisabled }" @tap="syncTo">上传本地任务到服务器</button>
+      <button class="btn-action danger" :disabled="clearDisabled" :class="{ disabled: clearDisabled }" @tap="clearAndUpload">清空服务器并用本地覆盖</button>
       <view v-if="lastSync" class="sync-info">
         <text>最近同步：{{ lastSync.sync_type }} - {{ lastSync.message }}</text>
       </view>

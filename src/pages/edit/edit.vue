@@ -2,13 +2,13 @@
   <view class="edit-page page-with-nav">
     <view class="form-content-wrap">
       <scroll-view scroll-y class="form-content" :style="scrollViewHeight ? { height: scrollViewHeight } : {}" :show-scrollbar="false">
-        <view class="form-content-inner">
+        <view class="form-content-inner" :style="scrollViewHeight ? { minHeight: scrollViewHeight } : {}">
           <view class="nav-header">
-            <view class="glass-btn" @click="goBack">
+            <view class="glass-btn" @tap="goBack">
               <uni-icons type="back" size="24" color="inherit" />
             </view>
             <text class="nav-title">{{ taskId ? '编辑任务' : '创建任务' }}</text>
-            <view v-if="taskId" class="glass-btn red-theme" @click="handleDelete">
+            <view v-if="taskId" class="glass-btn red-theme" @tap="handleDelete">
               <uni-icons type="trash" size="20" color="#dc2626" />
             </view>
             <view v-else class="placeholder-box"></view>
@@ -28,15 +28,15 @@
             <view class="glass-card form-section">
               <text class="label flex-label"><uni-icons type="info" size="12" color="inherit" /> 重要程度</text>
               <view class="toggle-group">
-                <view class="toggle-btn" :class="{ active: form.importance === 'low' }" @click="form.importance = 'low'">一般</view>
-                <view class="toggle-btn red" :class="{ active: form.importance === 'high' }" @click="form.importance = 'high'">重要</view>
+                <view class="toggle-btn" :class="{ active: form.importance === 'low' }" @tap="form.importance = 'low'">一般</view>
+                <view class="toggle-btn red" :class="{ active: form.importance === 'high' }" @tap="form.importance = 'high'">重要</view>
               </view>
             </view>
             <view class="glass-card form-section">
               <text class="label flex-label"><uni-icons type="notification" size="12" color="inherit" /> 紧急程度</text>
               <view class="toggle-group">
-                <view class="toggle-btn" :class="{ active: form.urgency === 'low' }" @click="form.urgency = 'low'">不急</view>
-                <view class="toggle-btn orange" :class="{ active: form.urgency === 'high' }" @click="form.urgency = 'high'">紧急</view>
+                <view class="toggle-btn" :class="{ active: form.urgency === 'low' }" @tap="form.urgency = 'low'">不急</view>
+                <view class="toggle-btn orange" :class="{ active: form.urgency === 'high' }" @tap="form.urgency = 'high'">紧急</view>
               </view>
             </view>
           </view>
@@ -267,7 +267,7 @@ function handleDelete() {
 }
 .form-content-inner {
   padding: 30px 40px 60px;
-  min-height: 100%;
+  /* min-height 由 :style 绑定 scrollViewHeight，避免 100% 解析成 100vh 导致底部可滚空白 */
 }
 .glass-card {
   background: rgba(255, 255, 255, 0.5);
@@ -386,7 +386,11 @@ function handleDelete() {
   width: 100%;
   height: 50px;
   line-height: 50px;
-  background: #1f2937;
+  background: linear-gradient(145deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+  box-shadow:
+    0 6px 20px rgba(99, 102, 241, 0.45),
+    0 2px 8px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
   color: white;
   border: none;
   border-radius: 14px;
@@ -397,7 +401,7 @@ function handleDelete() {
   justify-content: center;
   pointer-events: auto;
   &.disabled {
-    opacity: 0.5;
+    opacity: 0.2;
     pointer-events: none;
   }
 }

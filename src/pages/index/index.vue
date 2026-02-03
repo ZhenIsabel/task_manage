@@ -36,9 +36,9 @@
                   v-for="task in quadrantData.tl"
                   :key="task.id"
                   class="task-item"
-                  @click="goEdit(task)"
+                  @tap="goEdit(task)"
                 >
-                  <view class="checkbox" :class="{ checked: task.isCompleted }" @click.stop="handleToggleTask(task.id)">
+                  <view class="checkbox" :class="{ checked: task.isCompleted }" @tap.stop="handleToggleTask(task.id)">
                     <uni-icons v-if="task.isCompleted" type="checkmarkempty" size="12" color="white" />
                   </view>
                   <text class="task-title" :class="{ completed: task.isCompleted }">{{ task.title }}</text>
@@ -62,9 +62,9 @@
                   v-for="task in quadrantData.tr"
                   :key="task.id"
                   class="task-item"
-                  @click="goEdit(task)"
+                  @tap="goEdit(task)"
                 >
-                  <view class="checkbox" :class="{ checked: task.isCompleted }" @click.stop="handleToggleTask(task.id)">
+                  <view class="checkbox" :class="{ checked: task.isCompleted }" @tap.stop="handleToggleTask(task.id)">
                     <uni-icons v-if="task.isCompleted" type="checkmarkempty" size="12" color="white" />
                   </view>
                   <text class="task-title" :class="{ completed: task.isCompleted }">{{ task.title }}</text>
@@ -88,9 +88,9 @@
                   v-for="task in quadrantData.bl"
                   :key="task.id"
                   class="task-item"
-                  @click="goEdit(task)"
+                  @tap="goEdit(task)"
                 >
-                  <view class="checkbox" :class="{ checked: task.isCompleted }" @click.stop="handleToggleTask(task.id)">
+                  <view class="checkbox" :class="{ checked: task.isCompleted }" @tap.stop="handleToggleTask(task.id)">
                     <uni-icons v-if="task.isCompleted" type="checkmarkempty" size="12" color="white" />
                   </view>
                   <text class="task-title" :class="{ completed: task.isCompleted }">{{ task.title }}</text>
@@ -114,9 +114,9 @@
                   v-for="task in quadrantData.br"
                   :key="task.id"
                   class="task-item"
-                  @click="goEdit(task)"
+                  @tap="goEdit(task)"
                 >
-                  <view class="checkbox" :class="{ checked: task.isCompleted }" @click.stop="handleToggleTask(task.id)">
+                  <view class="checkbox" :class="{ checked: task.isCompleted }" @tap.stop="handleToggleTask(task.id)">
                     <uni-icons v-if="task.isCompleted" type="checkmarkempty" size="12" color="white" />
                   </view>
                   <text class="task-title" :class="{ completed: task.isCompleted }">{{ task.title }}</text>
@@ -132,13 +132,13 @@
       <!-- 底部 Dock：仅保留高频操作；新建任务为 FAB -->
       <view class="bottom-dock">
         <view class="dock-bar">
-          <view class="dock-item" @click="goSettings">
+          <view class="dock-item" @tap="goSettings">
             <view class="dock-icon-wrap">
               <uni-icons type="gear" size="28" color="inherit" />
             </view>
           </view>
           <view class="dock-item dock-item-spacer" aria-hidden="true" />
-          <view class="dock-item" @click="goArchive">
+          <view class="dock-item" @tap="goArchive">
             <view class="dock-icon-wrap">
               <uni-icons type="checkmarkempty" size="28" color="inherit" />
             </view>
@@ -148,7 +148,7 @@
         <view
           class="fab"
           :class="{ 'fab--pressed': fabPressed }"
-          @click="onFabTap"
+          @tap="onFabTap"
           @touchstart="fabPressed = true"
           @touchend="fabPressed = false"
           @touchcancel="fabPressed = false"
@@ -277,7 +277,10 @@ function goSettings() {
 
 <style lang="scss" scoped>
 @use '@/styles/variables.scss' as *;
-*, *::before, *::after {
+
+
+/* 强制使用边框盒模型，防止 padding 撑大元素导致重叠 */
+view, text, button, scroll-view, input, textarea {
   box-sizing: border-box;
 }
 
@@ -498,10 +501,6 @@ $dock-bar-height: 56px;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  pointer-events: none;
-}
-.bottom-dock > * {
-  pointer-events: auto;
 }
 
 .dock-bar {

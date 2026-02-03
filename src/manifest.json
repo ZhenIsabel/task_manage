@@ -1,9 +1,9 @@
 {
-    "name" : "四象限管理",
+    "name" : "做了么",
     "appid" : "__UNI__F0B58D0",
-    "description" : "",
-    "versionName" : "0.1.7",
-    "versionCode" : 107,
+    "description" : "用来管理这些见鬼待办任务的工具",
+    "versionName" : "0.1.8",
+    "versionCode" : 108,
     "transformPx" : false,
     /* 5+App特有相关 */
     "app-plus" : {
