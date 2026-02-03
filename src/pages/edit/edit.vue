@@ -1,63 +1,65 @@
 <template>
   <view class="edit-page page-with-nav">
-    <view class="nav-header">
-      <view class="glass-btn" @click="goBack">
-        <uni-icons type="back" size="24" color="inherit" />
-      </view>
-      <text class="nav-title">{{ taskId ? '编辑任务' : '创建任务' }}</text>
-      <view v-if="taskId" class="glass-btn red-theme" @click="handleDelete">
-        <uni-icons type="trash" size="20" color="#dc2626" />
-      </view>
-      <view v-else class="placeholder-box"></view>
-    </view>
-
     <view class="form-content-wrap">
       <scroll-view scroll-y class="form-content" :style="scrollViewHeight ? { height: scrollViewHeight } : {}" :show-scrollbar="false">
-      <view class="glass-card form-section">
-        <text class="label">任务标题</text>
-        <input
-          v-model="form.title"
-          placeholder="做什么？"
-          placeholder-class="input-placeholder"
-          class="input-title"
-        />
-      </view>
-
-      <view class="row-2-col">
-        <view class="glass-card form-section">
-          <text class="label flex-label"><uni-icons type="info" size="12" color="inherit" /> 重要程度</text>
-          <view class="toggle-group">
-            <view class="toggle-btn" :class="{ active: form.importance === 'low' }" @click="form.importance = 'low'">一般</view>
-            <view class="toggle-btn red" :class="{ active: form.importance === 'high' }" @click="form.importance = 'high'">重要</view>
+        <view class="form-content-inner">
+          <view class="nav-header">
+            <view class="glass-btn" @click="goBack">
+              <uni-icons type="back" size="24" color="inherit" />
+            </view>
+            <text class="nav-title">{{ taskId ? '编辑任务' : '创建任务' }}</text>
+            <view v-if="taskId" class="glass-btn red-theme" @click="handleDelete">
+              <uni-icons type="trash" size="20" color="#dc2626" />
+            </view>
+            <view v-else class="placeholder-box"></view>
           </view>
-        </view>
-        <view class="glass-card form-section">
-          <text class="label flex-label"><uni-icons type="notification" size="12" color="inherit" /> 紧急程度</text>
-          <view class="toggle-group">
-            <view class="toggle-btn" :class="{ active: form.urgency === 'low' }" @click="form.urgency = 'low'">不急</view>
-            <view class="toggle-btn orange" :class="{ active: form.urgency === 'high' }" @click="form.urgency = 'high'">紧急</view>
+
+          <view class="glass-card form-section">
+            <text class="label">任务标题</text>
+            <input
+              v-model="form.title"
+              placeholder="做什么？"
+              placeholder-class="input-placeholder"
+              class="input-title"
+            />
           </view>
+
+          <view class="row-2-col">
+            <view class="glass-card form-section">
+              <text class="label flex-label"><uni-icons type="info" size="12" color="inherit" /> 重要程度</text>
+              <view class="toggle-group">
+                <view class="toggle-btn" :class="{ active: form.importance === 'low' }" @click="form.importance = 'low'">一般</view>
+                <view class="toggle-btn red" :class="{ active: form.importance === 'high' }" @click="form.importance = 'high'">重要</view>
+              </view>
+            </view>
+            <view class="glass-card form-section">
+              <text class="label flex-label"><uni-icons type="notification" size="12" color="inherit" /> 紧急程度</text>
+              <view class="toggle-group">
+                <view class="toggle-btn" :class="{ active: form.urgency === 'low' }" @click="form.urgency = 'low'">不急</view>
+                <view class="toggle-btn orange" :class="{ active: form.urgency === 'high' }" @click="form.urgency = 'high'">紧急</view>
+              </view>
+            </view>
+          </view>
+
+          <view class="glass-card form-section row-between">
+            <text class="label-row"><uni-icons type="calendar" size="16" color="inherit" /> 截止日期</text>
+            <picker mode="date" :value="formatDateForPicker(form.dueDate)" @change="handleDateChange">
+              <view class="picker-value">{{ form.dueDate ? formatDate(form.dueDate) : '选择日期' }}</view>
+            </picker>
+          </view>
+
+          <view class="glass-card form-section h-large">
+            <text class="label">备注</text>
+            <textarea
+              v-model="form.note"
+              placeholder="添加详细描述..."
+              placeholder-class="input-placeholder"
+              class="input-area"
+              maxlength="-1"
+            />
+          </view>
+          <view class="bottom-spacer" />
         </view>
-      </view>
-
-      <view class="glass-card form-section row-between">
-        <text class="label-row"><uni-icons type="calendar" size="16" color="inherit" /> 截止日期</text>
-        <picker mode="date" :value="formatDateForPicker(form.dueDate)" @change="handleDateChange">
-          <view class="picker-value">{{ form.dueDate ? formatDate(form.dueDate) : '选择日期' }}</view>
-        </picker>
-      </view>
-
-      <view class="glass-card form-section h-large">
-        <text class="label">备注</text>
-        <textarea
-          v-model="form.note"
-          placeholder="添加详细描述..."
-          placeholder-class="input-placeholder"
-          class="input-area"
-          maxlength="-1"
-        />
-      </view>
-      <view class="bottom-spacer" />
       </scroll-view>
     </view>
 
@@ -225,7 +227,7 @@ function handleDelete() {
 <style lang="scss" scoped>
 .edit-page {
   min-height: 100vh;
-  padding: 60px 20px 40px;
+  padding: 20px 00px 00px;
   background: linear-gradient(180deg, #f0f4ff 0%, #fff 40%);
   display: flex;
   flex-direction: column;
@@ -240,7 +242,13 @@ function handleDelete() {
 .placeholder-box {
   width: 36px;
 }
-
+.nav-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+  flex: 1;
+  text-align: left;
+}
 .form-content-wrap {
   flex: 1;
   min-height: 0;
@@ -251,12 +259,15 @@ function handleDelete() {
   flex: 1;
   min-height: 0;
   height: 100%;
-  /* H5 隐藏滚动条，避免右侧白条 */
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 .form-content::-webkit-scrollbar {
   display: none;
+}
+.form-content-inner {
+  padding: 30px 40px 60px;
+  min-height: 100%;
 }
 .glass-card {
   background: rgba(255, 255, 255, 0.5);
@@ -356,7 +367,6 @@ function handleDelete() {
 }
 
 .bottom-spacer {
-  height: 90px;
   flex-shrink: 0;
 }
 .bottom-action {
@@ -367,7 +377,7 @@ function handleDelete() {
   padding: 16px 20px;
   padding-bottom: calc(16px + constant(safe-area-inset-bottom, 0));
   padding-bottom: calc(16px + env(safe-area-inset-bottom, 0));
-  background: linear-gradient(to top, #f0f4ff 0%, rgba(240, 244, 255, 0.98) 80%, transparent);
+  background: #fff;
   z-index: 100;
   box-sizing: border-box;
   cursor: pointer;

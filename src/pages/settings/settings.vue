@@ -135,7 +135,7 @@ function clearAndUpload() {
 @use '@/styles/variables.scss' as *;
 .settings-page {
   min-height: 100vh;
-  padding: 60px 20px 40px;
+  padding: 50px 40px 60px;
   background: linear-gradient(180deg, #f0f4ff 0%, #fff 40%);
 }
 .settings-page.page-with-nav .glass-btn {
