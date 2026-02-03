@@ -12,11 +12,13 @@ export default {
 }
 </script>
 
-<style>
+<style lang="scss">
+@use '@/styles/variables.scss' as *;
 /*每个页面公共css */
 @import 'tailwindcss/base';
 @import 'tailwindcss/components';
 @import 'tailwindcss/utilities';
+
 
 html, body {
   margin: 0;
@@ -25,6 +27,15 @@ html, body {
 
 page {
   background-color: #f2f2f7;
+}
+
+/* 公共 Glass 卡片 */
+.glass-card {
+  background: $glass-bg;
+  border: 1px solid $glass-border;
+  box-shadow: $shadow;
+  border-radius: 20px;
+  overflow: hidden;
 }
 
 /* 子页面公共导航样式（edit / archive / settings 根节点加 page-with-nav） */

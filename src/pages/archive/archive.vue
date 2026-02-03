@@ -1,28 +1,33 @@
 <template>
   <view class="archive-page page-with-nav">
-    <view class="nav-header">
-      <view class="glass-btn" @click="goBack">
-        <uni-icons type="back" size="24" color="inherit" />
-      </view>
-      <view class="header-text-col">
-        <text class="nav-title">已完成任务</text>
-        <text class="nav-sub">共 {{ list.length }} 项历史记录</text>
-      </view>
-    </view>
 
     <scroll-view scroll-y class="archive-list" :show-scrollbar="false">
-      <view v-if="list.length === 0" class="empty-archive">
-        <uni-icons type="checkmarkempty" size="48" color="#ccc" />
-        <text>暂无已完成任务</text>
-      </view>
-      <view v-else v-for="task in list" :key="task.id" class="glass-card archive-item">
-        <view class="archive-info">
-          <text class="archive-title">{{ task.title }}</text>
-          <text class="archive-date">{{ formatDateShort(task.completedAt) }} 完成</text>
+     
+      <view class="archive-list-content">
+        <view class="archive-header-row">
+          <view class="glass-btn" @click="goBack">
+            <uni-icons type="back" size="24" color="inherit" />
+          </view>
+          <view class="archive-list-title">
+            <text class="nav-title">已完成任务</text>
+            <text class="nav-sub">共 {{ list.length }} 项历史记录</text>
+          </view>
         </view>
-        <view class="btn-restore" @click="handleRestore(task.id)">
-          <uni-icons type="redo" size="16" color="#15803d" />
+        <view v-if="list.length === 0" class="empty-archive">
+          <uni-icons type="checkmarkempty" size="48" color="#ccc" />
+          <text>暂无已完成任务</text>
         </view>
+        <template v-else>
+          <view v-for="task in list" :key="task.id" class="glass-card archive-item">
+            <view class="archive-info">
+              <text class="archive-title">{{ task.title }}</text>
+              <text class="archive-date">{{ formatDateShort(task.completedAt) }} 完成</text>
+            </view>
+            <view class="btn-restore" @click="handleRestore(task.id)">
+              <uni-icons type="redo" size="16" color="#15803d" />
+            </view>
+          </view>
+        </template>
       </view>
     </scroll-view>
   </view>
@@ -68,10 +73,28 @@ function handleRestore(id) {
 <style lang="scss" scoped>
 .archive-page {
   min-height: 100vh;
-  padding: 60px 20px 40px;
+  padding: 20px 00px 00px;
   background: linear-gradient(180deg, #f0f4ff 0%, #fff 40%);
   display: flex;
   flex-direction: column;
+}
+// 按钮和标题同一行，悬浮在列表顶部
+.archive-header-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 16px;
+  margin-bottom: 8px;
+}
+.archive-list-title {
+  flex: 1;
+  min-width: 0;
+}
+.nav-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+  display: block;
 }
 .nav-sub {
   font-size: 11px;
@@ -84,6 +107,11 @@ function handleRestore(id) {
   flex: 1;
   min-height: 0;
 }
+/* 给卡片阴影留出空间*/
+.archive-list-content {
+  padding: 30px 40px 60px;
+  min-height: 100%;
+}
 .empty-archive {
   display: flex;
   flex-direction: column;
@@ -93,13 +121,6 @@ function handleRestore(id) {
   color: #9ca3af;
   gap: 10px;
   font-size: 13px;
-}
-.glass-card {
-  background: rgba(255, 255, 255, 0.5);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  padding: 20px;
-  margin-bottom: 16px;
 }
 .archive-item {
   display: flex;
@@ -132,7 +153,7 @@ function handleRestore(id) {
 .btn-restore {
   padding: 6px;
   border-radius: 50%;
-  background: #dcfce7;
+  background:rgb(231, 244, 235);
   color: #15803d;
   display: flex;
   align-items: center;

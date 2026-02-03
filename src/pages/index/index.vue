@@ -206,6 +206,7 @@ function loadTasks() {
   syncStatus.value = dataManager.getLastSyncStatus();
 }
 
+//从服务器拉取任务并合并到本地
 function doSyncFromServer() {
   if (!dataManager.hasRemoteConfig()) return;
   loading.value = true;
@@ -217,6 +218,7 @@ function doSyncFromServer() {
   });
 }
 
+//首页组件挂载完成后就从服务器拉取任务到本地
 onMounted(() => {
   loadTasks();
   if (dataManager.hasRemoteConfig()) doSyncFromServer();
@@ -274,13 +276,8 @@ function goSettings() {
 </script>
 
 <style lang="scss" scoped>
-/* 1. 全局变量与基础设置 */
-$glass-bg: rgba(255, 255, 255, 0.45);
-$glass-border: rgba(255, 255, 255, 0.6);
-$shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
-
-/* 强制使用边框盒模型，防止 padding 撑大元素导致重叠 */
-view, text, button, scroll-view, input, textarea {
+@use '@/styles/variables.scss' as *;
+*, *::before, *::after {
   box-sizing: border-box;
 }
 
@@ -329,9 +326,7 @@ view, text, button, scroll-view, input, textarea {
   z-index: 1;
   display: flex;
   flex-direction: column;
-  /* 底部留白避让 FAB + Dock，避免内容被遮挡 */
-  padding-bottom: calc(100px + constant(safe-area-inset-bottom, 0px));
-  padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+
   box-sizing: border-box;
 }
 
@@ -345,15 +340,26 @@ view, text, button, scroll-view, input, textarea {
   overflow: hidden;
 }
 
-/* Glass Card 基础样式 */
-.glass-card {
-  background: $glass-bg;
-  border: 1px solid $glass-border;
-  box-shadow: $shadow;
-  border-radius: 20px;
-  overflow: hidden;
-  /* 移除 backdrop-filter 以提升部分安卓机性能，依靠背景色透明度 */
+/*四宫格区域*/
+.grid-layout{
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 16px;
+  padding-bottom: 16px;
+  min-height: 0;
+    /* 底部留白避让 FAB + Dock，避免内容被遮挡 */
+  padding-bottom: calc(80px + constant(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
 }
+.grid-item {
+  width: calc(50% - 6px);   /* gap 的一半 */
+  height: calc(50% - 6px);
+  min-height: 0;
+  min-width: 0;
+}
+
 
 /* --- 修复后的四象限视图 (Matrix View) --- */
 
@@ -386,22 +392,7 @@ view, text, button, scroll-view, input, textarea {
   .month { font-size: 12px; color: #6b7280; font-weight: 500; margin-top: 4px; display: block; }
 }
 
-/* 核心修复：使用 Grid 布局替代 Flex wrap */
-.grid-layout {
-  flex: 1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 12px 16px;
-  padding-bottom: 16px;
-  min-height: 0;
-}
-.grid-item {
-  width: calc(50% - 6px);   /* gap 的一半 */
-  height: calc(50% - 6px);
-  min-height: 0;
-  min-width: 0;
-}
+
 
 .quadrant-card {
   width: 100%;
@@ -521,11 +512,9 @@ $dock-bar-height: 56px;
   gap: 0;
   padding: 6px 8px;
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  box-shadow:
-    0 4px 20px rgba(31, 38, 135, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  background: $glass-bg;
+  border: 1px solid $glass-border;
+  box-shadow:$shadow;
   min-height: $dock-bar-height;
 }
 
@@ -558,9 +547,9 @@ $dock-bar-height: 56px;
   justify-content: center;
   min-height: 44px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  background: $glass-bg;
+  border: 1px solid $glass-border;
+  box-shadow:$shadow;
   transition: background 0.2s ease, box-shadow 0.2s ease;
 }
 
