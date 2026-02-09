@@ -49,125 +49,70 @@ class TaskScheduler:
         计算下次运行时间
         
         :param frequency: 频率 (daily, weekly, monthly, quarterly, yearly)
-        :param base_time: 基准时间（通常是当前时间或上次运行时间）
-        :param week_day: 周几 (1=周一, 7=周日)，weekly 时使用（如果为None则使用created_time的周几）
-        :param month_day: 每月第几天 (1-31)，monthly 时使用（如果为None则使用created_time的日期）
-        :param quarter_day: 每季度第几天，quarterly 时使用（如果为None则使用created_time的日期）
-        :param year_month: 每年第几月 (1-12)，yearly 时使用（如果为None则使用created_time的月份）
-        :param year_day: 每年该月第几天，yearly 时使用（如果为None则使用created_time的日期）
-        :param created_time: 创建时间，用于确定触发日期（如果为None则使用base_time）
-        :return: 下次运行时间
+        :param base_time: 基准时间（通常是start_time或上次运行时间）
+        :param week_day: 周几 (1=周一, 7=周日)，weekly 时使用（保留用于兼容性，但不影响周期计算）
+        :param month_day: 每月第几天 (1-31)，monthly 时使用（保留用于兼容性，但不影响周期计算）
+        :param quarter_day: 每季度第几天，quarterly 时使用（保留用于兼容性，但不影响周期计算）
+        :param year_month: 每年第几月 (1-12)，yearly 时使用（保留用于兼容性，但不影响周期计算）
+        :param year_day: 每年该月第几天，yearly 时使用（保留用于兼容性，但不影响周期计算）
+        :return: 下次运行时间（保持base_time的时分秒）
         """
         # 如果没有提供创建时间，使用base_time作为参考
         reference_time = created_time if created_time is not None else base_time
         
         if frequency == 'daily':
-            # 每天：直接加1天
+            # 每天：直接加1天，保持原有时分秒
             next_run = base_time + timedelta(days=1)
             return next_run.replace(hour=0, minute=2, second=0, microsecond=0)
         
         elif frequency == 'weekly':
-            # 每周：使用创建时间的周几，如果创建时间未提供则使用base_time的周几
-            # 如果明确指定了week_day，则使用指定的（向后兼容）
-            if week_day is None:
-                # 使用参考时间的周几 (1=周一, 7=周日)
-                target_weekday = reference_time.weekday() + 1
-            else:
-                target_weekday = week_day
-            
-            # 当前是周几 (0=周一, 6=周日)
-            current_weekday = base_time.weekday()
-            target_weekday_0based = target_weekday - 1  # 转换为 0-6
-            
-            # 计算到目标周几还有几天
-            days_ahead = target_weekday_0based - current_weekday
-            if days_ahead <= 0:  # 如果已经过了或是今天，跳到下周
-                days_ahead += 7
-            
-            next_run = base_time + timedelta(days=days_ahead)
-            return next_run.replace(hour=0, minute=2, second=0, microsecond=0)
+            # 每周：直接加7天，保持原有时分秒
+            next_run = base_time + timedelta(days=7)
+            return next_run
         
         elif frequency == 'monthly':
-            # 每月：使用创建时间的日期，如果创建时间未提供则使用base_time的日期
-            if month_day is None:
-                # 使用参考时间的日期
-                target_day = reference_time.day
-            else:
-                target_day = month_day
-            
-            # 尝试下个月的同一天
+            # 每月：从base_time加1个月，保持相同的日期和时间
             year = base_time.year
             month = base_time.month + 1
             if month > 12:
                 month = 1
                 year += 1
             
-            # 处理月末溢出（如2月30日）
+            # 处理月末溢出（如1月31日+1个月，2月没有31日）
+            day = base_time.day
             max_day = monthrange(year, month)[1]
-            actual_day = min(target_day, max_day)
+            actual_day = min(day, max_day)
             
-            next_run = datetime(year, month, actual_day, 0, 2, 0)
+            next_run = datetime(year, month, actual_day, base_time.hour, base_time.minute, base_time.second, base_time.microsecond)
             return next_run
         
         elif frequency == 'quarterly':
-            # 每季度：使用创建时间的日期
-            if quarter_day is None:
-                # 使用参考时间的日期
-                target_day = reference_time.day
-            else:
-                target_day = quarter_day
-            
-            # 季度起始月份
-            quarter_months = [1, 4, 7, 10]
-            
-            # 找到下一个季度月份
-            current_month = base_time.month
-            next_quarter_month = None
-            for qm in quarter_months:
-                if qm > current_month:
-                    next_quarter_month = qm
-                    break
-            
-            if next_quarter_month is None:
-                # 跳到明年第一季度
-                next_quarter_month = 1
-                year = base_time.year + 1
-            else:
-                year = base_time.year
+            # 每季度：从base_time加3个月
+            year = base_time.year
+            month = base_time.month + 3
+            while month > 12:
+                month -= 12
+                year += 1
             
             # 处理日期溢出
-            max_day = monthrange(year, next_quarter_month)[1]
-            actual_day = min(target_day, max_day)
+            day = base_time.day
+            max_day = monthrange(year, month)[1]
+            actual_day = min(day, max_day)
             
-            next_run = datetime(year, next_quarter_month, actual_day, 0, 2, 0)
+            next_run = datetime(year, month, actual_day, base_time.hour, base_time.minute, base_time.second, base_time.microsecond)
             return next_run
         
         elif frequency == 'yearly':
-            # 每年：使用创建时间的月份和日期
-            if year_month is None:
-                # 使用参考时间的月份
-                target_month = reference_time.month
-            else:
-                target_month = year_month
+            # 每年：从base_time加1年，保持相同的月日时间
+            year = base_time.year + 1
+            month = base_time.month
+            day = base_time.day
             
-            if year_day is None:
-                # 使用参考时间的日期
-                target_day = reference_time.day
-            else:
-                target_day = year_day
+            # 处理闰年问题（如2月29日在非闰年）
+            max_day = monthrange(year, month)[1]
+            actual_day = min(day, max_day)
             
-            # 尝试今年的指定日期
-            year = base_time.year
-            # 判断是否已经过了今年的目标日期
-            if base_time.month > target_month or (base_time.month == target_month and base_time.day >= target_day):
-                # 已经过了，跳到明年
-                year += 1
-            
-            # 处理闰年问题（2月29日）
-            max_day = monthrange(year, target_month)[1]
-            actual_day = min(target_day, max_day)
-            
-            next_run = datetime(year, target_month, actual_day, 0, 2, 0)
+            next_run = datetime(year, month, actual_day, base_time.hour, base_time.minute, base_time.second, base_time.microsecond)
             return next_run
         
         else:
