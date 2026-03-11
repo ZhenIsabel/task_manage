@@ -170,7 +170,7 @@ export function syncFromServer(localTasks) {
     if (overwriteRecords.length > 0) {
       appendTaskHistoryRecords(overwriteRecords);
     }
-    setLastSyncStatus('download', true, '���سɹ����� ' + serverTasks.length + ' ������');
+    setLastSyncStatus('download', true, '成功下载' + serverTasks.length + '个任务');
     return { success: true, merged };
   });
 }
@@ -183,7 +183,7 @@ export function syncToServer(localTasks) {
 
   const run = (index) => {
     if (index >= list.length) {
-      setLastSyncStatus('upload', true, '�ϴ��ɹ����� ' + uploaded + ' ������');
+      setLastSyncStatus('upload', true, '成功上传' + uploaded + '个任务');
       return Promise.resolve({ success: true, uploaded });
     }
 
