@@ -6,8 +6,8 @@ import time
 import threading
 from datetime import datetime
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QColorDialog, QSlider,  QMessageBox, QDialog,
-                            QTabWidget, QFormLayout, QSpinBox,  QMenu, QTimeEdit, QLabel, QCheckBox)
-from PyQt6.QtCore import Qt, QPoint,  QRect, QTimer,QUrl, QTime
+                            QTabWidget, QFormLayout, QSpinBox,  QMenu, QTimeEdit, QLabel, QCheckBox, QScrollArea)
+from PyQt6.QtCore import Qt, QPoint,  QRect, QTimer,QUrl, QTime, pyqtSignal
 from PyQt6.QtWidgets import QApplication,QFileDialog
 from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont,  QPainterPath, QLinearGradient, QAction
 try:
@@ -29,6 +29,8 @@ import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
 
 class QuadrantWidget(QWidget):
+    remote_sync_refresh_requested = pyqtSignal(object)
+
     """四象限窗口部件"""
     def __init__(self, config, parent=None, ui_manager=None):
         try:
@@ -42,6 +44,11 @@ class QuadrantWidget(QWidget):
         self.edit_mode = False
         self.tasks = []
         self.undo_stack = []
+        self.db_manager = get_db_manager()
+        self._is_closing = False
+        self._sync_refresh_pending = False
+        self.remote_sync_refresh_requested.connect(self._show_remote_sync_confirmation)
+        self.db_manager.add_task_sync_listener(self._handle_remote_sync)
         
         # 设置为无边框、保持在底层且作为桌面级窗口
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint  | Qt.WindowType.Tool)
@@ -1353,51 +1360,136 @@ class QuadrantWidget(QWidget):
         
         save_config(self.config, self)
     
+    def _handle_remote_sync(self, change_summaries):
+        """后台同步发现远程修改后，投递一次主线程确认。"""
+        if not change_summaries or self._is_closing or self._sync_refresh_pending:
+            return
+        self._sync_refresh_pending = True
+        self.remote_sync_refresh_requested.emit(change_summaries)
+
+    def _show_remote_sync_confirmation(self, change_summaries):
+        """弹出远程修改确认窗口。"""
+        if self._is_closing:
+            self._sync_refresh_pending = False
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("远程修改确认")
+        dialog.setModal(True)
+        dialog.resize(460, 380)
+
+        layout = QVBoxLayout(dialog)
+        message = QLabel("检测到远程修改。请勾选需要接受的项目；未勾选项目会使用本地内容回写到远程。")
+        message.setWordWrap(True)
+        layout.addWidget(message)
+
+        scroll_area = QScrollArea(dialog)
+        scroll_area.setWidgetResizable(True)
+        list_container = QWidget()
+        list_layout = QVBoxLayout(list_container)
+        checkboxes = []
+
+        for change in change_summaries:
+            title = change.get('title') or f"任务 {change.get('id', '')}"
+            change_type = change.get('change_type')
+            if change_type == 'create':
+                prefix = "新增"
+            elif change_type == 'delete':
+                prefix = "删除"
+            else:
+                prefix = "修改"
+            checkbox = QCheckBox(f"[{prefix}] {title}")
+            checkbox.setChecked(True)
+            list_layout.addWidget(checkbox)
+            checkboxes.append((change.get('id'), checkbox))
+
+        list_layout.addStretch()
+        scroll_area.setWidget(list_container)
+        layout.addWidget(scroll_area)
+
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        cancel_button = QPushButton("取消", dialog)
+        confirm_button = QPushButton("确认", dialog)
+        cancel_button.clicked.connect(dialog.reject)
+        confirm_button.clicked.connect(dialog.accept)
+        button_layout.addWidget(cancel_button)
+        button_layout.addWidget(confirm_button)
+        layout.addLayout(button_layout)
+
+        try:
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                logger.info("用户取消了远程修改确认")
+                return
+
+            accepted_ids = []
+            rejected_ids = []
+            for task_id, checkbox in checkboxes:
+                if checkbox.isChecked():
+                    accepted_ids.append(task_id)
+                else:
+                    rejected_ids.append(task_id)
+
+            success = self.db_manager.resolve_pending_remote_task_changes(accepted_ids, rejected_ids)
+            if not success:
+                QMessageBox.warning(self, "同步失败", "处理远程修改失败，请稍后重试。")
+                return
+
+            self.db_manager.flush_cache_to_db()
+            if rejected_ids and getattr(self.db_manager, 'api_base_url', ''):
+                sync_ok = self.db_manager.sync_to_server()
+                logger.info(f"远程修改确认后回写本地版本结果: {sync_ok}")
+                self.db_manager.flush_cache_to_db()
+
+            self.load_tasks()
+        finally:
+            self._sync_refresh_pending = False
     def load_tasks(self):
-        """从文件加载任务（支持历史记录）"""
-        logger.info("正在从文件加载任务...")
-        
+        """从数据库加载任务并刷新主面板。"""
+        logger.info("正在从数据库加载任务...")
+
         # 清除当前所有任务
         for task in self.tasks:
             task.deleteLater()
         self.tasks.clear()
-        
+
         try:
-            # 使用新的历史记录加载函数
             from config.config_manager import load_tasks_with_history
             tasks_data = load_tasks_with_history()
-            
-            # 加载可见的任务
+
             for task_data in tasks_data:
-                # 创建任务标签 - 支持所有自定义字段
                 task = TaskLabel(
-                                task_id=task_data['id'],
-                                color=task_data['color'],
-                                parent=self,
-                                completed=task_data['completed'],
-                                **{field['name']: task_data.get(field['name'], "" if field.get('required') else None) 
-                                for field in self.config.get('task_fields', [])}
-                            )
-                
-                # 设置位置
+                    task_id=task_data['id'],
+                    color=task_data['color'],
+                    parent=self,
+                    completed=task_data['completed'],
+                    **{
+                        field['name']: task_data.get(field['name'], "" if field.get('required') else None)
+                        for field in self.config.get('task_fields', [])
+                    }
+                )
+                task.updated_at = task_data.get('updated_at', '')
+                task.created_at = task_data.get('created_at', '')
+
                 if 'position' in task_data:
                     task.move(task_data['position']['x'], task_data['position']['y'])
-                
-                # 连接信号
+
                 task.deleteRequested.connect(self.delete_task)
                 task.statusChanged.connect(self.save_tasks)
-                
-                # 显示任务并添加到列表
                 task.show()
                 self.tasks.append(task)
+
+            self._sync_refresh_pending = False
             logger.info(f"成功加载了 {len(self.tasks)} 个任务")
         except Exception as e:
+            self._sync_refresh_pending = False
             logger.error(f"加载任务失败: {str(e)}")
             QMessageBox.warning(self, "加载失败", f"加载任务失败: {str(e)}")
-    
+
     def save_tasks(self, task=None):
-        """保存任务到文件"""
-        save_tasks(self.tasks, self)
+        """保存任务到数据库。"""
+        tasks_to_save = self.tasks if task is None else [task]
+        save_tasks(tasks_to_save, self)
 
     def scheduled_task(self):
         """定时任务"""
@@ -1414,31 +1506,25 @@ class QuadrantWidget(QWidget):
         dialog.exec()
 
     def closeEvent(self, event):
-        """关闭事件"""
+        """关闭事件。"""
         logger.info("正在关闭程序...")
-        # 保存配置和任务
+        self._is_closing = True
         self.save_config()
-        self.save_tasks()
-        
-        # 退出前：确保内存缓存写盘并进行一次远程同步
+
         try:
-            db_manager = get_db_manager()
-            # 先写盘，确保数据库与缓存一致
+            db_manager = self.db_manager if getattr(self, 'db_manager', None) else get_db_manager()
+            db_manager.remove_task_sync_listener(self._handle_remote_sync)
             db_manager.flush_cache_to_db()
-            # 如果配置了远程，则执行一次上传同步
             if getattr(db_manager, 'api_base_url', ''):
                 sync_ok = db_manager.sync_to_server()
                 logger.info(f"退出前远程同步结果: {sync_ok}")
-                # 同步后的状态也写盘
                 db_manager.flush_cache_to_db()
-            # 关闭连接并停止后台线程
             db_manager.close_connection()
         except Exception as e:
             logger.error(f"退出时写盘/同步失败: {str(e)}")
-        
+
         logger.info("程序关闭前的保存/同步操作完成，即将退出")
-        # 确保程序完全退出
         from PyQt6.QtWidgets import QApplication
         QApplication.instance().quit()
-        
+
         event.accept()

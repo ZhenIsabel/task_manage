@@ -51,6 +51,9 @@ class DatabaseManager:
         self._deleted_task_ids = set()
         self._cache_lock = threading.Lock()
         self._cache_dirty = False
+        self._task_sync_listeners = []
+        self._listener_lock = threading.Lock()
+        self._pending_remote_task_changes = {}
 
         # 定时flush相关
         self._flush_interval = flush_interval
@@ -349,17 +352,18 @@ class DatabaseManager:
         """同步本地数据到服务器"""
         try:
             with self._cache_lock:
+                if self._pending_remote_task_changes:
+                    logger.info("存在待确认的远程修改，暂不上传本地任务")
+                    return False
                 unsynced_tasks = [copy.deepcopy(task) for task in self._task_cache.values() if task.get('sync_status') != 'synced']
             if not unsynced_tasks:
                 logger.info("没有需要同步的数据")
                 return True
-            
-            # 同步每个任务
+
             for task in unsynced_tasks:
                 task_data = dict(task)
                 task_data['position'] = {'x': task['position_x'], 'y': task['position_y']}
-                
-                # 发送到服务器
+
                 result = self._make_api_request('POST', '/api/tasks', task_data)
                 if result:
                     with self._cache_lock:
@@ -367,7 +371,7 @@ class DatabaseManager:
                         self._cache_dirty = True
                 else:
                     logger.error(f"同步任务 {task['id']} 失败")
-            # 记录同步状态
+
             conn = self.get_connection()
             cursor = conn.cursor()
             cursor.execute('''
@@ -382,35 +386,208 @@ class DatabaseManager:
             return False
 
     def sync_from_server(self) -> bool:
-        """从服务器同步数据到本地"""
+        """从服务器同步数据到本地缓存。"""
         try:
+            with self._cache_lock:
+                pending_summaries = self._build_pending_remote_change_summaries_locked()
+            if pending_summaries:
+                self._notify_task_sync_listeners(pending_summaries)
+                return True
+
             result = self._make_api_request('GET', '/api/tasks')
             if not result:
                 logger.error("无法从服务器获取数据")
                 return False
+
             server_tasks = result.get('tasks', [])
-            updated_count = 0
+            pending_changes = {}
+            server_task_ids = {task_data['id'] for task_data in server_tasks}
             with self._cache_lock:
                 for task_data in server_tasks:
                     local_task = self._task_cache.get(task_data['id'])
-                    if (not local_task) or (task_data['updated_at'] > local_task.get('updated_at', '')):
-                        self._save_task_to_cache(task_data, 'synced')
-                        updated_count += 1
-                self._cache_dirty = True
-            # 记录同步状态
+                    if (not local_task) or self._is_remote_task_newer_or_changed(local_task, task_data):
+                        pending_changes[task_data['id']] = self._build_remote_change(local_task, task_data)
+
+                for task_id, local_task in self._task_cache.items():
+                    if task_id in server_task_ids:
+                        continue
+                    if local_task.get('sync_status') != 'synced':
+                        continue
+                    if local_task.get('deleted'):
+                        continue
+                    pending_changes[task_id] = self._build_remote_delete_change(local_task)
+
+            if not pending_changes:
+                conn = self.get_connection()
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO sync_status (sync_type, status, message)
+                    VALUES (?, ?, ?)
+                ''', ('download', 'success', f'从服务器检查了 {len(server_tasks)} 个任务'))
+                conn.commit()
+                return True
+
+            if not self._has_task_sync_listeners():
+                with self._cache_lock:
+                    for change in pending_changes.values():
+                        self._apply_remote_change_locked(change)
+                conn = self.get_connection()
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO sync_status (sync_type, status, message)
+                    VALUES (?, ?, ?)
+                ''', ('download', 'success', f'从服务器同步了 {len(pending_changes)} 个任务'))
+                conn.commit()
+                return True
+
+            with self._cache_lock:
+                self._pending_remote_task_changes.update(pending_changes)
+                pending_summaries = self._build_pending_remote_change_summaries_locked()
+
             conn = self.get_connection()
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO sync_status (sync_type, status, message)
                 VALUES (?, ?, ?)
-            ''', ('download', 'success', f'从服务器同步了 {len(server_tasks)} 个任务'))
+            ''', ('download', 'pending', f'发现 {len(pending_changes)} 个待确认的远程修改'))
             conn.commit()
-            # logger.info(f"成功从服务器同步 {len(server_tasks)} 个任务")
+
+            self._notify_task_sync_listeners(pending_summaries)
             return True
         except Exception as e:
             logger.error(f"从服务器同步失败: {str(e)}")
             return False
 
+    def add_task_sync_listener(self, listener) -> None:
+        """注册任务下载同步后的回调。"""
+        if listener is None:
+            return
+        with self._listener_lock:
+            if listener not in self._task_sync_listeners:
+                self._task_sync_listeners.append(listener)
+
+    def remove_task_sync_listener(self, listener) -> None:
+        """移除任务下载同步后的回调。"""
+        with self._listener_lock:
+            if listener in self._task_sync_listeners:
+                self._task_sync_listeners.remove(listener)
+
+    def _has_task_sync_listeners(self) -> bool:
+        """是否存在任务同步监听器。"""
+        with self._listener_lock:
+            return bool(self._task_sync_listeners)
+
+    def _notify_task_sync_listeners(self, change_summaries) -> None:
+        """通知界面层：有新的服务端任务等待确认。"""
+        with self._listener_lock:
+            listeners = list(self._task_sync_listeners)
+
+        for listener in listeners:
+            try:
+                listener(copy.deepcopy(change_summaries))
+            except Exception as e:
+                logger.error(f"任务同步回调执行失败: {str(e)}")
+
+    def _cache_task_to_task_data(self, cache_task: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """将缓存中的任务记录转换成外部任务数据结构。"""
+        if not cache_task:
+            return None
+
+        task_data = dict(cache_task)
+        task_data['position'] = {
+            'x': task_data.pop('position_x', 100),
+            'y': task_data.pop('position_y', 100)
+        }
+        return task_data
+
+    def _is_remote_task_newer_or_changed(self, local_task: Dict[str, Any], remote_task: Dict[str, Any]) -> bool:
+        """判断远程任务是否比本地更新，或其完成/删除状态已变化。"""
+        if remote_task.get('updated_at', '') > local_task.get('updated_at', ''):
+            return True
+
+        local_task_data = self._cache_task_to_task_data(local_task)
+        return any([
+            bool(remote_task.get('completed', False)) != bool(local_task_data.get('completed', False)),
+            bool(remote_task.get('deleted', False)) != bool(local_task_data.get('deleted', False)),
+            str(remote_task.get('completed_date', '') or '') != str(local_task_data.get('completed_date', '') or ''),
+        ])
+
+    def _build_remote_change(self, local_task: Optional[Dict[str, Any]], remote_task: Dict[str, Any]) -> Dict[str, Any]:
+        """构造待确认的远程修改项。"""
+        local_task_data = self._cache_task_to_task_data(local_task)
+        title = remote_task.get('text') or (local_task_data.get('text') if local_task_data else '') or f"任务 {remote_task['id']}"
+        return {
+            'id': remote_task['id'],
+            'title': str(title),
+            'change_type': 'create' if local_task_data is None else 'update',
+            'local_task': copy.deepcopy(local_task_data),
+            'remote_task': copy.deepcopy(remote_task),
+        }
+
+    def _build_remote_delete_change(self, local_task: Dict[str, Any]) -> Dict[str, Any]:
+        """构造远程已删除任务的待确认项。"""
+        local_task_data = self._cache_task_to_task_data(local_task)
+        remote_task = copy.deepcopy(local_task_data)
+        remote_task['deleted'] = True
+        remote_task['completed'] = False
+        remote_task['completed_date'] = ''
+        remote_task['updated_at'] = datetime.now().isoformat()
+        return {
+            'id': local_task_data['id'],
+            'title': str(local_task_data.get('text') or f"任务 {local_task_data['id']}"),
+            'change_type': 'delete',
+            'local_task': copy.deepcopy(local_task_data),
+            'remote_task': remote_task,
+        }
+
+    def _build_pending_remote_change_summaries_locked(self) -> List[Dict[str, Any]]:
+        """生成待确认远程修改的摘要。"""
+        summaries = []
+        for change in self._pending_remote_task_changes.values():
+            summaries.append({
+                'id': change['id'],
+                'title': change.get('title', ''),
+                'change_type': change.get('change_type', 'update'),
+            })
+        summaries.sort(key=lambda item: item.get('title', ''))
+        return summaries
+
+    def _apply_remote_change_locked(self, change: Dict[str, Any]) -> None:
+        """接受远程修改并写入本地缓存。"""
+        self._save_task_to_cache(change['remote_task'], 'synced')
+
+    def _reject_remote_change_locked(self, change: Dict[str, Any]) -> None:
+        """拒绝远程修改，保留本地版本并标记为待上传。"""
+        local_task = change.get('local_task')
+        if local_task is None:
+            local_task = copy.deepcopy(change['remote_task'])
+            local_task['deleted'] = True
+            local_task['completed'] = False
+            local_task['completed_date'] = ''
+        else:
+            local_task = copy.deepcopy(local_task)
+
+        local_task['updated_at'] = datetime.now().isoformat()
+        self._save_task_to_cache(local_task, 'modified')
+
+    def resolve_pending_remote_task_changes(self, accepted_ids: List[str], rejected_ids: List[str]) -> bool:
+        """处理待确认的远程修改。"""
+        try:
+            accepted_set = set(accepted_ids or [])
+            rejected_set = set(rejected_ids or [])
+            with self._cache_lock:
+                pending_ids = set(self._pending_remote_task_changes.keys())
+                for task_id in pending_ids & accepted_set:
+                    self._apply_remote_change_locked(self._pending_remote_task_changes[task_id])
+                for task_id in pending_ids & rejected_set:
+                    self._reject_remote_change_locked(self._pending_remote_task_changes[task_id])
+                for task_id in pending_ids & (accepted_set | rejected_set):
+                    self._pending_remote_task_changes.pop(task_id, None)
+                self._cache_dirty = True
+            return True
+        except Exception as e:
+            logger.error(f"处理待确认远程修改失败: {str(e)}")
+            return False
     def clear_server_and_upload(self) -> bool:
         """清空服务器任务后，用本地任务覆盖上传。
         步骤：
@@ -515,6 +692,8 @@ class DatabaseManager:
         self._task_cache[task_id] = task
         if deleted:
             self._deleted_task_ids.add(task_id)
+        else:
+            self._deleted_task_ids.discard(task_id)
         self._cache_dirty = True
 
     def save_task(self, task_data: Dict[str, Any]) -> bool:
@@ -966,30 +1145,28 @@ class DatabaseManager:
             return False
 
     def _periodic_sync_worker(self):
-        """
-        定时同步线程的工作函数。
-        """
+        """定时同步线程的工作函数。"""
         logger.info("定时同步线程工作函数启动")
         while not self._stop_sync_event.is_set():
             try:
-                logger.info("定时同步：开始同步普通任务到服务器")
-                self.sync_to_server()
                 logger.info("定时同步：开始从服务器同步普通任务")
                 self.sync_from_server()
-                
-                logger.info("定时同步：开始同步定时任务到服务器")
-                self.sync_scheduled_tasks_to_server()
+                logger.info("定时同步：开始同步普通任务到服务器")
+                self.sync_to_server()
+
                 logger.info("定时同步：开始从服务器同步定时任务")
                 self.sync_scheduled_tasks_from_server()
+                logger.info("定时同步：开始同步定时任务到服务器")
+                self.sync_scheduled_tasks_to_server()
             except Exception as e:
                 logger.error(f"定时同步异常: {str(e)}")
+
             # 等待下一个周期或直到被停止
             self._stop_sync_event.wait(self._sync_interval)
+
         logger.info("定时同步线程退出")
 
-# 全局数据库管理器实例
 _db_manager = None
-
 def get_db_manager(sync_interval: int = 180, flush_interval: int = 5) -> DatabaseManager:
     """获取全局数据库管理器实例，可选定时同步间隔（秒）和flush间隔（秒）"""
     global _db_manager
