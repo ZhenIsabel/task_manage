@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <view class="archive-page page-with-nav">
     <scroll-view scroll-y class="archive-list" :show-scrollbar="false">
       <view class="archive-list-content">

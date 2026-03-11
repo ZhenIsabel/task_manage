@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <view class="container">
     <view class="background-blobs">
       <view class="blob blue"></view>

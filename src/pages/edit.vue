@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <view class="edit-page page-with-nav">
     <view class="form-content-wrap">
       <scroll-view scroll-y class="form-content" :style="scrollViewHeight ? { height: scrollViewHeight } : {}" :show-scrollbar="false">
