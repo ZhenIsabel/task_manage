@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <view class="edit-page page-with-nav">
     <view class="form-content-wrap">
       <scroll-view scroll-y class="form-content" :style="scrollViewHeight ? { height: scrollViewHeight } : {}" :show-scrollbar="false">
@@ -63,12 +63,8 @@
       </scroll-view>
     </view>
 
-    <view
-      class="bottom-action"
-      data-agent="bottom-action-wrap"
-      @tap.stop="onSaveTap"
-    >
-      <view class="btn-save" :class="{ disabled: !(form.title || '').trim() }">保 存</view>
+    <view class="bottom-action" data-agent="bottom-action-wrap" @tap.stop="onSaveTap">
+      <view class="btn-save" :class="{ disabled: !(form.title || '').trim() }">保存</view>
     </view>
   </view>
 </template>
@@ -107,7 +103,7 @@ onLoad((options) => {
 onMounted(() => {
   if (taskId.value) {
     const list = dataManager.loadTasksFromStorage();
-    const task = list.find((t) => t.id === taskId.value);
+    const task = list.find((item) => item.id === taskId.value);
     if (task) {
       form.title = task.title ?? '';
       form.note = task.note ?? '';
@@ -119,14 +115,15 @@ onMounted(() => {
   } else {
     Object.assign(form, defaultForm());
   }
+
   try {
     const sys = uni.getSystemInfoSync();
     const winH = sys.windowHeight || sys.screenHeight || 0;
     const top = 60 + 36 + 24;
     const bottom = 50 + 16 + 40;
-    if (winH > top + bottom) scrollViewHeight.value = (winH - top - bottom) + 'px';
+    if (winH > top + bottom) scrollViewHeight.value = `${winH - top - bottom}px`;
   } catch (_) {}
-  // #region agent log
+
   nextTick(() => {
     const instance = getCurrentInstance();
     if (!instance || !instance.proxy) return;
@@ -136,10 +133,25 @@ onMounted(() => {
     q.selectViewport().fields({ size: true, scrollOffset: true });
     q.exec((res) => {
       const [bottomAction, formContent, viewport] = res || [];
-      fetch('http://127.0.0.1:7244/ingest/dc396521-042c-48ee-aa0f-06555631d63b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'edit.vue:onMounted',message:'layout query',data:{bottomAction:bottomAction||null,formContentHeight:formContent?.height,viewportHeight:viewport?.height,viewportScrollTop:viewport?.scrollTop},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,B,C,D'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7244/ingest/dc396521-042c-48ee-aa0f-06555631d63b', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'edit.vue:onMounted',
+          message: 'layout query',
+          data: {
+            bottomAction: bottomAction || null,
+            formContentHeight: formContent?.height,
+            viewportHeight: viewport?.height,
+            viewportScrollTop: viewport?.scrollTop,
+          },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          hypothesisId: 'A,B,C,D',
+        }),
+      }).catch(() => {});
     });
   });
-  // #endregion
 });
 
 function goBack() {
@@ -163,6 +175,7 @@ function onSaveTap() {
 function handleSave() {
   if (saving.value) return;
   saving.value = true;
+
   const payload = {
     title: form.title.trim(),
     note: form.note ?? '',
@@ -171,15 +184,18 @@ function handleSave() {
     importance: form.importance,
     urgency: form.urgency,
   };
+
   if (taskId.value) {
     const list = dataManager.loadTasksFromStorage();
-    const task = list.find((t) => t.id === taskId.value);
+    const task = list.find((item) => item.id === taskId.value);
     if (!task) {
+      saving.value = false;
       uni.showToast({ title: '任务不存在', icon: 'none' });
       return;
     }
+
     const updated = { ...task, ...payload };
-    dataManager.saveTask(updated, true).then(() => {
+    dataManager.saveTask(updated, false).then(() => {
       uni.showToast({ title: '已保存', icon: 'success' });
       setTimeout(() => {
         saving.value = false;
@@ -189,24 +205,26 @@ function handleSave() {
       saving.value = false;
       uni.showToast({ title: '保存失败', icon: 'none' });
     });
-  } else {
-    const newTask = {
-      id: Math.random().toString(36).substr(2, 9),
-      ...payload,
-      isCompleted: false,
-      completedAt: null,
-    };
-    dataManager.saveTask(newTask, true).then(() => {
-      uni.showToast({ title: '已保存', icon: 'success' });
-      setTimeout(() => {
-        saving.value = false;
-        uni.navigateBack();
-      }, 300);
-    }).catch(() => {
-      saving.value = false;
-      uni.showToast({ title: '保存失败', icon: 'none' });
-    });
+    return;
   }
+
+  const newTask = {
+    id: Math.random().toString(36).slice(2, 11),
+    ...payload,
+    isCompleted: false,
+    completedAt: null,
+  };
+
+  dataManager.saveTask(newTask, false).then(() => {
+    uni.showToast({ title: '已保存', icon: 'success' });
+    setTimeout(() => {
+      saving.value = false;
+      uni.navigateBack();
+    }, 300);
+  }).catch(() => {
+    saving.value = false;
+    uni.showToast({ title: '保存失败', icon: 'none' });
+  });
 }
 
 function handleDelete() {
@@ -215,7 +233,7 @@ function handleDelete() {
     content: '删除后无法恢复，确定删除吗？',
     success: (res) => {
       if (!res.confirm) return;
-      dataManager.deleteTask(taskId.value, true).then(() => {
+      dataManager.deleteTask(taskId.value, false).then(() => {
         uni.showToast({ title: '已删除', icon: 'success' });
         setTimeout(() => uni.navigateBack(), 300);
       }).catch(() => {});
@@ -227,21 +245,25 @@ function handleDelete() {
 <style lang="scss" scoped>
 .edit-page {
   min-height: 100vh;
-  padding: 20px 00px 00px;
+  padding: 20px 0 0;
   background: linear-gradient(180deg, #f0f4ff 0%, #fff 40%);
   display: flex;
   flex-direction: column;
 }
+
 .nav-header {
   justify-content: space-between;
 }
+
 .glass-btn.red-theme {
   background: rgba(254, 226, 226, 0.8);
   color: #dc2626;
 }
+
 .placeholder-box {
   width: 36px;
 }
+
 .nav-title {
   font-size: 18px;
   font-weight: 600;
@@ -249,12 +271,14 @@ function handleDelete() {
   flex: 1;
   text-align: left;
 }
+
 .form-content-wrap {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
+
 .form-content {
   flex: 1;
   min-height: 0;
@@ -262,13 +286,15 @@ function handleDelete() {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
+
 .form-content::-webkit-scrollbar {
   display: none;
 }
+
 .form-content-inner {
   padding: 30px 40px 60px;
-  /* min-height 由 :style 绑定 scrollViewHeight，避免 100% 解析成 100vh 导致底部可滚空白 */
 }
+
 .glass-card {
   background: rgba(255, 255, 255, 0.5);
   border-radius: 16px;
@@ -276,9 +302,11 @@ function handleDelete() {
   padding: 20px;
   margin-bottom: 16px;
 }
+
 .form-section {
   padding: 16px;
 }
+
 .form-section .label {
   display: block;
   font-size: 11px;
@@ -287,11 +315,13 @@ function handleDelete() {
   text-transform: uppercase;
   margin-bottom: 8px;
 }
+
 .flex-label {
   display: flex;
   align-items: center;
   gap: 4px;
 }
+
 .input-title {
   width: 100%;
   height: 30px;
@@ -299,6 +329,7 @@ function handleDelete() {
   font-weight: 600;
   color: #1f2937;
 }
+
 .input-placeholder {
   color: #9ca3af;
 }
@@ -308,14 +339,17 @@ function handleDelete() {
   gap: 12px;
   margin-bottom: 16px;
 }
+
 .row-2-col .form-section {
   flex: 1;
   margin-bottom: 0;
 }
+
 .toggle-group {
   display: flex;
   gap: 6px;
 }
+
 .toggle-btn {
   flex: 1;
   padding: 6px 0;
@@ -325,12 +359,15 @@ function handleDelete() {
   border-radius: 8px;
   background: rgba(0, 0, 0, 0.03);
   color: #6b7280;
+
   &.active {
     background: #3b82f6;
     color: white;
+
     &.red {
       background: #ef4444;
     }
+
     &.orange {
       background: #f97316;
     }
@@ -342,6 +379,7 @@ function handleDelete() {
   justify-content: space-between;
   align-items: center;
 }
+
 .label-row {
   display: flex;
   align-items: center;
@@ -350,6 +388,7 @@ function handleDelete() {
   font-weight: 500;
   color: #4b5563;
 }
+
 .picker-value {
   font-size: 14px;
   color: #1f2937;
@@ -358,6 +397,7 @@ function handleDelete() {
 .h-large {
   height: 140px;
 }
+
 .input-area {
   width: 100%;
   height: 100%;
@@ -369,6 +409,7 @@ function handleDelete() {
 .bottom-spacer {
   flex-shrink: 0;
 }
+
 .bottom-action {
   position: fixed;
   left: 0;
@@ -382,6 +423,7 @@ function handleDelete() {
   box-sizing: border-box;
   cursor: pointer;
 }
+
 .btn-save {
   width: 100%;
   height: 50px;
@@ -400,6 +442,7 @@ function handleDelete() {
   align-items: center;
   justify-content: center;
   pointer-events: auto;
+
   &.disabled {
     opacity: 0.2;
     pointer-events: none;

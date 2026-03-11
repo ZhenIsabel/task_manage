@@ -27,9 +27,9 @@
     </view>
 
     <view v-if="hasRemote" class="actions-card glass-card">
-      <text class="section-title">数据同步 / 备份</text>
+      <text class="section-title">数据同步</text>
       <button class="btn-action" @tap="syncFrom">从服务器拉取任务</button>
-      <button class="btn-action" :disabled="uploadDisabled" :class="{ disabled: uploadDisabled }" @tap="syncTo">上传本地任务到服务器</button>
+      <button class="btn-action" @tap="syncTo">上传本地任务到服务器</button>
       <button class="btn-action danger" :disabled="clearDisabled" :class="{ disabled: clearDisabled }" @tap="clearAndUpload">清空服务器并用本地覆盖</button>
       <view v-if="lastSync" class="sync-info">
         <text>最近同步：{{ lastSync.sync_type }} - {{ lastSync.message }}</text>
@@ -54,8 +54,7 @@ const form = reactive({
 
 const hasRemote = ref(false);
 const lastSync = ref(null);
-// 暂时禁用上传与清空覆盖功能
-const uploadDisabled = true;
+const uploadDisabled = false;
 const clearDisabled = true;
 
 onMounted(() => {
@@ -86,7 +85,7 @@ function syncFrom() {
     uni.hideLoading();
     lastSync.value = dataManager.getLastSyncStatus();
     if (res.success) {
-      uni.showToast({ title: '拉取成功，请返回首页查看', icon: 'success' });
+      uni.showToast({ title: '拉取成功', icon: 'success' });
     } else {
       uni.showToast({ title: res.error || '拉取失败', icon: 'none' });
     }
@@ -133,25 +132,30 @@ function clearAndUpload() {
 
 <style lang="scss" scoped>
 @use '@/styles/variables.scss' as *;
+
 .settings-page {
   min-height: 100vh;
   padding: 50px 40px 60px;
   background: linear-gradient(180deg, #f0f4ff 0%, #fff 40%);
 }
+
 .settings-page.page-with-nav .glass-btn {
   background: rgba(255, 255, 255, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.6);
 }
+
 .nav-title {
   font-size: 18px;
   font-weight: 600;
   color: #1f2937;
   display: block;
 }
+
 .glass-card {
   padding: 20px;
   margin-bottom: 16px;
 }
+
 .form-card .label {
   display: block;
   font-size: 13px;
@@ -160,9 +164,11 @@ function clearAndUpload() {
   margin-bottom: 6px;
   margin-top: 12px;
 }
+
 .form-card .label:first-child {
   margin-top: 0;
 }
+
 .input {
   width: 100%;
   height: 44px;
@@ -173,9 +179,11 @@ function clearAndUpload() {
   font-size: 14px;
   box-sizing: border-box;
 }
+
 .placeholder {
   color: #9ca3af;
 }
+
 .btn-save {
   margin-top: 20px;
   width: 100%;
@@ -190,6 +198,7 @@ function clearAndUpload() {
   box-shadow: $shadow;
   border: 1px solid $glass-border;
 }
+
 .section-title {
   font-size: 14px;
   font-weight: 700;
@@ -197,6 +206,7 @@ function clearAndUpload() {
   margin-bottom: 12px;
   display: block;
 }
+
 .btn-action {
   width: 100%;
   height: 44px;
@@ -209,26 +219,31 @@ function clearAndUpload() {
   font-weight: 600;
   margin-bottom: 10px;
 }
+
 .btn-action.danger {
   background: rgba(220, 38, 38, 0.08);
   color: #dc2626;
   border-color: rgba(220, 38, 38, 0.2);
 }
+
 .btn-action.disabled {
   opacity: 0.5;
   color: #9ca3af;
   border-color: rgba(0, 0, 0, 0.08);
   background: rgba(0, 0, 0, 0.04);
 }
+
 .btn-action.danger.disabled {
   color: #9ca3af;
   border-color: rgba(0, 0, 0, 0.08);
 }
+
 .sync-info {
   margin-top: 12px;
   font-size: 12px;
   color: #6b7280;
 }
+
 .tip {
   font-size: 12px;
   color: #9ca3af;
