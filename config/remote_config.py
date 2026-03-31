@@ -35,19 +35,22 @@ class RemoteConfigManager:
             print(f"保存远程配置失败: {str(e)}")
             return False
     
-    def set_server_config(self, api_base_url: str, api_token: str) -> bool:
+    def set_server_config(self, api_base_url: str, api_token: str, username: str = '') -> bool:
         """设置服务器配置"""
         config = {
             'api_base_url': api_base_url,
             'api_token': api_token
         }
+        if username:
+            config['username'] = username
         return self.save_config(config)
     
     def get_server_config(self) -> Dict:
         """获取服务器配置"""
         return {
             'api_base_url': self.config.get('api_base_url', ''),
-            'api_token': self.config.get('api_token', '')
+            'api_token': self.config.get('api_token', ''),
+            'username': self.config.get('username', '')
         }
     
     def test_connection(self) -> bool:
@@ -106,9 +109,10 @@ def main():
             print("\n=== 设置服务器配置 ===")
             api_base_url = input("请输入API服务器地址 (例如: https://api.example.com): ").strip()
             api_token = input("请输入API访问令牌: ").strip()
+            username = input("请输入用户名: ").strip()
             
             if api_base_url and api_token:
-                if config_manager.set_server_config(api_base_url, api_token):
+                if config_manager.set_server_config(api_base_url, api_token, username=username):
                     print("✅ 服务器配置设置成功")
                 else:
                     print("❌ 服务器配置设置失败")
@@ -121,6 +125,7 @@ def main():
             if config['api_base_url']:
                 print(f"服务器地址: {config['api_base_url']}")
                 print(f"访问令牌: {config['api_token'][:10]}..." if config['api_token'] else "未设置")
+                print(f"用户名: {config['username']}" if config['username'] else "用户名: 未设置")
             else:
                 print("未配置服务器信息")
                 

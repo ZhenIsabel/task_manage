@@ -49,6 +49,7 @@ class QuadrantWidget(QWidget):
         self._sync_refresh_pending = False
         self.remote_sync_refresh_requested.connect(self._show_remote_sync_confirmation)
         self.db_manager.add_task_sync_listener(self._handle_remote_sync)
+        QTimer.singleShot(0, self._bootstrap_remote_sync)
         
         # 设置为无边框、保持在底层且作为桌面级窗口
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint  | Qt.WindowType.Tool)
@@ -1367,6 +1368,16 @@ class QuadrantWidget(QWidget):
         self._sync_refresh_pending = True
         self.remote_sync_refresh_requested.emit(change_summaries)
 
+    def _bootstrap_remote_sync(self):
+        """在界面监听器就绪后显式触发远程同步。"""
+        if self._is_closing or not getattr(self.db_manager, 'api_base_url', ''):
+            return
+
+        sync_ok = self.db_manager.bootstrap_remote_sync()
+        logger.info(f"启动后远程同步结果: {sync_ok}")
+        if sync_ok and not self._sync_refresh_pending:
+            self.load_tasks()
+
     def _show_remote_sync_confirmation(self, change_summaries):
         """弹出远程修改确认窗口。"""
         if self._is_closing:
@@ -1390,7 +1401,7 @@ class QuadrantWidget(QWidget):
         checkboxes = []
 
         for change in change_summaries:
-            title = change.get('title') or f"任务 {change.get('id', '')}"
+            title = change.get('title') or f"任务 {change.get('entity_id') or change.get('id', '')}"
             change_type = change.get('change_type')
             if change_type == 'create':
                 prefix = "新增"
@@ -1398,7 +1409,13 @@ class QuadrantWidget(QWidget):
                 prefix = "删除"
             else:
                 prefix = "修改"
-            checkbox = QCheckBox(f"[{prefix}] {title}")
+
+            if change.get('entity_type') == 'scheduled_task':
+                label_prefix = f"[定时任务][{prefix}]"
+            else:
+                label_prefix = f"[{prefix}]"
+
+            checkbox = QCheckBox(f"{label_prefix} {title}")
             checkbox.setChecked(True)
             list_layout.addWidget(checkbox)
             checkboxes.append((change.get('id'), checkbox))

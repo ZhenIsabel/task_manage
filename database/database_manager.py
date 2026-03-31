@@ -41,6 +41,8 @@ class DatabaseManager:
         self.remote_config = remote_config or {}
         self.api_base_url = self.remote_config.get('api_base_url', '')
         self.api_token = self.remote_config.get('api_token', '')
+        self.username = self.remote_config.get('username', '')
+        self._remote_user_registration_attempted = False
         self._sync_interval = sync_interval
         self._sync_thread = None
         self._stop_sync_event = threading.Event()
@@ -69,9 +71,6 @@ class DatabaseManager:
         self.init_database()
         self._load_all_tasks_to_cache()
         self.start_periodic_flush(self._flush_interval)
-        # 启用定时同步
-        if self._sync_interval and self.api_base_url:
-            self.start_periodic_sync(self._sync_interval)
 
     def get_connection(self):
         """获取数据库连接"""
@@ -194,16 +193,60 @@ class DatabaseManager:
             logger.error(f"数据库初始化失败: {str(e)}")
             raise
 
-    def _make_api_request(self, method: str, endpoint: str, data: Optional[Dict] = None) -> Optional[Dict]:
+    def _is_public_endpoint(self, endpoint: str) -> bool:
+        """判断接口是否为无需鉴权的公共接口。"""
+        normalized_endpoint = f"/{endpoint.lstrip('/')}"
+        return normalized_endpoint in {'/api/health', '/api/users'}
+
+    def _build_api_headers(self, endpoint: str) -> Dict[str, str]:
+        """构造接口请求头。"""
+        headers = {'Content-Type': 'application/json'}
+        if (not self._is_public_endpoint(endpoint)) and self.api_token:
+            headers['Authorization'] = f'Bearer {self.api_token}'
+        return headers
+
+    def _register_remote_user(self) -> bool:
+        """首次鉴权失败时，尝试按配置自动注册远程用户。"""
+        if self._remote_user_registration_attempted:
+            return False
+
+        self._remote_user_registration_attempted = True
+        if not self.api_base_url or not self.username or not self.api_token:
+            logger.warning("缺少远程注册所需的 username 或 api_token，跳过自动注册")
+            return False
+
+        try:
+            response = requests.request(
+                method='POST',
+                url=f"{self.api_base_url.rstrip('/')}/api/users",
+                headers=self._build_api_headers('/api/users'),
+                json={'username': self.username, 'api_token': self.api_token},
+                timeout=30
+            )
+        except requests.exceptions.Timeout:
+            logger.error("自动注册远程用户超时")
+            return False
+        except requests.exceptions.ConnectionError:
+            logger.error("自动注册远程用户时连接失败")
+            return False
+        except Exception as e:
+            logger.error(f"自动注册远程用户异常: {str(e)}")
+            return False
+
+        if response.status_code in (200, 201, 409):
+            logger.info(f"自动注册远程用户结果: {response.status_code}")
+            return True
+
+        logger.error(f"自动注册远程用户失败: {response.status_code} - {response.text}")
+        return False
+
+    def _make_api_request(self, method: str, endpoint: str, data: Optional[Dict] = None, retry_on_auth_failure: bool = True) -> Optional[Dict]:
         if not self.api_base_url:
             logger.debug("未配置API服务器地址，跳过API请求")
             return None
         try:
             url = f"{self.api_base_url.rstrip('/')}/{endpoint.lstrip('/')}"
-            headers = {
-                'Content-Type': 'application/json',
-                'Authorization': f'Bearer {self.api_token}'
-            }
+            headers = self._build_api_headers(endpoint)
             logger.debug(f"发送API请求: {method} {url}")
             if data:
                 logger.debug(f"请求数据: {json.dumps(data, ensure_ascii=False)[:200]}...")
@@ -215,16 +258,28 @@ class DatabaseManager:
                 timeout=30
             )
             logger.debug(f"API响应状态: {response.status_code}")
-            if response.status_code == 200:
-                result = response.json()
+            if response.status_code in (200, 201):
                 logger.debug(f"API请求成功: {endpoint}")
-                return result
-            elif response.status_code == 500:
-                logger.error(f"API请求失败：服务器内部错误")
-                logger.error(f"错误信息: {response.text}")
-            else:
-                logger.error(f"API请求失败: {response.status_code} - {response.text}")
+                try:
+                    return response.json()
+                except ValueError:
+                    return {}
+            if response.status_code == 204:
+                logger.debug(f"API请求成功且无响应体: {endpoint}")
+                return {}
+            if response.status_code == 401 and retry_on_auth_failure and (not self._is_public_endpoint(endpoint)):
+                logger.warning(f"API鉴权失败，尝试自动注册用户后重试: {endpoint}")
+                if self._register_remote_user():
+                    return self._make_api_request(method, endpoint, data, retry_on_auth_failure=False)
+                logger.error("自动注册远程用户失败，无法重试业务请求")
                 return None
+            if response.status_code == 500:
+                logger.error("API请求失败：服务器内部错误")
+                logger.error(f"错误信息: {response.text}")
+                return None
+
+            logger.error(f"API请求失败: {response.status_code} - {response.text}")
+            return None
         except requests.exceptions.Timeout:
             logger.error(f"API请求超时: {endpoint}")
             return None
@@ -234,6 +289,23 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"API请求异常: {str(e)}")
             return None
+
+    def bootstrap_remote_sync(self) -> bool:
+        """在界面监听器就绪后，显式触发一次远程健康检查与拉取。"""
+        if not self.api_base_url:
+            logger.info("未配置远程服务器，跳过启动同步")
+            return False
+
+        health = self._make_api_request('GET', '/api/health')
+        if not health:
+            logger.warning("远程服务健康检查失败，保留本地数据")
+            return False
+
+        tasks_ok = self.sync_from_server()
+        scheduled_ok = self.sync_scheduled_tasks_from_server()
+        if self._sync_interval:
+            self.start_periodic_sync(self._sync_interval)
+        return tasks_ok and scheduled_ok
 
     def _load_all_tasks_to_cache(self):
         """启动时加载所有任务到内存缓存"""
@@ -406,7 +478,8 @@ class DatabaseManager:
                 for task_data in server_tasks:
                     local_task = self._task_cache.get(task_data['id'])
                     if (not local_task) or self._is_remote_task_newer_or_changed(local_task, task_data):
-                        pending_changes[task_data['id']] = self._build_remote_change(local_task, task_data)
+                        change = self._build_remote_change(local_task, task_data)
+                        pending_changes[change['change_key']] = change
 
                 for task_id, local_task in self._task_cache.items():
                     if task_id in server_task_ids:
@@ -415,7 +488,8 @@ class DatabaseManager:
                         continue
                     if local_task.get('deleted'):
                         continue
-                    pending_changes[task_id] = self._build_remote_delete_change(local_task)
+                    change = self._build_remote_delete_change(local_task)
+                    pending_changes[change['change_key']] = change
 
             if not pending_changes:
                 conn = self.get_connection()
@@ -515,13 +589,16 @@ class DatabaseManager:
     def _build_remote_change(self, local_task: Optional[Dict[str, Any]], remote_task: Dict[str, Any]) -> Dict[str, Any]:
         """构造待确认的远程修改项。"""
         local_task_data = self._cache_task_to_task_data(local_task)
-        title = remote_task.get('text') or (local_task_data.get('text') if local_task_data else '') or f"任务 {remote_task['id']}"
+        entity_id = remote_task['id']
+        title = remote_task.get('text') or (local_task_data.get('text') if local_task_data else '') or f"任务 {entity_id}"
         return {
-            'id': remote_task['id'],
+            'change_key': f'task:{entity_id}',
+            'entity_type': 'task',
+            'entity_id': entity_id,
             'title': str(title),
             'change_type': 'create' if local_task_data is None else 'update',
-            'local_task': copy.deepcopy(local_task_data),
-            'remote_task': copy.deepcopy(remote_task),
+            'local_record': copy.deepcopy(local_task_data),
+            'remote_record': copy.deepcopy(remote_task),
         }
 
     def _build_remote_delete_change(self, local_task: Dict[str, Any]) -> Dict[str, Any]:
@@ -532,12 +609,29 @@ class DatabaseManager:
         remote_task['completed'] = False
         remote_task['completed_date'] = ''
         remote_task['updated_at'] = datetime.now().isoformat()
+        entity_id = local_task_data['id']
         return {
-            'id': local_task_data['id'],
-            'title': str(local_task_data.get('text') or f"任务 {local_task_data['id']}"),
+            'change_key': f'task:{entity_id}',
+            'entity_type': 'task',
+            'entity_id': entity_id,
+            'title': str(local_task_data.get('text') or f"任务 {entity_id}"),
             'change_type': 'delete',
-            'local_task': copy.deepcopy(local_task_data),
-            'remote_task': remote_task,
+            'local_record': copy.deepcopy(local_task_data),
+            'remote_record': remote_task,
+        }
+
+    def _build_scheduled_remote_change(self, local_task: Optional[Dict[str, Any]], remote_task: Dict[str, Any]) -> Dict[str, Any]:
+        """构造待确认的远程定时任务修改项。"""
+        entity_id = remote_task['id']
+        title = remote_task.get('title') or (local_task.get('title') if local_task else '') or f"定时任务 {entity_id}"
+        return {
+            'change_key': f'scheduled:{entity_id}',
+            'entity_type': 'scheduled_task',
+            'entity_id': entity_id,
+            'title': str(title),
+            'change_type': 'create' if local_task is None else 'update',
+            'local_record': copy.deepcopy(local_task),
+            'remote_record': copy.deepcopy(remote_task),
         }
 
     def _build_pending_remote_change_summaries_locked(self) -> List[Dict[str, Any]]:
@@ -545,7 +639,9 @@ class DatabaseManager:
         summaries = []
         for change in self._pending_remote_task_changes.values():
             summaries.append({
-                'id': change['id'],
+                'id': change.get('change_key', ''),
+                'entity_type': change.get('entity_type', 'task'),
+                'entity_id': change.get('entity_id', ''),
                 'title': change.get('title', ''),
                 'change_type': change.get('change_type', 'update'),
             })
@@ -553,14 +649,26 @@ class DatabaseManager:
         return summaries
 
     def _apply_remote_change_locked(self, change: Dict[str, Any]) -> None:
-        """接受远程修改并写入本地缓存。"""
-        self._save_task_to_cache(change['remote_task'], 'synced')
+        """接受远程修改并写入本地缓存/数据库。"""
+        if change.get('entity_type') == 'scheduled_task':
+            remote_record = change.get('remote_record')
+            if remote_record is not None:
+                self._upsert_scheduled_task_local(remote_record)
+            return
+
+        self._save_task_to_cache(change['remote_record'], 'synced')
 
     def _reject_remote_change_locked(self, change: Dict[str, Any]) -> None:
         """拒绝远程修改，保留本地版本并标记为待上传。"""
-        local_task = change.get('local_task')
+        if change.get('entity_type') == 'scheduled_task':
+            local_record = change.get('local_record')
+            if local_record is not None:
+                self._upsert_scheduled_task_local(local_record)
+            return
+
+        local_task = change.get('local_record')
         if local_task is None:
-            local_task = copy.deepcopy(change['remote_task'])
+            local_task = copy.deepcopy(change['remote_record'])
             local_task['deleted'] = True
             local_task['completed'] = False
             local_task['completed_date'] = ''
@@ -575,19 +683,33 @@ class DatabaseManager:
         try:
             accepted_set = set(accepted_ids or [])
             rejected_set = set(rejected_ids or [])
+            rejected_changes = []
             with self._cache_lock:
                 pending_ids = set(self._pending_remote_task_changes.keys())
-                for task_id in pending_ids & accepted_set:
-                    self._apply_remote_change_locked(self._pending_remote_task_changes[task_id])
-                for task_id in pending_ids & rejected_set:
-                    self._reject_remote_change_locked(self._pending_remote_task_changes[task_id])
-                for task_id in pending_ids & (accepted_set | rejected_set):
-                    self._pending_remote_task_changes.pop(task_id, None)
+                for change_key in pending_ids & accepted_set:
+                    self._apply_remote_change_locked(self._pending_remote_task_changes[change_key])
+                for change_key in pending_ids & rejected_set:
+                    change = self._pending_remote_task_changes[change_key]
+                    self._reject_remote_change_locked(change)
+                    rejected_changes.append(copy.deepcopy(change))
+                for change_key in pending_ids & (accepted_set | rejected_set):
+                    self._pending_remote_task_changes.pop(change_key, None)
                 self._cache_dirty = True
+
+            for change in rejected_changes:
+                if change.get('entity_type') != 'scheduled_task' or (not self.api_base_url):
+                    continue
+
+                local_record = change.get('local_record')
+                if local_record is not None:
+                    self._make_api_request('POST', '/api/scheduled_tasks', local_record)
+                elif change.get('entity_id'):
+                    self._make_api_request('DELETE', f"/api/scheduled_tasks/{change['entity_id']}")
             return True
         except Exception as e:
             logger.error(f"处理待确认远程修改失败: {str(e)}")
             return False
+
     def clear_server_and_upload(self) -> bool:
         """清空服务器任务后，用本地任务覆盖上传。
         步骤：
@@ -807,11 +929,15 @@ class DatabaseManager:
             return []
 
     def get_task_history(self, task_id: str) -> Dict[str, List[Dict[str, Any]]]:
-        """从数据库获取任务的历史记录"""
+        """优先从远程接口获取任务历史，失败时回退到本地数据库。"""
         try:
-            # 先确保缓存中的历史记录已写入数据库
+            if self.api_base_url:
+                remote_result = self._make_api_request('GET', f'/api/tasks/{task_id}/history')
+                if remote_result and isinstance(remote_result.get('history'), dict):
+                    return remote_result.get('history', {})
+
             self.flush_cache_to_db()
-            
+
             conn = self.get_connection()
             cursor = conn.cursor()
             cursor.execute('''
@@ -821,7 +947,7 @@ class DatabaseManager:
                 ORDER BY timestamp ASC
             ''', (task_id,))
             history_records = cursor.fetchall()
-            
+
             field_history = {}
             for record in history_records:
                 field_name = record['field_name']
@@ -832,8 +958,7 @@ class DatabaseManager:
                     'timestamp': record['timestamp'],
                     'action': record['action']
                 })
-            
-            # logger.debug(f"获取任务 {task_id} 的历史记录: {len(history_records)} 条")
+
             return field_history
         except Exception as e:
             logger.error(f"获取任务历史记录失败: {str(e)}")
@@ -882,50 +1007,80 @@ class DatabaseManager:
             logger.error(f"获取同步状态失败: {str(e)}")
             return {}
 
-    def create_scheduled_task(self, schedule_data: Dict[str, Any]) -> bool:
-        """创建定时任务"""
+    def _normalize_scheduled_task_data(self, schedule_data: Dict[str, Any], existing: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """补齐定时任务字段，统一本地落库数据结构。"""
+        normalized = dict(existing or {})
+        normalized.update(schedule_data)
+        now = datetime.now().isoformat()
+        normalized['priority'] = normalized.get('priority', '中')
+        normalized['urgency'] = normalized.get('urgency', '低')
+        normalized['importance'] = normalized.get('importance', '低')
+        normalized['notes'] = normalized.get('notes', '')
+        normalized['due_date'] = normalized.get('due_date', '')
+        normalized['active'] = normalized.get('active', True)
+        normalized['created_at'] = normalized.get('created_at') or (existing or {}).get('created_at') or now
+        normalized['updated_at'] = schedule_data.get('updated_at') or now
+        return normalized
+
+    def _upsert_scheduled_task_local(self, schedule_data: Dict[str, Any], commit: bool = True) -> bool:
+        """在本地数据库中插入或更新定时任务。"""
         try:
+            existing = self.get_scheduled_task(schedule_data['id'])
+            normalized = self._normalize_scheduled_task_data(schedule_data, existing=existing)
             conn = self.get_connection()
             cursor = conn.cursor()
-            
-            # 使用传入的created_at，如果没有则使用当前时间
-            created_at = schedule_data.get('created_at')
-            if not created_at:
-                created_at = datetime.now().isoformat()
-            
             cursor.execute('''
-                INSERT INTO scheduled_tasks 
-                (id, title, priority, urgency, importance, notes, due_date, frequency, 
-                 week_day, month_day, quarter_day, year_month, year_day, 
+                INSERT OR REPLACE INTO scheduled_tasks 
+                (id, title, priority, urgency, importance, notes, due_date, frequency,
+                 week_day, month_day, quarter_day, year_month, year_day,
                  next_run_at, active, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
-                schedule_data['id'],
-                schedule_data['title'],
-                schedule_data.get('priority', '中'),
-                schedule_data.get('urgency', '低'),
-                schedule_data.get('importance', '低'),
-                schedule_data.get('notes', ''),
-                schedule_data.get('due_date', ''),
-                schedule_data['frequency'],
-                schedule_data.get('week_day'),
-                schedule_data.get('month_day'),
-                schedule_data.get('quarter_day'),
-                schedule_data.get('year_month'),
-                schedule_data.get('year_day'),
-                schedule_data.get('next_run_at'),
-                schedule_data.get('active', True),
-                created_at,
-                datetime.now().isoformat()
+                normalized['id'],
+                normalized['title'],
+                normalized.get('priority', '中'),
+                normalized.get('urgency', '低'),
+                normalized.get('importance', '低'),
+                normalized.get('notes', ''),
+                normalized.get('due_date', ''),
+                normalized['frequency'],
+                normalized.get('week_day'),
+                normalized.get('month_day'),
+                normalized.get('quarter_day'),
+                normalized.get('year_month'),
+                normalized.get('year_day'),
+                normalized.get('next_run_at'),
+                normalized.get('active', True),
+                normalized['created_at'],
+                normalized['updated_at']
             ))
-            
-            conn.commit()
-            logger.info(f"创建定时任务成功: {schedule_data['id']}")
+            if commit:
+                conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"本地写入定时任务失败: {str(e)}")
+            return False
+
+    def create_scheduled_task(self, schedule_data: Dict[str, Any]) -> bool:
+        """创建定时任务，并在成功写入本地后尽力回写远端。"""
+        try:
+            schedule_to_save = self._normalize_scheduled_task_data(schedule_data)
+            if not self._upsert_scheduled_task_local(schedule_to_save):
+                return False
+
+            if self.api_base_url:
+                result = self._make_api_request('POST', '/api/scheduled_tasks', schedule_to_save)
+                if result:
+                    logger.info(f"创建定时任务已同步到服务器: {schedule_to_save['id']}")
+                else:
+                    logger.warning(f"创建定时任务未能同步到服务器，保留本地结果: {schedule_to_save['id']}")
+
+            logger.info(f"创建定时任务成功: {schedule_to_save['id']}")
             return True
         except Exception as e:
             logger.error(f"创建定时任务失败: {str(e)}")
             return False
-    
+
     def list_scheduled_tasks(
         self, 
         active_only: bool = False, 
@@ -975,39 +1130,34 @@ class DatabaseManager:
             return None
     
     def update_scheduled_task(self, task_id: str, updates: Dict[str, Any]) -> bool:
-        """更新定时任务"""
+        """更新定时任务，并在本地成功后尽力回写远端。"""
         try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            # 构建更新语句
-            update_fields = []
-            values = []
-            
-            for key, value in updates.items():
-                if key != 'id':  # 不更新主键
-                    update_fields.append(f"{key} = ?")
-                    values.append(value)
-            
-            if not update_fields:
-                return True
-            
-            # 总是更新 updated_at
-            update_fields.append("updated_at = ?")
-            values.append(datetime.now().isoformat())
-            
-            values.append(task_id)
-            
-            query = f"UPDATE scheduled_tasks SET {', '.join(update_fields)} WHERE id = ?"
-            cursor.execute(query, values)
-            
-            conn.commit()
+            existing = self.get_scheduled_task(task_id)
+            if not existing:
+                logger.warning(f"定时任务 {task_id} 不存在，无法更新")
+                return False
+
+            merged = dict(existing)
+            merged.update({key: value for key, value in updates.items() if key != 'id'})
+            merged['id'] = task_id
+            merged['updated_at'] = updates.get('updated_at') or datetime.now().isoformat()
+
+            if not self._upsert_scheduled_task_local(merged):
+                return False
+
+            if self.api_base_url:
+                result = self._make_api_request('POST', '/api/scheduled_tasks', merged)
+                if result:
+                    logger.info(f"更新定时任务已同步到服务器: {task_id}")
+                else:
+                    logger.warning(f"更新定时任务未能同步到服务器，保留本地结果: {task_id}")
+
             logger.info(f"更新定时任务成功: {task_id}")
             return True
         except Exception as e:
             logger.error(f"更新定时任务失败: {str(e)}")
             return False
-    
+
     def delete_scheduled_task(self, task_id: str) -> bool:
         """删除定时任务"""
         try:
@@ -1087,58 +1237,42 @@ class DatabaseManager:
             return False
 
     def sync_scheduled_tasks_from_server(self) -> bool:
-        """从服务器同步定时任务到本地"""
+        """从服务器同步定时任务到本地，本地已有项遇到远端更新时转为待确认冲突。"""
         if not self.api_base_url:
             return True
-        
+
         try:
             result = self._make_api_request('GET', '/api/scheduled_tasks')
             if not result:
                 logger.error("无法从服务器获取定时任务")
                 return False
-            
+
             server_tasks = result.get('scheduled_tasks', [])
-            
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            updated_count = 0
+            pending_changes = {}
+            inserted_count = 0
+
             for task_data in server_tasks:
-                # 检查本地是否存在
-                cursor.execute('SELECT updated_at FROM scheduled_tasks WHERE id = ?', (task_data['id'],))
-                local_task = cursor.fetchone()
-                
-                if not local_task or task_data.get('updated_at', '') > local_task[0]:
-                    # 插入或更新本地任务
-                    cursor.execute('''
-                        INSERT OR REPLACE INTO scheduled_tasks 
-                        (id, title, priority, urgency, importance, notes, due_date, frequency,
-                         week_day, month_day, quarter_day, year_month, year_day,
-                         next_run_at, active, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (
-                        task_data['id'],
-                        task_data.get('title'),
-                        task_data.get('priority', ''),
-                        task_data.get('urgency', '低'),
-                        task_data.get('importance', '低'),
-                        task_data.get('notes', ''),
-                        task_data.get('due_date', ''),
-                        task_data.get('frequency'),
-                        task_data.get('week_day'),
-                        task_data.get('month_day'),
-                        task_data.get('quarter_day'),
-                        task_data.get('year_month'),
-                        task_data.get('year_day'),
-                        task_data.get('next_run_at'),
-                        task_data.get('active', True),
-                        task_data.get('created_at', datetime.now().isoformat()),
-                        task_data.get('updated_at', datetime.now().isoformat())
-                    ))
-                    updated_count += 1
-            
-            conn.commit()
-            logger.info(f"成功从服务器同步 {updated_count} 个定时任务")
+                local_task = self.get_scheduled_task(task_data['id'])
+                if not local_task:
+                    if self._upsert_scheduled_task_local(task_data, commit=True):
+                        inserted_count += 1
+                    continue
+
+                if task_data.get('updated_at', '') > local_task.get('updated_at', ''):
+                    change = self._build_scheduled_remote_change(local_task, task_data)
+                    pending_changes[change['change_key']] = change
+
+            if pending_changes:
+                with self._cache_lock:
+                    self._pending_remote_task_changes.update(pending_changes)
+                    pending_summaries = self._build_pending_remote_change_summaries_locked()
+
+                if self._has_task_sync_listeners():
+                    self._notify_task_sync_listeners(pending_summaries)
+
+                logger.info(f"发现 {len(pending_changes)} 个待确认的远程定时任务修改")
+
+            logger.info(f"成功从服务器同步 {inserted_count} 个定时任务，待确认 {len(pending_changes)} 个")
             return True
         except Exception as e:
             logger.error(f"从服务器同步定时任务失败: {str(e)}")
