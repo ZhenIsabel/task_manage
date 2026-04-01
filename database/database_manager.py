@@ -601,12 +601,46 @@ class DatabaseManager:
         }
         return task_data
 
-    def _is_remote_task_newer_or_changed(self, local_task: Dict[str, Any], remote_task: Dict[str, Any]) -> bool:
-        """判断远程任务是否比本地更新，或其完成/删除状态已变化。"""
-        if remote_task.get('updated_at', '') > local_task.get('updated_at', ''):
-            return True
+    def _build_task_sync_compare_payload(self, task_data: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """构造用于下行同步比较的任务内容，忽略 updated_at 等同步元数据。"""
+        if not task_data:
+            return None
 
+        normalized_task = copy.deepcopy(task_data)
+        if 'position_x' in normalized_task or 'position_y' in normalized_task:
+            normalized_task = self._cache_task_to_task_data(normalized_task)
+
+        position = normalized_task.get('position') or {}
+        return {
+            'id': normalized_task.get('id'),
+            'text': str(normalized_task.get('text', '') or ''),
+            'notes': str(normalized_task.get('notes', '') or ''),
+            'due_date': str(normalized_task.get('due_date', '') or ''),
+            'priority': str(normalized_task.get('priority', '') or ''),
+            'urgency': str(normalized_task.get('urgency', '低') or '低'),
+            'importance': str(normalized_task.get('importance', '低') or '低'),
+            'directory': str(normalized_task.get('directory', '') or ''),
+            'create_date': str(normalized_task.get('create_date', '') or ''),
+            'color': str(normalized_task.get('color', '#4ECDC4') or '#4ECDC4'),
+            'completed': bool(normalized_task.get('completed', False)),
+            'completed_date': str(normalized_task.get('completed_date', '') or ''),
+            'deleted': bool(normalized_task.get('deleted', False)),
+            'position': {
+                'x': position.get('x', 100),
+                'y': position.get('y', 100),
+            },
+        }
+
+    def _task_sync_content_changed(self, local_task: Dict[str, Any], remote_task: Dict[str, Any]) -> bool:
+        """判断任务内容是否真的变化，避免仅更新时间戳就触发远端修改。"""
+        return self._build_task_sync_compare_payload(local_task) != self._build_task_sync_compare_payload(remote_task)
+
+    def _is_remote_task_newer_or_changed(self, local_task: Dict[str, Any], remote_task: Dict[str, Any]) -> bool:
+        """判断远程任务是否有需要确认的实际内容变化。"""
         local_task_data = self._cache_task_to_task_data(local_task)
+        if remote_task.get('updated_at', '') > local_task.get('updated_at', ''):
+            return self._task_sync_content_changed(local_task_data, remote_task)
+
         return any([
             bool(remote_task.get('completed', False)) != bool(local_task_data.get('completed', False)),
             bool(remote_task.get('deleted', False)) != bool(local_task_data.get('deleted', False)),
@@ -1051,6 +1085,33 @@ class DatabaseManager:
         normalized['updated_at'] = schedule_data.get('updated_at') or now
         return normalized
 
+    def _build_scheduled_task_sync_compare_payload(self, task_data: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """构造用于下行同步比较的定时任务内容，忽略 updated_at 等同步元数据。"""
+        if not task_data:
+            return None
+
+        return {
+            'id': task_data.get('id'),
+            'title': str(task_data.get('title', '') or ''),
+            'priority': str(task_data.get('priority', '中') or '中'),
+            'urgency': str(task_data.get('urgency', '低') or '低'),
+            'importance': str(task_data.get('importance', '低') or '低'),
+            'notes': str(task_data.get('notes', '') or ''),
+            'due_date': str(task_data.get('due_date', '') or ''),
+            'frequency': str(task_data.get('frequency', 'daily') or 'daily'),
+            'week_day': task_data.get('week_day'),
+            'month_day': task_data.get('month_day'),
+            'quarter_day': task_data.get('quarter_day'),
+            'year_month': task_data.get('year_month'),
+            'year_day': task_data.get('year_day'),
+            'next_run_at': task_data.get('next_run_at'),
+            'active': bool(task_data.get('active', True)),
+        }
+
+    def _scheduled_task_sync_content_changed(self, local_task: Dict[str, Any], remote_task: Dict[str, Any]) -> bool:
+        """判断定时任务内容是否真的变化，避免仅更新时间戳就触发远端修改。"""
+        return self._build_scheduled_task_sync_compare_payload(local_task) != self._build_scheduled_task_sync_compare_payload(remote_task)
+
     def _serialize_scheduled_task_for_api(self, schedule_data: Dict[str, Any]) -> Dict[str, Any]:
         """将定时任务记录转换为远端接口期望的 JSON 结构。"""
         payload = copy.deepcopy(schedule_data)
@@ -1309,7 +1370,7 @@ class DatabaseManager:
                         inserted_count += 1
                     continue
 
-                if task_data.get('updated_at', '') > local_task.get('updated_at', ''):
+                if task_data.get('updated_at', '') > local_task.get('updated_at', '') and self._scheduled_task_sync_content_changed(local_task, task_data):
                     change = self._build_scheduled_remote_change(local_task, task_data)
                     pending_changes[change['change_key']] = change
 

@@ -172,6 +172,37 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
             'scheduled_task',
         )
 
+
+    def test_sync_scheduled_tasks_from_server_ignores_updated_at_only_change(self):
+        manager = self._build_manager(remote_config={})
+        manager.create_scheduled_task({
+            'id': 'sched-1',
+            'title': '每周复盘',
+            'frequency': 'weekly',
+            'notes': '内容未变',
+        })
+        conn = manager.get_connection()
+        conn.execute(
+            'UPDATE scheduled_tasks SET updated_at = ? WHERE id = ?',
+            ('2026-03-30T09:00:00', 'sched-1'),
+        )
+        conn.commit()
+        manager.api_base_url = 'http://example.com'
+
+        with patch.object(manager, '_make_api_request', return_value={
+            'scheduled_tasks': [{
+                'id': 'sched-1',
+                'title': '每周复盘',
+                'frequency': 'weekly',
+                'notes': '内容未变',
+                'updated_at': '2026-03-30T10:00:00',
+            }]
+        }):
+            result = manager.sync_scheduled_tasks_from_server()
+
+        self.assertTrue(result)
+        self.assertEqual(manager.get_scheduled_task('sched-1')['updated_at'], '2026-03-30T09:00:00')
+        self.assertNotIn('scheduled:sched-1', manager._pending_remote_task_changes)
     def test_accept_scheduled_remote_change_applies_remote_record(self):
         manager = self._build_manager(remote_config={})
         manager.create_scheduled_task({
@@ -444,6 +475,56 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
         self.assertEqual(manager.api_base_url, '')
         self.assertEqual(manager.api_token, '')
         self.assertEqual(manager.username, '')
+
+
+    def test_sync_from_server_ignores_updated_at_only_change(self):
+        manager = self._build_manager(remote_config={})
+        manager.save_task({
+            'id': 'task-1',
+            'text': '写周报',
+            'notes': '内容未变',
+            'completed': False,
+            'completed_date': '',
+            'deleted': False,
+            'priority': '中',
+            'urgency': '低',
+            'importance': '高',
+            'directory': '',
+            'create_date': '',
+            'position': {'x': 120, 'y': 180},
+            'updated_at': '2026-03-30T09:00:00',
+            'created_at': '2026-03-30T08:00:00',
+        })
+        manager.api_base_url = 'http://example.com'
+
+        with patch.object(manager, '_make_api_request', return_value={
+            'tasks': [{
+                'id': 'task-1',
+                'text': '写周报',
+                'notes': '内容未变',
+                'completed': False,
+                'completed_date': '',
+                'deleted': False,
+                'priority': '中',
+                'urgency': '低',
+                'importance': '高',
+                'directory': '',
+                'create_date': '',
+                'position': {'x': 120, 'y': 180},
+                'updated_at': '2026-03-30T10:00:00',
+                'created_at': '2026-03-30T08:00:00',
+            }],
+            'count': 1,
+        }):
+            result = manager.sync_from_server()
+
+        self.assertTrue(result)
+        self.assertEqual(
+            manager._cache_task_to_task_data(manager._task_cache['task-1'])['updated_at'],
+            '2026-03-30T09:00:00',
+        )
+        self.assertNotIn('task:task-1', manager._pending_remote_task_changes)
+
 
 
 
