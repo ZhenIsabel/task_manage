@@ -205,6 +205,38 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
         ).fetchone()
         self.assertIsNotNone(row)
 
+    def test_database_manager_loads_scheduled_tasks_into_entity_cache(self):
+        manager = self._build_manager(remote_config={})
+        conn = manager.get_connection()
+        conn.execute(
+            '''
+            INSERT INTO scheduled_tasks
+            (id, title, frequency, active, deleted, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''',
+            ('sched-cache-loaded', '已加载任务', 'daily', True, False, '2026-04-01T00:00:00', '2026-04-01T00:00:00'),
+        )
+        conn.commit()
+
+        manager._load_all_entities_to_cache()
+
+        self.assertIn('sched-cache-loaded', manager._entity_cache['scheduled_task']['records'])
+
+    def test_get_scheduled_task_can_return_deleted_tombstone_when_requested(self):
+        manager = self._build_manager(remote_config={})
+        manager.create_scheduled_task({
+            'id': 'sched-cache-tombstone',
+            'title': '墓碑任务',
+            'frequency': 'daily',
+        })
+        manager.flush_cache_to_db()
+        manager.delete_scheduled_task('sched-cache-tombstone')
+
+        self.assertIsNone(manager.get_scheduled_task('sched-cache-tombstone'))
+        deleted_record = manager.get_scheduled_task('sched-cache-tombstone', include_deleted=True)
+        self.assertIsNotNone(deleted_record)
+        self.assertTrue(deleted_record['deleted'])
+
     def test_sync_scheduled_tasks_from_server_keeps_local_when_remote_is_newer(self):
         manager = self._build_manager(remote_config={})
         manager.create_scheduled_task({

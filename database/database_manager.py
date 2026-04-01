@@ -53,10 +53,26 @@ class DatabaseManager:
 
         # 内存缓存
         self._task_cache = {}  # id -> task_data
+        self._scheduled_task_cache = {}  # id -> scheduled_task_data
         self._task_history_cache = []  # [(task_id, field_name, field_value, action, timestamp)]
         self._deleted_task_ids = set()
+        self._deleted_scheduled_task_ids = set()
         self._cache_lock = threading.Lock()
         self._cache_dirty = False
+        self._entity_cache = {
+            'task': {
+                'records': self._task_cache,
+                'deleted_ids': self._deleted_task_ids,
+                'dirty': False,
+                'loaded': False,
+            },
+            'scheduled_task': {
+                'records': self._scheduled_task_cache,
+                'deleted_ids': self._deleted_scheduled_task_ids,
+                'dirty': False,
+                'loaded': False,
+            },
+        }
         self._task_sync_listeners = []
         self._listener_lock = threading.Lock()
         self._pending_remote_task_changes = {}
@@ -73,7 +89,7 @@ class DatabaseManager:
             logger.info("使用本地模式")
 
         self.init_database()
-        self._load_all_tasks_to_cache()
+        self._load_all_entities_to_cache()
         self.start_periodic_flush(self._flush_interval)
 
     def get_connection(self):
@@ -175,10 +191,14 @@ class DatabaseManager:
                     year_day INTEGER,
                     next_run_at TIMESTAMP,
                     active BOOLEAN DEFAULT TRUE,
+                    deleted BOOLEAN DEFAULT FALSE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+            scheduled_columns = [col[1] for col in cursor.execute('PRAGMA table_info(scheduled_tasks)').fetchall()]
+            if 'deleted' not in scheduled_columns:
+                cursor.execute('ALTER TABLE scheduled_tasks ADD COLUMN deleted BOOLEAN DEFAULT FALSE')
             
             # 创建索引以提高查询性能
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(completed)')
@@ -330,6 +350,19 @@ class DatabaseManager:
             self.start_periodic_sync(self._sync_interval)
         return tasks_ok and scheduled_ok
 
+    def _get_entity_bucket(self, entity_type: str) -> Dict[str, Any]:
+        """获取实体缓存桶。"""
+        return self._entity_cache[entity_type]
+
+    def _mark_entity_dirty(self, entity_type: str):
+        """标记实体缓存有未落盘变更。"""
+        self._entity_cache[entity_type]['dirty'] = True
+
+    def _load_all_entities_to_cache(self):
+        """启动时加载所有实体到内存缓存。"""
+        self._load_all_tasks_to_cache()
+        self._load_all_scheduled_tasks_to_cache()
+
     def _load_all_tasks_to_cache(self):
         """启动时加载所有任务到内存缓存"""
         try:
@@ -349,18 +382,76 @@ class DatabaseManager:
                 
                 logger.info(f"从数据库加载了 {len(self._task_cache)} 个任务到缓存")
                 self._cache_dirty = False
+                self._entity_cache['task']['dirty'] = False
+                self._entity_cache['task']['loaded'] = True
         except Exception as e:
             logger.error(f"加载任务到缓存失败: {str(e)}")
-            # 如果数据库加载失败，创建空的缓存
             with self._cache_lock:
                 self._task_cache.clear()
                 self._deleted_task_ids.clear()
                 self._cache_dirty = False
+                self._entity_cache['task']['dirty'] = False
+                self._entity_cache['task']['loaded'] = False
+
+    def _load_all_scheduled_tasks_to_cache(self):
+        """启动时加载所有定时任务到内存缓存。"""
+        try:
+            with self._cache_lock:
+                bucket = self._get_entity_bucket('scheduled_task')
+                bucket['records'].clear()
+                bucket['deleted_ids'].clear()
+
+                conn = self.get_connection()
+                cursor = conn.cursor()
+                cursor.execute('SELECT * FROM scheduled_tasks')
+
+                for row in cursor.fetchall():
+                    record = dict(row)
+                    record['deleted'] = bool(record.get('deleted', False))
+                    record['sync_status'] = record.get('sync_status', 'synced')
+                    bucket['records'][record['id']] = record
+                    if record['deleted']:
+                        bucket['deleted_ids'].add(record['id'])
+
+                bucket['dirty'] = False
+                bucket['loaded'] = True
+        except Exception as e:
+            logger.error(f"加载定时任务到缓存失败: {str(e)}")
+            with self._cache_lock:
+                bucket = self._get_entity_bucket('scheduled_task')
+                bucket['records'].clear()
+                bucket['deleted_ids'].clear()
+                bucket['dirty'] = False
+                bucket['loaded'] = False
+
+    def _save_scheduled_task_to_cache(
+        self,
+        schedule_data: Dict[str, Any],
+        sync_status: Optional[str] = None,
+        mark_dirty: bool = True,
+    ) -> Dict[str, Any]:
+        """保存定时任务到内存缓存。"""
+        bucket = self._get_entity_bucket('scheduled_task')
+        existing = bucket['records'].get(schedule_data['id'])
+        normalized = self._normalize_scheduled_task_data(schedule_data, existing=existing)
+        normalized['deleted'] = bool(normalized.get('deleted', False))
+        if sync_status is not None:
+            normalized['sync_status'] = sync_status
+        elif 'sync_status' not in normalized:
+            normalized['sync_status'] = (existing or {}).get('sync_status', 'synced')
+        bucket['records'][normalized['id']] = normalized
+        if normalized['deleted']:
+            bucket['deleted_ids'].add(normalized['id'])
+        else:
+            bucket['deleted_ids'].discard(normalized['id'])
+        if mark_dirty:
+            bucket['dirty'] = True
+        return normalized
 
     def flush_cache_to_db(self):
-        """将内存缓存中的更改批量写入数据库"""
         with self._cache_lock:
-            if not self._cache_dirty:
+            scheduled_bucket = self._get_entity_bucket('scheduled_task')
+            if (not self._cache_dirty) and (not scheduled_bucket['dirty']) and (not self._task_history_cache):
                 return
             conn = self.get_connection()
             cursor = conn.cursor()
@@ -393,6 +484,35 @@ class DatabaseManager:
                         task.get('sync_status', ''),
                         task.get('created_at', datetime.now().isoformat())
                     ))
+
+                # 批量写入scheduled_tasks
+                for schedule_id, schedule in self._scheduled_task_cache.items():
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO scheduled_tasks 
+                        (id, title, priority, urgency, importance, notes, due_date, frequency,
+                         week_day, month_day, quarter_day, year_month, year_day,
+                         next_run_at, active, deleted, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        schedule['id'],
+                        schedule['title'],
+                        schedule.get('priority', '中'),
+                        schedule.get('urgency', '低'),
+                        schedule.get('importance', '低'),
+                        schedule.get('notes', ''),
+                        schedule.get('due_date', ''),
+                        schedule['frequency'],
+                        schedule.get('week_day'),
+                        schedule.get('month_day'),
+                        schedule.get('quarter_day'),
+                        schedule.get('year_month'),
+                        schedule.get('year_day'),
+                        schedule.get('next_run_at'),
+                        schedule.get('active', True),
+                        schedule.get('deleted', False),
+                        schedule['created_at'],
+                        schedule['updated_at'],
+                    ))
                 
                 # 批量写入历史记录
                 if self._task_history_cache:
@@ -402,12 +522,12 @@ class DatabaseManager:
                             (task_id, field_name, field_value, action, timestamp)
                             VALUES (?, ?, ?, ?, ?)
                         ''', hist)
-                    # logger.info(f"写入 {len(self._task_history_cache)} 条历史记录到数据库")
                     self._task_history_cache.clear()
                 
                 conn.commit()
                 self._cache_dirty = False
-                # logger.info("内存缓存已写入数据库")
+                self._entity_cache['task']['dirty'] = False
+                scheduled_bucket['dirty'] = False
             except Exception as e:
                 logger.error(f"写入数据库失败: {str(e)}")
                 conn.rollback()
@@ -1081,8 +1201,10 @@ class DatabaseManager:
         normalized['notes'] = normalized.get('notes', '')
         normalized['due_date'] = normalized.get('due_date', '')
         normalized['active'] = normalized.get('active', True)
+        normalized['deleted'] = bool(normalized.get('deleted', False))
         normalized['created_at'] = normalized.get('created_at') or (existing or {}).get('created_at') or now
         normalized['updated_at'] = schedule_data.get('updated_at') or now
+        normalized['sync_status'] = normalized.get('sync_status', (existing or {}).get('sync_status', 'synced'))
         return normalized
 
     def _build_scheduled_task_sync_compare_payload(self, task_data: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -1133,7 +1255,7 @@ class DatabaseManager:
     def _upsert_scheduled_task_local(self, schedule_data: Dict[str, Any], commit: bool = True) -> bool:
         """在本地数据库中插入或更新定时任务。"""
         try:
-            existing = self.get_scheduled_task(schedule_data['id'])
+            existing = self.get_scheduled_task(schedule_data['id'], include_deleted=True)
             normalized = self._normalize_scheduled_task_data(schedule_data, existing=existing)
             conn = self.get_connection()
             cursor = conn.cursor()
@@ -1141,8 +1263,8 @@ class DatabaseManager:
                 INSERT OR REPLACE INTO scheduled_tasks 
                 (id, title, priority, urgency, importance, notes, due_date, frequency,
                  week_day, month_day, quarter_day, year_month, year_day,
-                 next_run_at, active, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 next_run_at, active, deleted, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 normalized['id'],
                 normalized['title'],
@@ -1159,30 +1281,27 @@ class DatabaseManager:
                 normalized.get('year_day'),
                 normalized.get('next_run_at'),
                 normalized.get('active', True),
+                normalized.get('deleted', False),
                 normalized['created_at'],
                 normalized['updated_at']
             ))
             if commit:
                 conn.commit()
+            self._save_scheduled_task_to_cache(
+                normalized,
+                sync_status=normalized.get('sync_status', 'synced'),
+                mark_dirty=False,
+            )
             return True
         except Exception as e:
             logger.error(f"本地写入定时任务失败: {str(e)}")
             return False
 
     def create_scheduled_task(self, schedule_data: Dict[str, Any]) -> bool:
-        """创建定时任务，并在成功写入本地后尽力回写远端。"""
+        """创建定时任务，仅写入内存缓存。"""
         try:
             schedule_to_save = self._normalize_scheduled_task_data(schedule_data)
-            if not self._upsert_scheduled_task_local(schedule_to_save):
-                return False
-
-            if self.api_base_url:
-                result = self._make_api_request('POST', '/api/scheduled_tasks', self._serialize_scheduled_task_for_api(schedule_to_save))
-                if result:
-                    logger.info(f"创建定时任务已同步到服务器: {schedule_to_save['id']}")
-                else:
-                    logger.warning(f"创建定时任务未能同步到服务器，保留本地结果: {schedule_to_save['id']}")
-
+            self._save_scheduled_task_to_cache(schedule_to_save, sync_status='modified')
             logger.info(f"创建定时任务成功: {schedule_to_save['id']}")
             return True
         except Exception as e:
@@ -1190,57 +1309,45 @@ class DatabaseManager:
             return False
 
     def list_scheduled_tasks(
-        self, 
-        active_only: bool = False, 
-        due_before: Optional[datetime] = None
+        self,
+        active_only: bool = False,
+        due_before: Optional[datetime] = None,
+        include_deleted: bool = False,
     ) -> List[Dict[str, Any]]:
         """列出定时任务"""
         try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            query = 'SELECT * FROM scheduled_tasks WHERE 1=1'
-            params = []
-            
-            if active_only:
-                query += ' AND active = ?'
-                params.append(True)
-            
-            if due_before:
-                query += ' AND next_run_at <= ?'
-                params.append(due_before.isoformat())
-            
-            query += ' ORDER BY next_run_at ASC'
-            
-            cursor.execute(query, params)
-            rows = cursor.fetchall()
-            
-            schedules = [dict(row) for row in rows]
+            schedules = []
+            for record in self._scheduled_task_cache.values():
+                if record.get('deleted') and not include_deleted:
+                    continue
+                if active_only and not record.get('active', True):
+                    continue
+                if due_before and record.get('next_run_at') and record['next_run_at'] > due_before.isoformat():
+                    continue
+                schedules.append(copy.deepcopy(record))
+            schedules.sort(key=lambda item: item.get('next_run_at') or '')
             return schedules
         except Exception as e:
             logger.error(f"查询定时任务失败: {str(e)}")
             return []
-    
-    def get_scheduled_task(self, task_id: str) -> Optional[Dict[str, Any]]:
+
+    def get_scheduled_task(self, task_id: str, include_deleted: bool = False) -> Optional[Dict[str, Any]]:
         """获取单个定时任务"""
         try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            cursor.execute('SELECT * FROM scheduled_tasks WHERE id = ?', (task_id,))
-            row = cursor.fetchone()
-            
-            if row:
-                return dict(row)
-            return None
+            record = self._scheduled_task_cache.get(task_id)
+            if not record:
+                return None
+            if record.get('deleted') and not include_deleted:
+                return None
+            return copy.deepcopy(record)
         except Exception as e:
             logger.error(f"获取定时任务失败: {str(e)}")
             return None
-    
+
     def update_scheduled_task(self, task_id: str, updates: Dict[str, Any]) -> bool:
-        """更新定时任务，并在本地成功后尽力回写远端。"""
+        """更新定时任务，仅写入内存缓存。"""
         try:
-            existing = self.get_scheduled_task(task_id)
+            existing = self.get_scheduled_task(task_id, include_deleted=True)
             if not existing:
                 logger.warning(f"定时任务 {task_id} 不存在，无法更新")
                 return False
@@ -1250,16 +1357,7 @@ class DatabaseManager:
             merged['id'] = task_id
             merged['updated_at'] = updates.get('updated_at') or datetime.now().isoformat()
 
-            if not self._upsert_scheduled_task_local(merged):
-                return False
-
-            if self.api_base_url:
-                result = self._make_api_request('POST', '/api/scheduled_tasks', self._serialize_scheduled_task_for_api(merged))
-                if result:
-                    logger.info(f"更新定时任务已同步到服务器: {task_id}")
-                else:
-                    logger.warning(f"更新定时任务未能同步到服务器，保留本地结果: {task_id}")
-
+            self._save_scheduled_task_to_cache(merged, sync_status='modified')
             logger.info(f"更新定时任务成功: {task_id}")
             return True
         except Exception as e:
@@ -1267,25 +1365,16 @@ class DatabaseManager:
             return False
 
     def delete_scheduled_task(self, task_id: str) -> bool:
-        """删除定时任务"""
+        """删除定时任务，仅在缓存中标记为 deleted。"""
         try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            cursor.execute('DELETE FROM scheduled_tasks WHERE id = ?', (task_id,))
-            conn.commit()
-            
-            # 如果配置了远程服务器，同步删除到服务器
-            if self.api_base_url:
-                try:
-                    result = self._make_api_request('DELETE', f'/api/scheduled_tasks/{task_id}')
-                    if result:
-                        logger.info(f"删除定时任务已同步到服务器: {task_id}")
-                    else:
-                        logger.warning(f"删除定时任务未能同步到服务器: {task_id}")
-                except Exception as e:
-                    logger.error(f"同步删除到服务器时出错: {str(e)}")
-            
+            existing = self.get_scheduled_task(task_id, include_deleted=True)
+            if not existing:
+                logger.warning(f"定时任务 {task_id} 不存在，无法删除")
+                return False
+
+            existing['deleted'] = True
+            existing['updated_at'] = datetime.now().isoformat()
+            self._save_scheduled_task_to_cache(existing, sync_status='modified')
             logger.info(f"删除定时任务成功: {task_id}")
             return True
         except Exception as e:
