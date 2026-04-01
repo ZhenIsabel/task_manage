@@ -138,6 +138,73 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
         request_mock.assert_called_once()
         self.assertEqual(request_mock.call_args.args[:2], ('POST', '/api/scheduled_tasks'))
 
+
+    def test_create_scheduled_task_is_visible_from_cache_before_flush(self):
+        manager = self._build_manager(remote_config={})
+
+        result = manager.create_scheduled_task({
+            'id': 'sched-cache-create',
+            'title': '缓存创建',
+            'frequency': 'daily',
+        })
+
+        self.assertTrue(result)
+        self.assertIsNotNone(manager.get_scheduled_task('sched-cache-create'))
+        self.assertEqual(
+            [task['id'] for task in manager.list_scheduled_tasks()],
+            ['sched-cache-create'],
+        )
+
+        row = manager.get_connection().execute(
+            'SELECT id FROM scheduled_tasks WHERE id = ?',
+            ('sched-cache-create',),
+        ).fetchone()
+        self.assertIsNone(row)
+
+    def test_update_scheduled_task_uses_cache_before_flush(self):
+        manager = self._build_manager(remote_config={})
+        manager.create_scheduled_task({
+            'id': 'sched-cache-update',
+            'title': '原始标题',
+            'frequency': 'daily',
+        })
+        manager.flush_cache_to_db()
+
+        result = manager.update_scheduled_task('sched-cache-update', {'title': '缓存标题'})
+
+        self.assertTrue(result)
+        self.assertEqual(manager.get_scheduled_task('sched-cache-update')['title'], '缓存标题')
+
+        row = manager.get_connection().execute(
+            'SELECT title FROM scheduled_tasks WHERE id = ?',
+            ('sched-cache-update',),
+        ).fetchone()
+        self.assertEqual(row['title'], '原始标题')
+
+    def test_delete_scheduled_task_hides_from_reads_before_flush(self):
+        manager = self._build_manager(remote_config={})
+        manager.create_scheduled_task({
+            'id': 'sched-cache-delete',
+            'title': '待删除任务',
+            'frequency': 'daily',
+        })
+        manager.flush_cache_to_db()
+
+        result = manager.delete_scheduled_task('sched-cache-delete')
+
+        self.assertTrue(result)
+        self.assertIsNone(manager.get_scheduled_task('sched-cache-delete'))
+        self.assertEqual(
+            [task['id'] for task in manager.list_scheduled_tasks()],
+            [],
+        )
+
+        row = manager.get_connection().execute(
+            'SELECT id FROM scheduled_tasks WHERE id = ?',
+            ('sched-cache-delete',),
+        ).fetchone()
+        self.assertIsNotNone(row)
+
     def test_sync_scheduled_tasks_from_server_keeps_local_when_remote_is_newer(self):
         manager = self._build_manager(remote_config={})
         manager.create_scheduled_task({
