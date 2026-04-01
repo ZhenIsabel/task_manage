@@ -23,27 +23,34 @@ class TaskLabel(QWidget):
     """任务标签类，表示一个工作项"""
     deleteRequested = pyqtSignal(object)
     statusChanged = pyqtSignal(object)
+    _editable_fields_cache = None
 
     @classmethod
-    def get_editable_fields(cls):
-        """从配置中获取可编辑字段"""
-        config = load_config()
-        fields = config.get('task_fields', [])
-        if not fields:
-            # 如果配置中没有字段定义，使用默认字段
-            fields = [
-                {"name": "text",      "label": "任务内容", "type": "text",  "required": True},
-                {"name": "due_date",  "label": "到期日期", "type": "date",  "required": False},
-                {"name": "urgency",   "label": "紧急程度", "type": "select", "required": False, "options": ["高", "低"]},
-                {"name": "importance","label": "重要程度", "type": "select", "required": False, "options": ["高", "低"]},
-                {"name": "notes",     "label": "备注",     "type": "multiline",  "required": False},
-                {"name": "directory","label": "目录","type": "file", "required": False},
-                {"name":"create_date","label":"创建日期","type":"date","required":False},
-                {"name":"completed_date","label":"完成日期","type":"date","required":False}
-            ]
-        return fields
+    def get_editable_fields(cls, field_definitions=None):
+        """获取可编辑字段，优先使用调用方传入的预加载配置。"""
+        if field_definitions is not None:
+            return field_definitions
+
+        if cls._editable_fields_cache is None:
+            config = load_config()
+            fields = config.get('task_fields', [])
+            if not fields:
+                # 如果配置中没有字段定义，使用默认字段
+                fields = [
+                    {"name": "text",      "label": "任务内容", "type": "text",  "required": True},
+                    {"name": "due_date",  "label": "到期日期", "type": "date",  "required": False},
+                    {"name": "urgency",   "label": "紧急程度", "type": "select", "required": False, "options": ["高", "低"]},
+                    {"name": "importance","label": "重要程度", "type": "select", "required": False, "options": ["高", "低"]},
+                    {"name": "notes",     "label": "备注",     "type": "multiline",  "required": False},
+                    {"name": "directory","label": "目录","type": "file", "required": False},
+                    {"name":"create_date","label":"创建日期","type":"date","required":False},
+                    {"name":"completed_date","label":"完成日期","type":"date","required":False}
+                ]
+            cls._editable_fields_cache = fields
+
+        return cls._editable_fields_cache
     
-    def __init__(self, task_id, color,completed=False, parent=None,  **fields):
+    def __init__(self, task_id, color,completed=False, parent=None, field_definitions=None, **fields):
         try:
             super().__init__(parent)
         except Exception as e:
@@ -53,7 +60,8 @@ class TaskLabel(QWidget):
         self.color = QColor(color)
 
         # ---- 自动把 EDITABLE_FIELDS 里声明的 key 赋成属性 ----
-        for meta in self.get_editable_fields():
+        self._field_definitions = list(self.get_editable_fields(field_definitions))
+        for meta in self._field_definitions:
             key = meta["name"]
             setattr(self, key, fields.get(key, ""))  # 添加默认值
 
@@ -280,7 +288,7 @@ class TaskLabel(QWidget):
         """编辑任务内容"""
         # 获取当前字段配置
         task_fields = []
-        for meta in self.get_editable_fields():
+        for meta in self._field_definitions:
             value = getattr(self, meta["name"], "") or ""  # 双重空值保护
             task_fields.append(dict(meta, default=value))
 
@@ -306,7 +314,7 @@ class TaskLabel(QWidget):
                 return
 
         # 更新任务数据
-        for meta in self.get_editable_fields():
+        for meta in self._field_definitions:
             key = meta["name"]
             if key in task_data:
                 setattr(self, key, task_data[key])
@@ -348,7 +356,7 @@ class TaskLabel(QWidget):
         }
         
         # 添加所有可编辑字段
-        for meta in self.get_editable_fields():
+        for meta in self._field_definitions:
             key = meta["name"]
             value = getattr(self, key, "")
             data[key] = value if value is not None else ""

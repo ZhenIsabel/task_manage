@@ -816,5 +816,64 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
         self.assertEqual(widget.db_manager.flush_cache_to_db.call_count, 2)
         widget.db_manager.sync_to_server.assert_called_once()
         widget.load_tasks.assert_called_once()
+
+    def test_bootstrap_remote_sync_starts_background_thread_when_remote_is_configured(self):
+        widget = QuadrantWidget.__new__(QuadrantWidget)
+        widget._is_closing = False
+        widget._sync_refresh_pending = False
+        widget.load_tasks = Mock()
+        widget.show_settings = Mock()
+        widget.db_manager = Mock()
+        widget.db_manager.api_base_url = 'http://example.com'
+        widget.db_manager.api_token = 'token'
+        widget.db_manager.username = 'alice'
+
+        fake_thread = Mock()
+        with patch('core.quadrant_widget.threading.Thread', return_value=fake_thread) as thread_mock:
+            QuadrantWidget._bootstrap_remote_sync(widget)
+
+        thread_mock.assert_called_once()
+        fake_thread.start.assert_called_once()
+        widget.db_manager.bootstrap_remote_sync.assert_not_called()
+        widget.load_tasks.assert_not_called()
+
+    def test_task_label_get_editable_fields_uses_cached_config(self):
+        from core.task_label import TaskLabel
+
+        TaskLabel._editable_fields_cache = None
+        self.addCleanup(lambda: setattr(TaskLabel, '_editable_fields_cache', None))
+        fake_fields = [{'name': 'text', 'label': '任务内容', 'type': 'text', 'required': True}]
+
+        with patch('core.task_label.load_config', return_value={'task_fields': fake_fields}) as load_config_mock:
+            first = TaskLabel.get_editable_fields()
+            second = TaskLabel.get_editable_fields()
+
+        self.assertEqual(first, fake_fields)
+        self.assertEqual(second, fake_fields)
+        load_config_mock.assert_called_once()
+
+    def test_load_tasks_batches_updates_while_rebuilding_task_widgets(self):
+        widget = QuadrantWidget.__new__(QuadrantWidget)
+        widget.tasks = []
+        widget.config = {'task_fields': [{'name': 'text', 'required': True}]}
+        widget._sync_refresh_pending = False
+        widget.setUpdatesEnabled = Mock()
+
+        fake_task = Mock()
+        with patch('config.config_manager.load_tasks_with_history', return_value=[{
+            'id': 'task-1',
+            'color': '#4ECDC4',
+            'completed': False,
+            'text': '写周报',
+            'position': {'x': 10, 'y': 10},
+            'updated_at': '2026-04-01T10:00:00',
+            'created_at': '2026-04-01T09:00:00',
+        }]), patch('core.quadrant_widget.TaskLabel', return_value=fake_task):
+            QuadrantWidget.load_tasks(widget)
+
+        self.assertEqual(widget.setUpdatesEnabled.call_args_list[0].args, (False,))
+        self.assertEqual(widget.setUpdatesEnabled.call_args_list[-1].args, (True,))
+        self.assertEqual(len(widget.tasks), 1)
+
 if __name__ == "__main__":
     unittest.main()

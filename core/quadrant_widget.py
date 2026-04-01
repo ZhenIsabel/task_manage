@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)  # 自动获取模块名
 
 class QuadrantWidget(QWidget):
     remote_sync_refresh_requested = pyqtSignal(object)
+    remote_bootstrap_finished = pyqtSignal(bool)
 
     """四象限窗口部件"""
     def __init__(self, config, parent=None, ui_manager=None):
@@ -49,6 +50,7 @@ class QuadrantWidget(QWidget):
         self._is_closing = False
         self._sync_refresh_pending = False
         self.remote_sync_refresh_requested.connect(self._show_remote_sync_confirmation)
+        self.remote_bootstrap_finished.connect(self._on_remote_bootstrap_finished)
         self.db_manager.add_task_sync_listener(self._handle_remote_sync)
         QTimer.singleShot(0, self._bootstrap_remote_sync)
         
@@ -1445,9 +1447,23 @@ class QuadrantWidget(QWidget):
             self.show_settings('remote')
             return
 
-        sync_ok = self.db_manager.bootstrap_remote_sync()
+        threading.Thread(target=self._run_bootstrap_remote_sync, daemon=True).start()
+
+    def _run_bootstrap_remote_sync(self):
+        """后台执行启动远程同步，并将结果投递回主线程。"""
+        try:
+            sync_ok = self.db_manager.bootstrap_remote_sync()
+        except Exception as e:
+            logger.error(f"启动后远程同步失败: {str(e)}")
+            sync_ok = False
+
+        if not self._is_closing:
+            self.remote_bootstrap_finished.emit(sync_ok)
+
+    def _on_remote_bootstrap_finished(self, sync_ok):
+        """处理后台启动同步的完成回调。"""
         logger.info(f"启动后远程同步结果: {sync_ok}")
-        if sync_ok and not self._sync_refresh_pending:
+        if sync_ok and (not self._sync_refresh_pending):
             self.load_tasks()
 
     def _get_remote_change_type_label(self, change_type):
@@ -1776,26 +1792,30 @@ class QuadrantWidget(QWidget):
     def load_tasks(self):
         """从数据库加载任务并刷新主面板。"""
         logger.info("正在从数据库加载任务...")
-
-        # 清除当前所有任务
-        for task in self.tasks:
-            task.deleteLater()
-        self.tasks.clear()
+        self.setUpdatesEnabled(False)
 
         try:
+            # 清除当前所有任务
+            for task in self.tasks:
+                task.deleteLater()
+            self.tasks.clear()
+
             from config.config_manager import load_tasks_with_history
             tasks_data = load_tasks_with_history()
+            field_definitions = self.config.get('task_fields', [])
 
             for task_data in tasks_data:
+                task_fields = {
+                    field['name']: task_data.get(field['name'], "" if field.get('required') else None)
+                    for field in field_definitions
+                }
                 task = TaskLabel(
                     task_id=task_data['id'],
                     color=task_data['color'],
                     parent=self,
                     completed=task_data['completed'],
-                    **{
-                        field['name']: task_data.get(field['name'], "" if field.get('required') else None)
-                        for field in self.config.get('task_fields', [])
-                    }
+                    field_definitions=field_definitions,
+                    **task_fields,
                 )
                 task.updated_at = task_data.get('updated_at', '')
                 task.created_at = task_data.get('created_at', '')
@@ -1808,12 +1828,13 @@ class QuadrantWidget(QWidget):
                 task.show()
                 self.tasks.append(task)
 
-            self._sync_refresh_pending = False
             logger.info(f"成功加载了 {len(self.tasks)} 个任务")
         except Exception as e:
-            self._sync_refresh_pending = False
             logger.error(f"加载任务失败: {str(e)}")
             QMessageBox.warning(self, "加载失败", f"加载任务失败: {str(e)}")
+        finally:
+            self._sync_refresh_pending = False
+            self.setUpdatesEnabled(True)
 
     def save_tasks(self, task=None):
         """保存任务到数据库。"""
