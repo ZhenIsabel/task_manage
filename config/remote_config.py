@@ -9,9 +9,10 @@ class RemoteConfigManager:
         if config_file:
             self.config_file = config_file
         else:
-            # 默认定位到config目录
             app_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-            self.config_file = os.path.join(app_root,'config', 'remote_config.json')
+            root_config = os.path.join(app_root, 'remote_config.json')
+            config_dir_config = os.path.join(app_root, 'config', 'remote_config.json')
+            self.config_file = root_config if os.path.exists(root_config) else config_dir_config
         self.config = self.load_config()
     
     def load_config(self) -> Dict:
@@ -29,15 +30,17 @@ class RemoteConfigManager:
         try:
             with open(self.config_file, 'w', encoding='utf-8') as f:
                 json.dump(config, f, ensure_ascii=False, indent=2)
+            self.config = dict(config)
             print("远程配置保存成功")
             return True
         except Exception as e:
             print(f"保存远程配置失败: {str(e)}")
             return False
     
-    def set_server_config(self, api_base_url: str, api_token: str, username: str = '') -> bool:
+    def set_server_config(self, api_base_url: str, api_token: str, username: str = '', enabled: bool = True) -> bool:
         """设置服务器配置"""
         config = {
+            'enabled': enabled,
             'api_base_url': api_base_url,
             'api_token': api_token
         }
@@ -48,6 +51,7 @@ class RemoteConfigManager:
     def get_server_config(self) -> Dict:
         """获取服务器配置"""
         return {
+            'enabled': self.config.get('enabled', bool(self.config.get('api_base_url', ''))),
             'api_base_url': self.config.get('api_base_url', ''),
             'api_token': self.config.get('api_token', ''),
             'username': self.config.get('username', '')
@@ -110,9 +114,10 @@ def main():
             api_base_url = input("请输入API服务器地址 (例如: https://api.example.com): ").strip()
             api_token = input("请输入API访问令牌: ").strip()
             username = input("请输入用户名: ").strip()
+            enabled = input("启用远程同步？(Y/n): ").strip().lower() != 'n'
             
             if api_base_url and api_token:
-                if config_manager.set_server_config(api_base_url, api_token, username=username):
+                if config_manager.set_server_config(api_base_url, api_token, username=username, enabled=enabled):
                     print("✅ 服务器配置设置成功")
                 else:
                     print("❌ 服务器配置设置失败")
@@ -123,6 +128,7 @@ def main():
             print("\n=== 当前配置 ===")
             config = config_manager.get_server_config()
             if config['api_base_url']:
+                print(f"远程同步: {'启用' if config['enabled'] else '关闭'}")
                 print(f"服务器地址: {config['api_base_url']}")
                 print(f"访问令牌: {config['api_token'][:10]}..." if config['api_token'] else "未设置")
                 print(f"用户名: {config['username']}" if config['username'] else "用户名: 未设置")

@@ -5,8 +5,8 @@ import socket
 import time
 import threading
 from datetime import datetime
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QColorDialog, QSlider,  QMessageBox, QDialog,
-                            QTabWidget, QFormLayout, QSpinBox,  QMenu, QTimeEdit, QLabel, QCheckBox, QScrollArea)
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QPushButton, QColorDialog, QSlider,  QMessageBox, QDialog,
+                            QTabWidget, QFormLayout, QSpinBox,  QMenu, QTimeEdit, QLabel, QCheckBox, QScrollArea, QLineEdit)
 from PyQt6.QtCore import Qt, QPoint,  QRect, QTimer,QUrl, QTime, pyqtSignal
 from PyQt6.QtWidgets import QApplication,QFileDialog
 from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont,  QPainterPath, QLinearGradient, QAction
@@ -19,6 +19,7 @@ except Exception:
 
 from .task_label import TaskLabel
 from config.config_manager import save_config, save_tasks
+from config.remote_config import RemoteConfigManager
 from .add_task_dialog import AddTaskDialog
 from ui.styles import StyleManager
 from database.database_manager import get_db_manager
@@ -815,7 +816,23 @@ class QuadrantWidget(QWidget):
         
         logger.debug(f"撤销完成，剩余撤销栈大小: {len(self.undo_stack)}")
     
-    def show_settings(self):
+    def _apply_remote_config_to_db_manager(self, remote_config: dict):
+        """将远程配置同步到当前数据库管理器实例。"""
+        self.db_manager.remote_config = dict(remote_config)
+        self.db_manager.remote_enabled = remote_config.get('enabled', bool(remote_config.get('api_base_url', '')))
+        if self.db_manager.remote_enabled:
+            self.db_manager.api_base_url = remote_config.get('api_base_url', '')
+            self.db_manager.api_token = remote_config.get('api_token', '')
+            self.db_manager.username = remote_config.get('username', '')
+        else:
+            self.db_manager.api_base_url = ''
+            self.db_manager.api_token = ''
+            self.db_manager.username = ''
+
+        if hasattr(self.db_manager, '_reset_remote_auth_state'):
+            self.db_manager._reset_remote_auth_state()
+
+    def show_settings(self, initial_tab: str = ''):
         """显示设置对话框 - 采用add_task_dialog样式"""
         # ❶ 直接把 QDialog 设为「无边框」窗口
         dialog = QDialog(self, flags=Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
@@ -956,6 +973,31 @@ class QuadrantWidget(QWidget):
         ui_layout = QFormLayout(ui_widget)
         ui_layout.setSpacing(15)
         ui_layout.setContentsMargins(20, 20, 20, 20)
+
+        # 远程设置
+        remote_widget = QWidget()
+        remote_layout = QFormLayout(remote_widget)
+        remote_layout.setSpacing(15)
+        remote_layout.setContentsMargins(20, 20, 20, 20)
+
+        remote_config_manager = RemoteConfigManager()
+        remote_config = remote_config_manager.get_server_config()
+
+        remote_enabled_checkbox = QCheckBox("启用远程同步")
+        remote_enabled_checkbox.setChecked(remote_config.get('enabled', bool(remote_config.get('api_base_url', ''))))
+
+        remote_url_edit = QLineEdit(remote_config.get('api_base_url', ''))
+        remote_url_edit.setPlaceholderText("http://example.com")
+
+        remote_username_edit = QLineEdit(remote_config.get('username', ''))
+        remote_username_edit.setPlaceholderText("用户名")
+
+        remote_token_edit = QLineEdit(remote_config.get('api_token', ''))
+        remote_token_edit.setPlaceholderText("API Token")
+
+        remote_hint_label = QLabel("关闭远程同步后，下次启动将不会检测远程服务器。")
+        remote_hint_label.setStyleSheet("color: #666; font-size: 11px;")
+        remote_hint_label.setWordWrap(True)
         
         # 圆角设置
         border_radius_spin = QSpinBox()
@@ -993,11 +1035,21 @@ class QuadrantWidget(QWidget):
         ui_layout.addRow(auto_refresh_checkbox)
         ui_layout.addRow("刷新时间:", refresh_time_edit)
         ui_layout.addRow("", refresh_label)
+
+        remote_layout.addRow(remote_enabled_checkbox)
+        remote_layout.addRow("服务器地址:", remote_url_edit)
+        remote_layout.addRow("用户名:", remote_username_edit)
+        remote_layout.addRow("访问令牌:", remote_token_edit)
+        remote_layout.addRow("", remote_hint_label)
         
         # 添加标签页
         tab_widget.addTab(color_widget, "颜色设置")
         tab_widget.addTab(size_widget, "大小设置")
         tab_widget.addTab(ui_widget, "界面设置")
+        tab_widget.addTab(remote_widget, "远程设置")
+
+        if initial_tab == 'remote':
+            tab_widget.setCurrentWidget(remote_widget)
         
         # 将标签页添加到面板布局
         panel_layout.addWidget(tab_widget)
@@ -1005,7 +1057,22 @@ class QuadrantWidget(QWidget):
         # 添加确定按钮
         button_layout = QHBoxLayout()
         ok_button = QPushButton("确定")
-        ok_button.clicked.connect(dialog.accept)
+
+        def save_settings_and_accept():
+            remote_config_payload = {
+                'enabled': remote_enabled_checkbox.isChecked(),
+                'api_base_url': remote_url_edit.text().strip(),
+                'api_token': remote_token_edit.text().strip(),
+                'username': remote_username_edit.text().strip(),
+            }
+            if not remote_config_manager.save_config(remote_config_payload):
+                QMessageBox.warning(self, "保存失败", "远程配置保存失败，请稍后重试。")
+                return
+
+            self._apply_remote_config_to_db_manager(remote_config_payload)
+            dialog.accept()
+
+        ok_button.clicked.connect(save_settings_and_accept)
         button_layout.addStretch()
         button_layout.addWidget(ok_button)
         panel_layout.addLayout(button_layout)
@@ -1373,10 +1440,207 @@ class QuadrantWidget(QWidget):
         if self._is_closing or not getattr(self.db_manager, 'api_base_url', ''):
             return
 
+        if (not getattr(self.db_manager, 'username', '').strip()) or (not getattr(self.db_manager, 'api_token', '').strip()):
+            QMessageBox.warning(self, "远程配置不完整", "远程同步已暂停。请在设置面板的“远程设置”页补全远程服务器、用户名和访问令牌。")
+            self.show_settings('remote')
+            return
+
         sync_ok = self.db_manager.bootstrap_remote_sync()
         logger.info(f"启动后远程同步结果: {sync_ok}")
         if sync_ok and not self._sync_refresh_pending:
             self.load_tasks()
+
+    def _get_remote_change_type_label(self, change_type):
+        if change_type == 'create':
+            return '新增'
+        if change_type == 'delete':
+            return '删除'
+        return '修改'
+
+    def _format_remote_change_datetime(self, value):
+        text = str(value or '').strip()
+        if not text:
+            return '-'
+        text = text.replace('T', ' ')
+        if '.' in text:
+            text = text.split('.', 1)[0]
+        return text
+
+    def _format_remote_change_frequency(self, value):
+        mapping = {
+            'daily': '每天',
+            'weekly': '每周',
+            'monthly': '每月',
+            'quarterly': '每季度',
+            'yearly': '每年',
+        }
+        text = str(value or '').strip()
+        if not text:
+            return '-'
+        return mapping.get(text, text)
+
+    def _format_remote_change_boolean(self, value):
+        if value in (None, ''):
+            return '-'
+        return '是' if bool(value) else '否'
+
+    def _format_remote_change_week_day(self, value):
+        mapping = {
+            1: '周一',
+            2: '周二',
+            3: '周三',
+            4: '周四',
+            5: '周五',
+            6: '周六',
+            7: '周日',
+        }
+        if value in (None, ''):
+            return '-'
+        try:
+            return mapping.get(int(value), str(value))
+        except (TypeError, ValueError):
+            return str(value)
+
+    def _format_remote_change_position(self, record):
+        if not record:
+            return '-'
+        x = record.get('position_x')
+        y = record.get('position_y')
+        if x in (None, '') and y in (None, ''):
+            return '-'
+        return f'x={x}, y={y}'
+
+    def _get_remote_change_field_specs(self, entity_type):
+        if entity_type == 'scheduled_task':
+            return [
+                ('标题', lambda record: str(record.get('title') or '').strip() or '-'),
+                ('优先级', lambda record: str(record.get('priority') or '').strip() or '-'),
+                ('紧急度', lambda record: str(record.get('urgency') or '').strip() or '-'),
+                ('重要度', lambda record: str(record.get('importance') or '').strip() or '-'),
+                ('备注', lambda record: str(record.get('notes') or '').strip() or '-'),
+                ('截止日期', lambda record: str(record.get('due_date') or '').strip() or '-'),
+                ('频率', lambda record: self._format_remote_change_frequency(record.get('frequency'))),
+                ('每周', lambda record: self._format_remote_change_week_day(record.get('week_day'))),
+                ('每月', lambda record: str(record.get('month_day') or '').strip() or '-'),
+                ('每季度', lambda record: str(record.get('quarter_day') or '').strip() or '-'),
+                ('每年月份', lambda record: str(record.get('year_month') or '').strip() or '-'),
+                ('每年日期', lambda record: str(record.get('year_day') or '').strip() or '-'),
+                ('下次执行时间', lambda record: self._format_remote_change_datetime(record.get('next_run_at'))),
+                ('启用', lambda record: self._format_remote_change_boolean(record.get('active'))),
+                ('更新时间', lambda record: self._format_remote_change_datetime(record.get('updated_at'))),
+            ]
+
+        return [
+            ('标题', lambda record: str(record.get('text') or '').strip() or '-'),
+            ('备注', lambda record: str(record.get('notes') or '').strip() or '-'),
+            ('截止日期', lambda record: str(record.get('due_date') or '').strip() or '-'),
+            ('优先级', lambda record: str(record.get('priority') or '').strip() or '-'),
+            ('紧急度', lambda record: str(record.get('urgency') or '').strip() or '-'),
+            ('重要度', lambda record: str(record.get('importance') or '').strip() or '-'),
+            ('目录', lambda record: str(record.get('directory') or '').strip() or '-'),
+            ('创建日期', lambda record: str(record.get('create_date') or '').strip() or '-'),
+            ('颜色', lambda record: str(record.get('color') or '').strip() or '-'),
+            ('位置', lambda record: self._format_remote_change_position(record)),
+            ('已完成', lambda record: self._format_remote_change_boolean(record.get('completed'))),
+            ('完成时间', lambda record: self._format_remote_change_datetime(record.get('completed_date'))),
+            ('已删除', lambda record: self._format_remote_change_boolean(record.get('deleted'))),
+            ('更新时间', lambda record: self._format_remote_change_datetime(record.get('updated_at'))),
+        ]
+
+    def _build_remote_change_record_lines(self, change, record):
+        if not record:
+            return '-'
+
+        lines = []
+        for label, formatter in self._get_remote_change_field_specs(change.get('entity_type')):
+            value = formatter(record)
+            if value == '-':
+                continue
+            if label in {'已完成', '已删除', '启用'} and value == '否':
+                continue
+            lines.append(f'{label}：{value}')
+        return '\n'.join(lines) if lines else '-'
+
+    def _build_remote_change_diff_lines(self, change, local_record, remote_record):
+        differences = []
+        for label, formatter in self._get_remote_change_field_specs(change.get('entity_type')):
+            local_value = formatter(local_record or {}) if local_record else '-'
+            remote_value = formatter(remote_record or {}) if remote_record else '-'
+            if local_value == remote_value:
+                continue
+            differences.append((label, local_value, remote_value))
+        return differences
+
+    def _build_remote_change_view_model(self, change):
+        local_record = change.get('local_record')
+        remote_record = change.get('remote_record')
+        change_type = change.get('change_type', 'update')
+        title = change.get('title') or ''
+        if not title:
+            if change.get('entity_type') == 'scheduled_task':
+                title = (remote_record or {}).get('title') or (local_record or {}).get('title') or f"定时任务 {change.get('entity_id') or change.get('id', '')}"
+            else:
+                title = (remote_record or {}).get('text') or (local_record or {}).get('text') or f"任务 {change.get('entity_id') or change.get('id', '')}"
+        if change.get('entity_type') == 'scheduled_task':
+            title = f'【定时任务】{title}'
+
+        if change_type == 'create':
+            local_text = '-'
+            remote_text = self._build_remote_change_record_lines(change, remote_record)
+        elif change_type == 'delete':
+            local_text = self._build_remote_change_record_lines(change, local_record)
+            remote_text = '-'
+        else:
+            differences = self._build_remote_change_diff_lines(change, local_record, remote_record)
+            if differences:
+                local_text = '\n'.join(f'{label}：{local_value}' for label, local_value, _ in differences)
+                remote_text = '\n'.join(f'{label}：{remote_value}' for label, _, remote_value in differences)
+            else:
+                local_text = '-'
+                remote_text = '-'
+
+        return {
+            'id': change.get('id', ''),
+            'change_type_label': self._get_remote_change_type_label(change_type),
+            'title': title,
+            'local_text': local_text,
+            'remote_text': remote_text,
+        }
+
+    def _collect_remote_change_choices(self, selection_rows):
+        accepted_ids = []
+        rejected_ids = []
+        missing_ids = []
+        for row in selection_rows:
+            local_selected = bool(row.get('local_selected'))
+            remote_selected = bool(row.get('remote_selected'))
+            if local_selected == remote_selected:
+                missing_ids.append(row.get('id'))
+            elif remote_selected:
+                accepted_ids.append(row.get('id'))
+            else:
+                rejected_ids.append(row.get('id'))
+        return accepted_ids, rejected_ids, missing_ids
+
+    def _apply_remote_change_selection(self, selection_rows):
+        accepted_ids, rejected_ids, missing_ids = self._collect_remote_change_choices(selection_rows)
+        if missing_ids:
+            QMessageBox.warning(self, '选择不完整', '还有未勾选的冲突，请为每条记录选择接受本地或接受远程。')
+            return False
+
+        success = self.db_manager.resolve_pending_remote_task_changes(accepted_ids, rejected_ids)
+        if not success:
+            QMessageBox.warning(self, '同步失败', '处理远程修改失败，请稍后重试。')
+            return False
+
+        self.db_manager.flush_cache_to_db()
+        if rejected_ids and getattr(self.db_manager, 'api_base_url', ''):
+            sync_ok = self.db_manager.sync_to_server()
+            logger.info(f'远程修改确认后回写本地版本结果: {sync_ok}')
+            self.db_manager.flush_cache_to_db()
+
+        self.load_tasks()
+        return True
 
     def _show_remote_sync_confirmation(self, change_summaries):
         """弹出远程修改确认窗口。"""
@@ -1385,80 +1649,128 @@ class QuadrantWidget(QWidget):
             return
 
         dialog = QDialog(self)
-        dialog.setWindowTitle("远程修改确认")
+        dialog.setWindowTitle('远程修改确认')
         dialog.setModal(True)
-        dialog.resize(460, 380)
+        dialog.resize(980, 520)
 
         layout = QVBoxLayout(dialog)
-        message = QLabel("检测到远程修改。请勾选需要接受的项目；未勾选项目会使用本地内容回写到远程。")
+        message = QLabel('检测到远程修改。请为每条记录选择接受本地或接受远程，未完成选择前无法保存。')
         message.setWordWrap(True)
         layout.addWidget(message)
 
         scroll_area = QScrollArea(dialog)
         scroll_area.setWidgetResizable(True)
-        list_container = QWidget()
-        list_layout = QVBoxLayout(list_container)
-        checkboxes = []
+        table_container = QWidget()
+        table_layout = QGridLayout(table_container)
+        table_layout.setContentsMargins(8, 8, 8, 8)
+        table_layout.setHorizontalSpacing(12)
+        table_layout.setVerticalSpacing(10)
+        table_layout.setColumnStretch(0, 0)
+        table_layout.setColumnStretch(1, 2)
+        table_layout.setColumnStretch(2, 3)
+        table_layout.setColumnStretch(3, 3)
 
-        for change in change_summaries:
-            title = change.get('title') or f"任务 {change.get('entity_id') or change.get('id', '')}"
-            change_type = change.get('change_type')
-            if change_type == 'create':
-                prefix = "新增"
-            elif change_type == 'delete':
-                prefix = "删除"
-            else:
-                prefix = "修改"
+        headers = ['变更', '任务标题', '本地', '远程']
+        for column, header_text in enumerate(headers):
+            header = QLabel(header_text)
+            header.setStyleSheet('font-weight: 600; color: #334155; padding: 4px 0;')
+            table_layout.addWidget(header, 0, column)
 
-            if change.get('entity_type') == 'scheduled_task':
-                label_prefix = f"[定时任务][{prefix}]"
-            else:
-                label_prefix = f"[{prefix}]"
+        selection_rows = []
 
-            checkbox = QCheckBox(f"{label_prefix} {title}")
-            checkbox.setChecked(True)
-            list_layout.addWidget(checkbox)
-            checkboxes.append((change.get('id'), checkbox))
+        def bind_exclusive(source_checkbox, target_checkbox):
+            source_checkbox.toggled.connect(
+                lambda checked, other=target_checkbox: other.setChecked(False) if checked and other.isChecked() else None
+            )
 
-        list_layout.addStretch()
-        scroll_area.setWidget(list_container)
+        for row_index, change in enumerate(change_summaries, start=1):
+            view_model = self._build_remote_change_view_model(change)
+
+            tag_label = QLabel(view_model['change_type_label'])
+            tag_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            tag_label.setStyleSheet(
+                'background-color: #e2e8f0; color: #1e293b; border-radius: 8px; padding: 2px 8px; font-size: 12px;'
+            )
+
+            title_label = QLabel(view_model['title'])
+            title_label.setWordWrap(True)
+            title_label.setStyleSheet('font-weight: 500; color: #0f172a;')
+            title_label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+
+            local_checkbox = QCheckBox('接受本地')
+            remote_checkbox = QCheckBox('接受远程')
+            bind_exclusive(local_checkbox, remote_checkbox)
+            bind_exclusive(remote_checkbox, local_checkbox)
+
+            local_text = QLabel(view_model['local_text'])
+            local_text.setWordWrap(True)
+            local_text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            local_text.setStyleSheet('color: #1f2937;')
+
+            remote_text = QLabel(view_model['remote_text'])
+            remote_text.setWordWrap(True)
+            remote_text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            remote_text.setStyleSheet('color: #1f2937;')
+
+            local_cell = QWidget()
+            local_cell.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            local_cell.setStyleSheet('background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;')
+            local_layout = QVBoxLayout(local_cell)
+            local_layout.setContentsMargins(8, 8, 8, 8)
+            local_layout.setSpacing(6)
+            local_layout.addWidget(local_checkbox)
+            local_layout.addWidget(local_text)
+
+            remote_cell = QWidget()
+            remote_cell.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            remote_cell.setStyleSheet('background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;')
+            remote_layout = QVBoxLayout(remote_cell)
+            remote_layout.setContentsMargins(8, 8, 8, 8)
+            remote_layout.setSpacing(6)
+            remote_layout.addWidget(remote_checkbox)
+            remote_layout.addWidget(remote_text)
+
+            table_layout.addWidget(tag_label, row_index, 0, alignment=Qt.AlignmentFlag.AlignTop)
+            table_layout.addWidget(title_label, row_index, 1)
+            table_layout.addWidget(local_cell, row_index, 2)
+            table_layout.addWidget(remote_cell, row_index, 3)
+
+            selection_rows.append({
+                'id': view_model['id'],
+                'local_checkbox': local_checkbox,
+                'remote_checkbox': remote_checkbox,
+            })
+
+        scroll_area.setWidget(table_container)
         layout.addWidget(scroll_area)
 
         button_layout = QHBoxLayout()
         button_layout.addStretch()
-        cancel_button = QPushButton("取消", dialog)
-        confirm_button = QPushButton("确认", dialog)
+        cancel_button = QPushButton('取消', dialog)
+        confirm_button = QPushButton('保存', dialog)
         cancel_button.clicked.connect(dialog.reject)
-        confirm_button.clicked.connect(dialog.accept)
+
+        def confirm_selection():
+            result = self._apply_remote_change_selection([
+                {
+                    'id': row['id'],
+                    'local_selected': row['local_checkbox'].isChecked(),
+                    'remote_selected': row['remote_checkbox'].isChecked(),
+                }
+                for row in selection_rows
+            ])
+            if result:
+                dialog.accept()
+
+        confirm_button.clicked.connect(confirm_selection)
         button_layout.addWidget(cancel_button)
         button_layout.addWidget(confirm_button)
         layout.addLayout(button_layout)
 
         try:
             if dialog.exec() != QDialog.DialogCode.Accepted:
-                logger.info("用户取消了远程修改确认")
+                logger.info('用户取消了远程修改确认')
                 return
-
-            accepted_ids = []
-            rejected_ids = []
-            for task_id, checkbox in checkboxes:
-                if checkbox.isChecked():
-                    accepted_ids.append(task_id)
-                else:
-                    rejected_ids.append(task_id)
-
-            success = self.db_manager.resolve_pending_remote_task_changes(accepted_ids, rejected_ids)
-            if not success:
-                QMessageBox.warning(self, "同步失败", "处理远程修改失败，请稍后重试。")
-                return
-
-            self.db_manager.flush_cache_to_db()
-            if rejected_ids and getattr(self.db_manager, 'api_base_url', ''):
-                sync_ok = self.db_manager.sync_to_server()
-                logger.info(f"远程修改确认后回写本地版本结果: {sync_ok}")
-                self.db_manager.flush_cache_to_db()
-
-            self.load_tasks()
         finally:
             self._sync_refresh_pending = False
     def load_tasks(self):

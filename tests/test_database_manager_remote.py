@@ -1,8 +1,10 @@
 import os
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
+from core.quadrant_widget import QuadrantWidget
+from config.remote_config import RemoteConfigManager
 from database.database_manager import DatabaseManager
 
 
@@ -276,6 +278,23 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
         sync_scheduled_mock.assert_not_called()
         start_sync_mock.assert_not_called()
 
+    def test_sync_scheduled_tasks_to_server_serializes_active_as_boolean(self):
+        manager = self._build_manager(remote_config={})
+        manager.create_scheduled_task({
+            'id': 'sched-1',
+            'title': '每日回顾',
+            'frequency': 'daily',
+        })
+        manager.api_base_url = 'http://example.com'
+        manager.api_token = 'token'
+
+        with patch.object(manager, '_make_api_request', return_value={'success': True}) as request_mock:
+            result = manager.sync_scheduled_tasks_to_server()
+
+        self.assertTrue(result)
+        self.assertTrue(request_mock.call_args.args[2]['active'])
+        self.assertIsInstance(request_mock.call_args.args[2]['active'], bool)
+
     def test_update_scheduled_task_keeps_local_write_when_remote_push_fails(self):
         manager = self._build_manager(remote_config={})
         manager.create_scheduled_task({
@@ -313,6 +332,248 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
         request_mock.assert_called_once_with('DELETE', '/api/scheduled_tasks/sched-1')
 
 
+    def test_database_manager_logger_does_not_propagate_to_root_logger(self):
+        from database.database_manager import logger as db_logger
 
+        self.assertFalse(db_logger.propagate)
+
+    def test_make_api_request_stops_repeated_auth_retry_after_failed_registration(self):
+        remote_config = {
+            "api_base_url": "http://example.com",
+            "api_token": "token",
+            "username": "alice",
+        }
+        manager = self._build_manager(remote_config=remote_config)
+
+        calls = []
+
+        def fake_request(method, url, headers=None, json=None, timeout=None):
+            calls.append((method, url, headers, json))
+            if url.endswith('/api/tasks') and method == 'GET':
+                return FakeResponse(401, {'error': 'Unauthorized'}, 'unauthorized')
+            if url.endswith('/api/users') and method == 'POST':
+                return FakeResponse(500, {'error': 'boom'}, 'boom')
+            raise AssertionError(f'unexpected request: {method} {url}')
+
+        with patch('database.database_manager.requests.request', side_effect=fake_request):
+            first_result = manager._make_api_request('GET', '/api/tasks')
+            second_result = manager._make_api_request('GET', '/api/tasks')
+
+        self.assertIsNone(first_result)
+        self.assertIsNone(second_result)
+        self.assertEqual(
+            calls,
+            [
+                ('GET', 'http://example.com/api/tasks', {'Content-Type': 'application/json', 'Authorization': 'Bearer token'}, None),
+                ('POST', 'http://example.com/api/users', {'Content-Type': 'application/json'}, {'username': 'alice', 'api_token': 'token'}),
+            ],
+        )
+
+
+    def test_bootstrap_remote_sync_does_not_start_periodic_sync_when_initial_sync_fails(self):
+        remote_config = {
+            "api_base_url": "http://example.com",
+            "api_token": "token",
+            "username": "alice",
+        }
+        with patch.object(DatabaseManager, '_make_api_request', autospec=True, return_value={'status': 'ok'}) as request_mock,              patch.object(DatabaseManager, 'sync_from_server', autospec=True, return_value=False) as sync_tasks_mock,              patch.object(DatabaseManager, 'sync_scheduled_tasks_from_server', autospec=True, return_value=False) as sync_scheduled_mock,              patch.object(DatabaseManager, 'start_periodic_sync', autospec=True) as start_sync_mock:
+            manager = self._build_manager(remote_config=remote_config, sync_interval=180)
+            result = manager.bootstrap_remote_sync()
+
+        self.assertFalse(result)
+        request_mock.assert_called_once_with(manager, 'GET', '/api/health')
+        sync_tasks_mock.assert_called_once_with(manager)
+        sync_scheduled_mock.assert_called_once_with(manager)
+        start_sync_mock.assert_not_called()
+
+
+    def test_bootstrap_remote_sync_opens_settings_when_username_missing(self):
+        widget = QuadrantWidget.__new__(QuadrantWidget)
+        widget._is_closing = False
+        widget._sync_refresh_pending = False
+        widget.load_tasks = Mock()
+        widget.show_settings = Mock()
+        widget.db_manager = Mock()
+        widget.db_manager.api_base_url = 'http://example.com'
+        widget.db_manager.api_token = 'token'
+        widget.db_manager.username = ''
+
+        with patch('core.quadrant_widget.QMessageBox.warning') as warning_mock:
+            QuadrantWidget._bootstrap_remote_sync(widget)
+
+        warning_mock.assert_called_once()
+        widget.show_settings.assert_called_once()
+        widget.db_manager.bootstrap_remote_sync.assert_not_called()
+        widget.load_tasks.assert_not_called()
+
+    def test_remote_config_manager_persists_enabled_flag(self):
+        fd, config_path = tempfile.mkstemp(dir=WORKSPACE_TMP_ROOT, suffix='.json')
+        os.close(fd)
+        os.remove(config_path)
+        self.addCleanup(lambda: os.path.exists(config_path) and os.remove(config_path))
+
+        manager = RemoteConfigManager(config_file=config_path)
+        self.assertTrue(
+            manager.set_server_config(
+                'http://example.com',
+                'token',
+                username='alice',
+                enabled=False,
+            )
+        )
+
+        reloaded = RemoteConfigManager(config_file=config_path)
+        config = reloaded.get_server_config()
+        self.assertEqual(config['api_base_url'], 'http://example.com')
+        self.assertEqual(config['api_token'], 'token')
+        self.assertEqual(config['username'], 'alice')
+        self.assertFalse(config['enabled'])
+
+    def test_database_manager_treats_disabled_remote_config_as_local_mode(self):
+        manager = self._build_manager(
+            remote_config={
+                'enabled': False,
+                'api_base_url': 'http://example.com',
+                'api_token': 'token',
+                'username': 'alice',
+            },
+            sync_interval=180,
+        )
+
+        self.assertFalse(manager.remote_enabled)
+        self.assertEqual(manager.api_base_url, '')
+        self.assertEqual(manager.api_token, '')
+        self.assertEqual(manager.username, '')
+
+
+
+    def test_quadrant_widget_builds_task_change_view_model_with_only_diff_fields(self):
+        widget = QuadrantWidget.__new__(QuadrantWidget)
+        change = {
+            'id': 'task:task-1',
+            'entity_type': 'task',
+            'change_type': 'update',
+            'title': '写周报',
+            'local_record': {
+                'id': 'task-1',
+                'text': '写周报',
+                'notes': '本地备注',
+                'completed': False,
+                'completed_date': '',
+                'deleted': False,
+                'urgency': '低',
+                'importance': '高',
+                'due_date': '',
+            },
+            'remote_record': {
+                'id': 'task-1',
+                'text': '写周报',
+                'notes': '远程备注',
+                'completed': True,
+                'completed_date': '2026-04-01T10:00:00',
+                'deleted': False,
+                'urgency': '低',
+                'importance': '高',
+                'due_date': '',
+            },
+        }
+
+        view_model = QuadrantWidget._build_remote_change_view_model(widget, change)
+
+        self.assertEqual(view_model['change_type_label'], '修改')
+        self.assertEqual(view_model['title'], '写周报')
+        self.assertIn('备注：本地备注', view_model['local_text'])
+        self.assertIn('备注：远程备注', view_model['remote_text'])
+        self.assertIn('已完成：否', view_model['local_text'])
+        self.assertIn('已完成：是', view_model['remote_text'])
+        self.assertIn('完成时间：-', view_model['local_text'])
+        self.assertIn('完成时间：2026-04-01 10:00:00', view_model['remote_text'])
+        self.assertNotIn('紧急度：', view_model['local_text'])
+        self.assertNotIn('重要度：', view_model['remote_text'])
+
+    def test_quadrant_widget_builds_scheduled_change_view_model_with_only_diff_fields(self):
+        widget = QuadrantWidget.__new__(QuadrantWidget)
+        change = {
+            'id': 'scheduled:sched-1',
+            'entity_type': 'scheduled_task',
+            'change_type': 'update',
+            'title': '每周复盘',
+            'local_record': {
+                'id': 'sched-1',
+                'title': '每周复盘',
+                'frequency': 'weekly',
+                'next_run_at': '2026-04-08T09:00:00',
+                'notes': '不变备注',
+                'active': True,
+            },
+            'remote_record': {
+                'id': 'sched-1',
+                'title': '每周复盘',
+                'frequency': 'monthly',
+                'next_run_at': '2026-05-01T09:00:00',
+                'notes': '不变备注',
+                'active': True,
+            },
+        }
+
+        view_model = QuadrantWidget._build_remote_change_view_model(widget, change)
+
+        self.assertEqual(view_model['change_type_label'], '修改')
+        self.assertEqual(view_model['title'], '【定时任务】每周复盘')
+        self.assertIn('频率：每周', view_model['local_text'])
+        self.assertIn('频率：每月', view_model['remote_text'])
+        self.assertIn('下次执行时间：2026-04-08 09:00:00', view_model['local_text'])
+        self.assertIn('下次执行时间：2026-05-01 09:00:00', view_model['remote_text'])
+        self.assertNotIn('备注：', view_model['local_text'])
+        self.assertNotIn('启用：', view_model['remote_text'])
+
+    def test_quadrant_widget_collects_remote_change_choices_and_flags_missing_rows(self):
+        widget = QuadrantWidget.__new__(QuadrantWidget)
+        accepted_ids, rejected_ids, missing_ids = QuadrantWidget._collect_remote_change_choices(widget, [
+            {'id': 'task:1', 'local_selected': False, 'remote_selected': False},
+            {'id': 'task:2', 'local_selected': True, 'remote_selected': False},
+            {'id': 'task:3', 'local_selected': False, 'remote_selected': True},
+            {'id': 'task:4', 'local_selected': True, 'remote_selected': True},
+        ])
+
+        self.assertEqual(accepted_ids, ['task:3'])
+        self.assertEqual(rejected_ids, ['task:2'])
+        self.assertEqual(missing_ids, ['task:1', 'task:4'])
+
+    def test_quadrant_widget_apply_remote_change_selection_requires_each_row_to_choose_one_side(self):
+        widget = QuadrantWidget.__new__(QuadrantWidget)
+        widget.db_manager = Mock()
+        widget.load_tasks = Mock()
+
+        with patch('core.quadrant_widget.QMessageBox.warning') as warning_mock:
+            result = QuadrantWidget._apply_remote_change_selection(widget, [
+                {'id': 'task:1', 'local_selected': False, 'remote_selected': False},
+            ])
+
+        self.assertFalse(result)
+        warning_mock.assert_called_once()
+        widget.db_manager.resolve_pending_remote_task_changes.assert_not_called()
+        widget.load_tasks.assert_not_called()
+
+    def test_quadrant_widget_apply_remote_change_selection_submits_local_and_remote_choices(self):
+        widget = QuadrantWidget.__new__(QuadrantWidget)
+        widget.db_manager = Mock()
+        widget.db_manager.resolve_pending_remote_task_changes.return_value = True
+        widget.db_manager.api_base_url = 'http://example.com'
+        widget.db_manager.sync_to_server.return_value = True
+        widget.load_tasks = Mock()
+
+        with patch('core.quadrant_widget.QMessageBox.warning') as warning_mock:
+            result = QuadrantWidget._apply_remote_change_selection(widget, [
+                {'id': 'task:1', 'local_selected': True, 'remote_selected': False},
+                {'id': 'scheduled:sched-1', 'local_selected': False, 'remote_selected': True},
+            ])
+
+        self.assertTrue(result)
+        warning_mock.assert_not_called()
+        widget.db_manager.resolve_pending_remote_task_changes.assert_called_once_with(['scheduled:sched-1'], ['task:1'])
+        self.assertEqual(widget.db_manager.flush_cache_to_db.call_count, 2)
+        widget.db_manager.sync_to_server.assert_called_once()
+        widget.load_tasks.assert_called_once()
 if __name__ == "__main__":
     unittest.main()

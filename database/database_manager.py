@@ -21,6 +21,7 @@ if not logger.handlers:
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
     logger.setLevel(logging.INFO)
+logger.propagate = False
 
 APP_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 
@@ -39,10 +40,13 @@ class DatabaseManager:
         self.db_path = db_path if os.path.isabs(db_path) else os.path.join(APP_ROOT,'database', db_path)
         self.conn = None
         self.remote_config = remote_config or {}
-        self.api_base_url = self.remote_config.get('api_base_url', '')
-        self.api_token = self.remote_config.get('api_token', '')
-        self.username = self.remote_config.get('username', '')
+        configured_api_base_url = self.remote_config.get('api_base_url', '')
+        self.remote_enabled = self.remote_config.get('enabled', bool(configured_api_base_url))
+        self.api_base_url = configured_api_base_url if self.remote_enabled else ''
+        self.api_token = self.remote_config.get('api_token', '') if self.remote_enabled else ''
+        self.username = self.remote_config.get('username', '') if self.remote_enabled else ''
         self._remote_user_registration_attempted = False
+        self._remote_auth_paused = False
         self._sync_interval = sync_interval
         self._sync_thread = None
         self._stop_sync_event = threading.Event()
@@ -205,6 +209,15 @@ class DatabaseManager:
             headers['Authorization'] = f'Bearer {self.api_token}'
         return headers
 
+    def _reset_remote_auth_state(self) -> None:
+        """重置远程鉴权降级状态，允许重新尝试自动注册。"""
+        self._remote_user_registration_attempted = False
+        self._remote_auth_paused = False
+
+    def _pause_remote_auth(self) -> None:
+        """在自动注册失败后暂停受保护远程请求，避免周期同步反复刷屏。"""
+        self._remote_auth_paused = True
+
     def _register_remote_user(self) -> bool:
         """首次鉴权失败时，尝试按配置自动注册远程用户。"""
         if self._remote_user_registration_attempted:
@@ -213,6 +226,7 @@ class DatabaseManager:
         self._remote_user_registration_attempted = True
         if not self.api_base_url or not self.username or not self.api_token:
             logger.warning("缺少远程注册所需的 username 或 api_token，跳过自动注册")
+            self._pause_remote_auth()
             return False
 
         try:
@@ -225,24 +239,32 @@ class DatabaseManager:
             )
         except requests.exceptions.Timeout:
             logger.error("自动注册远程用户超时")
+            self._pause_remote_auth()
             return False
         except requests.exceptions.ConnectionError:
             logger.error("自动注册远程用户时连接失败")
+            self._pause_remote_auth()
             return False
         except Exception as e:
             logger.error(f"自动注册远程用户异常: {str(e)}")
+            self._pause_remote_auth()
             return False
 
         if response.status_code in (200, 201, 409):
             logger.info(f"自动注册远程用户结果: {response.status_code}")
+            self._remote_auth_paused = False
             return True
 
         logger.error(f"自动注册远程用户失败: {response.status_code} - {response.text}")
+        self._pause_remote_auth()
         return False
 
     def _make_api_request(self, method: str, endpoint: str, data: Optional[Dict] = None, retry_on_auth_failure: bool = True) -> Optional[Dict]:
         if not self.api_base_url:
             logger.debug("未配置API服务器地址，跳过API请求")
+            return None
+        if self._remote_auth_paused and (not self._is_public_endpoint(endpoint)):
+            logger.debug(f"远程鉴权已暂停，跳过请求: {endpoint}")
             return None
         try:
             url = f"{self.api_base_url.rstrip('/')}/{endpoint.lstrip('/')}"
@@ -296,6 +318,7 @@ class DatabaseManager:
             logger.info("未配置远程服务器，跳过启动同步")
             return False
 
+        self._reset_remote_auth_state()
         health = self._make_api_request('GET', '/api/health')
         if not health:
             logger.warning("远程服务健康检查失败，保留本地数据")
@@ -303,7 +326,7 @@ class DatabaseManager:
 
         tasks_ok = self.sync_from_server()
         scheduled_ok = self.sync_scheduled_tasks_from_server()
-        if self._sync_interval:
+        if self._sync_interval and tasks_ok and scheduled_ok:
             self.start_periodic_sync(self._sync_interval)
         return tasks_ok and scheduled_ok
 
@@ -422,6 +445,8 @@ class DatabaseManager:
 
     def sync_to_server(self) -> bool:
         """同步本地数据到服务器"""
+        if self._remote_auth_paused:
+            return False
         try:
             with self._cache_lock:
                 if self._pending_remote_task_changes:
@@ -459,6 +484,8 @@ class DatabaseManager:
 
     def sync_from_server(self) -> bool:
         """从服务器同步数据到本地缓存。"""
+        if self._remote_auth_paused:
+            return False
         try:
             with self._cache_lock:
                 pending_summaries = self._build_pending_remote_change_summaries_locked()
@@ -644,6 +671,8 @@ class DatabaseManager:
                 'entity_id': change.get('entity_id', ''),
                 'title': change.get('title', ''),
                 'change_type': change.get('change_type', 'update'),
+                'local_record': copy.deepcopy(change.get('local_record')),
+                'remote_record': copy.deepcopy(change.get('remote_record')),
             })
         summaries.sort(key=lambda item: item.get('title', ''))
         return summaries
@@ -702,7 +731,7 @@ class DatabaseManager:
 
                 local_record = change.get('local_record')
                 if local_record is not None:
-                    self._make_api_request('POST', '/api/scheduled_tasks', local_record)
+                    self._make_api_request('POST', '/api/scheduled_tasks', self._serialize_scheduled_task_for_api(local_record))
                 elif change.get('entity_id'):
                     self._make_api_request('DELETE', f"/api/scheduled_tasks/{change['entity_id']}")
             return True
@@ -1022,6 +1051,24 @@ class DatabaseManager:
         normalized['updated_at'] = schedule_data.get('updated_at') or now
         return normalized
 
+    def _serialize_scheduled_task_for_api(self, schedule_data: Dict[str, Any]) -> Dict[str, Any]:
+        """将定时任务记录转换为远端接口期望的 JSON 结构。"""
+        payload = copy.deepcopy(schedule_data)
+        active = payload.get('active', True)
+        if isinstance(active, bool):
+            payload['active'] = active
+        elif isinstance(active, str):
+            lowered = active.strip().lower()
+            if lowered in {'1', 'true', 'yes', 'on'}:
+                payload['active'] = True
+            elif lowered in {'0', 'false', 'no', 'off', ''}:
+                payload['active'] = False
+            else:
+                payload['active'] = bool(active)
+        else:
+            payload['active'] = bool(active)
+        return payload
+
     def _upsert_scheduled_task_local(self, schedule_data: Dict[str, Any], commit: bool = True) -> bool:
         """在本地数据库中插入或更新定时任务。"""
         try:
@@ -1069,7 +1116,7 @@ class DatabaseManager:
                 return False
 
             if self.api_base_url:
-                result = self._make_api_request('POST', '/api/scheduled_tasks', schedule_to_save)
+                result = self._make_api_request('POST', '/api/scheduled_tasks', self._serialize_scheduled_task_for_api(schedule_to_save))
                 if result:
                     logger.info(f"创建定时任务已同步到服务器: {schedule_to_save['id']}")
                 else:
@@ -1146,7 +1193,7 @@ class DatabaseManager:
                 return False
 
             if self.api_base_url:
-                result = self._make_api_request('POST', '/api/scheduled_tasks', merged)
+                result = self._make_api_request('POST', '/api/scheduled_tasks', self._serialize_scheduled_task_for_api(merged))
                 if result:
                     logger.info(f"更新定时任务已同步到服务器: {task_id}")
                 else:
@@ -1211,6 +1258,8 @@ class DatabaseManager:
         """同步定时任务到服务器"""
         if not self.api_base_url:
             return True
+        if self._remote_auth_paused:
+            return False
         
         try:
             conn = self.get_connection()
@@ -1224,7 +1273,7 @@ class DatabaseManager:
             for row in scheduled_tasks:
                 task = dict(row)
                 # 发送到服务器
-                result = self._make_api_request('POST', '/api/scheduled_tasks', task)
+                result = self._make_api_request('POST', '/api/scheduled_tasks', self._serialize_scheduled_task_for_api(task))
                 if result:
                     synced_count += 1
                 else:
@@ -1240,6 +1289,8 @@ class DatabaseManager:
         """从服务器同步定时任务到本地，本地已有项遇到远端更新时转为待确认冲突。"""
         if not self.api_base_url:
             return True
+        if self._remote_auth_paused:
+            return False
 
         try:
             result = self._make_api_request('GET', '/api/scheduled_tasks')
@@ -1282,6 +1333,9 @@ class DatabaseManager:
         """定时同步线程的工作函数。"""
         logger.info("定时同步线程工作函数启动")
         while not self._stop_sync_event.is_set():
+            if self._remote_auth_paused:
+                self._stop_sync_event.wait(self._sync_interval)
+                continue
             try:
                 logger.info("定时同步：开始从服务器同步普通任务")
                 self.sync_from_server()

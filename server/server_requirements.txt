@@ -1,3 +1,0 @@
-Flask==2.3.3
-Flask-CORS==4.0.0
-# SQLite是Python标准库，不需要额外安装 
