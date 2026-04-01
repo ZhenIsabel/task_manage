@@ -836,7 +836,7 @@ class DatabaseManager:
         if change.get('entity_type') == 'scheduled_task':
             remote_record = change.get('remote_record')
             if remote_record is not None:
-                self._upsert_scheduled_task_local(remote_record)
+                self._save_scheduled_task_to_cache(remote_record, sync_status='synced')
             return
 
         self._save_task_to_cache(change['remote_record'], 'synced')
@@ -846,7 +846,9 @@ class DatabaseManager:
         if change.get('entity_type') == 'scheduled_task':
             local_record = change.get('local_record')
             if local_record is not None:
-                self._upsert_scheduled_task_local(local_record)
+                local_copy = copy.deepcopy(local_record)
+                local_copy['updated_at'] = datetime.now().isoformat()
+                self._save_scheduled_task_to_cache(local_copy, sync_status='modified')
             return
 
         local_task = change.get('local_record')
@@ -1000,6 +1002,7 @@ class DatabaseManager:
         else:
             self._deleted_task_ids.discard(task_id)
         self._cache_dirty = True
+        self._entity_cache['task']['dirty'] = True
 
     def save_task(self, task_data: Dict[str, Any]) -> bool:
         """保存任务到内存缓存，延迟写入数据库"""
@@ -1161,7 +1164,7 @@ class DatabaseManager:
                     logger.warning(f"任务 {task_id} 不存在于缓存，无法删除")
                     return False
             logger.info(f"任务 {task_id} 已逻辑删除（内存缓存）")
-            threading.Thread(target=self.sync_to_server).start()
+            self._entity_cache['task']['dirty'] = True
             return True
         except Exception as e:
             logger.error(f"删除任务失败: {str(e)}")
@@ -1405,26 +1408,34 @@ class DatabaseManager:
             logger.info("定时同步线程已停止")
 
     def sync_scheduled_tasks_to_server(self) -> bool:
-        """同步定时任务到服务器"""
+        """同步定时任务到服务器。"""
         if not self.api_base_url:
             return True
         if self._remote_auth_paused:
             return False
         
         try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            
-            # 获取所有定时任务
-            cursor.execute('SELECT * FROM scheduled_tasks')
-            scheduled_tasks = cursor.fetchall()
-            
+            pending_records = [
+                copy.deepcopy(record)
+                for record in self._scheduled_task_cache.values()
+                if record.get('sync_status') != 'synced'
+            ]
+
+            if not pending_records:
+                logger.info("没有需要同步的定时任务")
+                return True
+
             synced_count = 0
-            for row in scheduled_tasks:
-                task = dict(row)
-                # 发送到服务器
-                result = self._make_api_request('POST', '/api/scheduled_tasks', self._serialize_scheduled_task_for_api(task))
+            for task in pending_records:
+                if task.get('deleted'):
+                    result = self._make_api_request('DELETE', f"/api/scheduled_tasks/{task['id']}")
+                else:
+                    result = self._make_api_request('POST', '/api/scheduled_tasks', self._serialize_scheduled_task_for_api(task))
+
                 if result:
+                    if task['id'] in self._scheduled_task_cache:
+                        self._scheduled_task_cache[task['id']]['sync_status'] = 'synced'
+                        self._entity_cache['scheduled_task']['dirty'] = True
                     synced_count += 1
                 else:
                     logger.error(f"同步定时任务 {task['id']} 失败")
@@ -1455,8 +1466,8 @@ class DatabaseManager:
             for task_data in server_tasks:
                 local_task = self.get_scheduled_task(task_data['id'])
                 if not local_task:
-                    if self._upsert_scheduled_task_local(task_data, commit=True):
-                        inserted_count += 1
+                    self._save_scheduled_task_to_cache(task_data, sync_status='synced')
+                    inserted_count += 1
                     continue
 
                 if task_data.get('updated_at', '') > local_task.get('updated_at', '') and self._scheduled_task_sync_content_changed(local_task, task_data):

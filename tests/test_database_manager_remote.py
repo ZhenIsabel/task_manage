@@ -119,7 +119,7 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
 
         self.assertEqual(history, remote_history['history'])
 
-    def test_create_scheduled_task_keeps_local_write_when_remote_push_fails(self):
+    def test_create_scheduled_task_keeps_local_write_without_immediate_remote_push(self):
         manager = self._build_manager(remote_config={})
         manager.api_base_url = 'http://example.com'
         manager.api_token = 'token'
@@ -135,9 +135,7 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
 
         self.assertTrue(result)
         self.assertIsNotNone(manager.get_scheduled_task('sched-1'))
-        request_mock.assert_called_once()
-        self.assertEqual(request_mock.call_args.args[:2], ('POST', '/api/scheduled_tasks'))
-
+        request_mock.assert_not_called()
 
     def test_create_scheduled_task_is_visible_from_cache_before_flush(self):
         manager = self._build_manager(remote_config={})
@@ -237,6 +235,30 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
         self.assertIsNotNone(deleted_record)
         self.assertTrue(deleted_record['deleted'])
 
+    def test_sync_scheduled_tasks_from_server_adds_remote_record_to_cache_before_flush(self):
+        manager = self._build_manager(remote_config={})
+        manager.api_base_url = 'http://example.com'
+
+        with patch.object(manager, '_make_api_request', return_value={
+            'scheduled_tasks': [{
+                'id': 'sched-remote',
+                'title': '远端任务',
+                'frequency': 'daily',
+                'notes': '远端下发',
+                'updated_at': '2026-03-30T10:00:00',
+                'created_at': '2026-03-30T09:00:00',
+            }]
+        }):
+            result = manager.sync_scheduled_tasks_from_server()
+
+        self.assertTrue(result)
+        self.assertEqual(manager.get_scheduled_task('sched-remote')['title'], '远端任务')
+        row = manager.get_connection().execute(
+            'SELECT id FROM scheduled_tasks WHERE id = ?',
+            ('sched-remote',),
+        ).fetchone()
+        self.assertIsNone(row)
+
     def test_sync_scheduled_tasks_from_server_keeps_local_when_remote_is_newer(self):
         manager = self._build_manager(remote_config={})
         manager.create_scheduled_task({
@@ -244,13 +266,13 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
             'title': '本地版本',
             'frequency': 'daily',
             'notes': '保留本地',
+            'updated_at': '2026-03-30T09:00:00',
+            'created_at': '2026-03-30T08:00:00',
         })
-        conn = manager.get_connection()
-        conn.execute(
-            'UPDATE scheduled_tasks SET updated_at = ? WHERE id = ?',
-            ('2026-03-30T09:00:00', 'sched-1'),
+        manager._save_scheduled_task_to_cache(
+            manager.get_scheduled_task('sched-1', include_deleted=True),
+            sync_status='synced',
         )
-        conn.commit()
         manager.api_base_url = 'http://example.com'
 
         with patch.object(manager, '_make_api_request', return_value={
@@ -271,7 +293,6 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
             'scheduled_task',
         )
 
-
     def test_sync_scheduled_tasks_from_server_ignores_updated_at_only_change(self):
         manager = self._build_manager(remote_config={})
         manager.create_scheduled_task({
@@ -279,13 +300,13 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
             'title': '每周复盘',
             'frequency': 'weekly',
             'notes': '内容未变',
+            'updated_at': '2026-03-30T09:00:00',
+            'created_at': '2026-03-30T08:00:00',
         })
-        conn = manager.get_connection()
-        conn.execute(
-            'UPDATE scheduled_tasks SET updated_at = ? WHERE id = ?',
-            ('2026-03-30T09:00:00', 'sched-1'),
+        manager._save_scheduled_task_to_cache(
+            manager.get_scheduled_task('sched-1', include_deleted=True),
+            sync_status='synced',
         )
-        conn.commit()
         manager.api_base_url = 'http://example.com'
 
         with patch.object(manager, '_make_api_request', return_value={
@@ -302,6 +323,7 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(manager.get_scheduled_task('sched-1')['updated_at'], '2026-03-30T09:00:00')
         self.assertNotIn('scheduled:sched-1', manager._pending_remote_task_changes)
+
     def test_accept_scheduled_remote_change_applies_remote_record(self):
         manager = self._build_manager(remote_config={})
         manager.create_scheduled_task({
@@ -309,13 +331,14 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
             'title': '本地版本',
             'frequency': 'daily',
             'notes': '保留本地',
+            'updated_at': '2026-03-30T09:00:00',
+            'created_at': '2026-03-30T08:00:00',
         })
-        conn = manager.get_connection()
-        conn.execute(
-            'UPDATE scheduled_tasks SET updated_at = ? WHERE id = ?',
-            ('2026-03-30T09:00:00', 'sched-1'),
+        manager.flush_cache_to_db()
+        manager._save_scheduled_task_to_cache(
+            manager.get_scheduled_task('sched-1', include_deleted=True),
+            sync_status='synced',
         )
-        conn.commit()
         manager.api_base_url = 'http://example.com'
 
         with patch.object(manager, '_make_api_request', return_value={
@@ -333,6 +356,11 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
 
         self.assertTrue(result)
         self.assertEqual(manager.get_scheduled_task('sched-1')['title'], '远端版本')
+        row = manager.get_connection().execute(
+            'SELECT title FROM scheduled_tasks WHERE id = ?',
+            ('sched-1',),
+        ).fetchone()
+        self.assertEqual(row['title'], '本地版本')
         self.assertNotIn('scheduled:sched-1', manager._pending_remote_task_changes)
 
     def test_reject_scheduled_remote_change_keeps_local_and_pushes_back_to_server(self):
@@ -342,13 +370,14 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
             'title': '本地版本',
             'frequency': 'daily',
             'notes': '保留本地',
+            'updated_at': '2026-03-30T09:00:00',
+            'created_at': '2026-03-30T08:00:00',
         })
-        conn = manager.get_connection()
-        conn.execute(
-            'UPDATE scheduled_tasks SET updated_at = ? WHERE id = ?',
-            ('2026-03-30T09:00:00', 'sched-1'),
+        manager.flush_cache_to_db()
+        manager._save_scheduled_task_to_cache(
+            manager.get_scheduled_task('sched-1', include_deleted=True),
+            sync_status='synced',
         )
-        conn.commit()
         manager.api_base_url = 'http://example.com'
 
         with patch.object(manager, '_make_api_request', return_value={
@@ -367,6 +396,11 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
 
         self.assertTrue(result)
         self.assertEqual(manager.get_scheduled_task('sched-1')['title'], '本地版本')
+        row = manager.get_connection().execute(
+            'SELECT title FROM scheduled_tasks WHERE id = ?',
+            ('sched-1',),
+        ).fetchone()
+        self.assertEqual(row['title'], '本地版本')
         self.assertNotIn('scheduled:sched-1', manager._pending_remote_task_changes)
         request_mock.assert_called_once()
         self.assertEqual(request_mock.call_args.args[:2], ('POST', '/api/scheduled_tasks'))
@@ -425,7 +459,7 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
         self.assertTrue(request_mock.call_args.args[2]['active'])
         self.assertIsInstance(request_mock.call_args.args[2]['active'], bool)
 
-    def test_update_scheduled_task_keeps_local_write_when_remote_push_fails(self):
+    def test_update_scheduled_task_keeps_local_write_without_immediate_remote_push(self):
         manager = self._build_manager(remote_config={})
         manager.create_scheduled_task({
             'id': 'sched-1',
@@ -441,10 +475,10 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
 
         self.assertTrue(result)
         self.assertEqual(manager.get_scheduled_task('sched-1')['title'], '更新标题')
-        request_mock.assert_called_once()
-        self.assertEqual(request_mock.call_args.args[:2], ('POST', '/api/scheduled_tasks'))
+        request_mock.assert_not_called()
 
-    def test_delete_scheduled_task_keeps_local_delete_when_remote_push_fails(self):
+
+    def test_delete_scheduled_task_keeps_local_delete_without_immediate_remote_push(self):
         manager = self._build_manager(remote_config={})
         manager.create_scheduled_task({
             'id': 'sched-1',
@@ -459,7 +493,8 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
 
         self.assertTrue(result)
         self.assertIsNone(manager.get_scheduled_task('sched-1'))
-        request_mock.assert_called_once_with('DELETE', '/api/scheduled_tasks/sched-1')
+        self.assertTrue(manager.get_scheduled_task('sched-1', include_deleted=True)['deleted'])
+        request_mock.assert_not_called()
 
 
     def test_database_manager_logger_does_not_propagate_to_root_logger(self):
@@ -624,8 +659,34 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
         )
         self.assertNotIn('task:task-1', manager._pending_remote_task_changes)
 
+    def test_delete_task_keeps_local_tombstone_without_immediate_remote_sync(self):
+        manager = self._build_manager(remote_config={})
+        manager.save_task({
+            'id': 'task-1',
+            'text': '写周报',
+            'notes': '待删除',
+            'completed': False,
+            'completed_date': '',
+            'deleted': False,
+            'priority': '中',
+            'urgency': '低',
+            'importance': '高',
+            'directory': '',
+            'create_date': '',
+            'position': {'x': 120, 'y': 180},
+            'updated_at': '2026-03-30T09:00:00',
+            'created_at': '2026-03-30T08:00:00',
+        })
+        manager.api_base_url = 'http://example.com'
+        manager.api_token = 'token'
 
+        with patch('database.database_manager.threading.Thread') as thread_mock:
+            result = manager.delete_task('task-1')
 
+        self.assertTrue(result)
+        self.assertTrue(manager._task_cache['task-1']['deleted'])
+        self.assertEqual(manager._task_cache['task-1']['sync_status'], 'modified')
+        thread_mock.assert_not_called()
 
     def test_quadrant_widget_builds_task_change_view_model_with_only_diff_fields(self):
         widget = QuadrantWidget.__new__(QuadrantWidget)
