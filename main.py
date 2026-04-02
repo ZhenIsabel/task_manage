@@ -103,9 +103,7 @@ class TaskManagerApp:
         """显示主窗口"""
         if self.main_window:
             # 使用UI管理器的淡入效果
-            self.ui_manager.fade_in_widget("main_window", duration=500)
-            # 在窗口显示后设置为底层
-            self.main_window.start_bottom_layer_timer()
+            self.ui_manager.fade_in_widget("main_window", duration=300)
     
     def on_widget_state_changed(self, widget_name, new_state):
         """控件状态改变回调"""

@@ -80,10 +80,6 @@ class QuadrantWidget(QWidget):
         self.config['position']['y'] = center_y
         self.save_config()
         
-        # 创建布局
-        self.main_layout = QVBoxLayout(self)
-        self.main_layout.setContentsMargins(15, 15, 15, 15)  # 增加边距使界面更宽敞
-        
         # 创建控制按钮区域 - 美化控制面板
         self.control_widget = QWidget(self)
         # 确保样式表背景可绘制
@@ -186,13 +182,6 @@ class QuadrantWidget(QWidget):
         self.control_widget.mouseMoveEvent = self.handle_control_move
         self.control_widget.mouseReleaseEvent = self.handle_control_release
         
-        # 创建一个布局用于四象限区域
-        self.quadrant_layout = QVBoxLayout()
-        self.quadrant_layout.addStretch()
-        
-        # 将四象限布局添加到主布局
-        self.main_layout.addLayout(self.quadrant_layout)
-
         # 确保控制面板始终可见
         self.control_widget.show()
 
@@ -238,9 +227,6 @@ class QuadrantWidget(QWidget):
         except Exception as e:
             logger.warning(f"设置窗口底层失败: {e}")
     
-    def start_bottom_layer_timer(self):
-        """启动底层设置定时器（在窗口显示后调用）"""
-        self.bottom_layer_timer.start(300)  # 1秒后设置为底层
 
     def periodic_save_config(self):
         """定期保存控件位置"""
