@@ -402,7 +402,8 @@ class TaskLabel(QWidget):
         # 保护性判断：确保父级存在
         self.detail_popup = QFrame(parent_widget if parent_widget else self)
         self.detail_popup.setWindowFlags(Qt.WindowType.FramelessWindowHint)
-        self.detail_popup.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        # 不再使用透明背景，避免弹窗外侧出现可透底的透明区域
+        self.detail_popup.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.detail_popup.setStyleSheet(style_manager.get_stylesheet("detail_popup").format())
         
         # 设置阴影效果

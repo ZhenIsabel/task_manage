@@ -322,7 +322,9 @@ class ScheduledTaskDialog(QDialog):
         """设置UI"""
         self.setWindowTitle("定时任务")
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        # 不再使用透明背景，避免弹窗外侧出现可透底的透明区域
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet("QDialog { background-color: white; border-radius: 15px; }")
         self.adjustSize()
         
         # 主布局
@@ -593,7 +595,9 @@ class AddScheduleDialog(QDialog):
         logger.info("进入添加定时任务的setup_ui咯")
         self.setWindowTitle("添加定时任务")
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        # 不再使用透明背景，避免弹窗外侧出现可透底的透明区域
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet("QDialog { background-color: white; border-radius: 15px; }")
         self.adjustSize()
         
         # 主布局
@@ -679,14 +683,15 @@ class AddScheduleDialog(QDialog):
         main_layout.addWidget(panel)
         
         # ❹ 自动根据内容调大小，再把“壳”和“面板”都居中放
-        shadow_margin = 60  # 阴影空间
+        # 外圈透明壳/留白去掉：把“壳”尺寸与真实面板对齐
+        shadow_margin = 0
         # 让 panel 先自适应内容
         panel.setMinimumWidth(400)
         panel_layout.activate()
         panel.adjustSize()
-        # 让壳比面板大一圈
+        # 让壳与面板对齐
         self.resize(panel.width() + shadow_margin * 2, panel.height() + shadow_margin * 2)
-        # 把面板居中放到壳里
+        # 把面板放回壳左上角
         panel.move(shadow_margin, shadow_margin)
 
     def get_data(self):

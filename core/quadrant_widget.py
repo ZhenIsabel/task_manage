@@ -838,8 +838,10 @@ class QuadrantWidget(QWidget):
         """显示设置对话框 - 采用add_task_dialog样式"""
         # ❶ 直接把 QDialog 设为「无边框」窗口
         dialog = QDialog(self, flags=Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
-        # ❷ 允许窗口背景透明（才能配合圆角 + 阴影）
-        dialog.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        # 不再使用透明背景，避免弹窗外侧出现可透底的透明区域
+        dialog.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        border_radius = self.config.get('ui', {}).get('border_radius', 15)
+        dialog.setStyleSheet(f"QDialog {{ background-color: white; border-radius: {border_radius}px; }}")
         
         # ------- 外层透明壳，什么都不画 ------- #
         
@@ -1080,14 +1082,15 @@ class QuadrantWidget(QWidget):
         panel_layout.addLayout(button_layout)
         
         # ❹ 自动根据内容调大小，再把"壳"和"面板"都居中放
-        shadow_margin = 60  # 阴影空间
+        # 外圈透明壳/留白去掉：把“壳”尺寸与真实面板对齐
+        shadow_margin = 0
         # 让 panel 先自适应内容
         panel.setMinimumWidth(600)
         panel_layout.activate()
         panel.adjustSize()
-        # 让壳比面板大一圈
+        # 让壳与面板对齐
         dialog.resize(panel.width() + shadow_margin * 2, panel.height() + shadow_margin * 2)
-        # 把面板居中放到壳里
+        # 把面板放回壳左上角
         panel.move(shadow_margin, shadow_margin)
         
         # ❺ 实现拖动窗口（因为没了系统标题栏）
@@ -1306,7 +1309,10 @@ class QuadrantWidget(QWidget):
             return
         # 无边框 + 透明背景
         dlg = QDialog(self, flags=Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
-        dlg.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        # 不再使用透明背景，避免弹窗外侧出现可透底的透明区域
+        dlg.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        border_radius = self.config.get('ui', {}).get('border_radius', 15)
+        dlg.setStyleSheet(f"QDialog {{ background-color: white; border-radius: {border_radius}px; }}")
         dlg.setWindowTitle("甘特图")
         dlg.setModal(True)
         
@@ -1348,7 +1354,8 @@ class QuadrantWidget(QWidget):
         # 将 panel 放入外层 layout
         outer_layout.addWidget(panel)
 
-        dlg.resize(1000, 600)
+        # 让窗口大小跟随面板内容，避免固定尺寸造成外圈留白
+        dlg.adjustSize()
         dlg.exec()
 
     def show_complete_dialog(self):

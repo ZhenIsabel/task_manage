@@ -355,8 +355,8 @@ class WarningPopup(QDialog):
     def _setup_ui(self, message):
         """设置UI"""
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedSize(280, 140)
+        # 不再使用透明背景，避免弹窗外侧出现可透底的透明区域
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         
         # 创建主布局
         main_layout = QVBoxLayout(self)
@@ -384,6 +384,7 @@ class WarningPopup(QDialog):
         
         # 将面板添加到主布局
         main_layout.addWidget(self.panel)
+        self.adjustSize()
     
     def _apply_style(self):
         """应用样式"""
@@ -403,8 +404,8 @@ class DeleteConfirmDialog(QDialog):
     def _setup_ui(self, message):
         """设置UI"""
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedSize(320, 180)
+        # 不再使用透明背景，避免弹窗外侧出现可透底的透明区域
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         
         # 创建主布局
         main_layout = QVBoxLayout(self)
@@ -459,6 +460,7 @@ class DeleteConfirmDialog(QDialog):
         
         # 将面板添加到主布局
         main_layout.addWidget(self.panel)
+        self.adjustSize()
     
     def _apply_style(self):
         """应用样式 - 使用styles.py中的样式"""

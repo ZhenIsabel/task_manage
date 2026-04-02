@@ -27,7 +27,13 @@ class CompleteTableDialog(QDialog):
         """设置UI界面"""
         # 设置对话框属性
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        # 不再使用透明背景，避免弹窗外侧出现可透底的透明区域
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        parent_widget = self.parent()
+        border_radius = 15
+        if parent_widget and hasattr(parent_widget, "config"):
+            border_radius = parent_widget.config.get("ui", {}).get("border_radius", 15)
+        self.setStyleSheet(f"QDialog {{ background-color: white; border-radius: {border_radius}px; }}")
         self.setModal(True)
         self.setWindowTitle("已完成任务")
         

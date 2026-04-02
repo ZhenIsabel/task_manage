@@ -14,8 +14,8 @@ class AddTaskDialog(QDialog):
     def __init__(self, parent=None, task_fields=None):
         # ❶ 直接把 QDialog 设为「无边框」窗口
         super().__init__(parent, flags=Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
-        # ❷ 允许窗口背景透明（才能配合圆角 + 阴影）
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        # 不再使用透明背景，避免对话框外侧出现可透底的透明区域
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
         # ------- 外层透明壳，什么都不画 ------- #
 
@@ -99,14 +99,15 @@ class AddTaskDialog(QDialog):
         panel_layout.addLayout(btn_row)
 
         # ❹ 自动根据内容调大小，再把“壳”和“面板”都居中放
-        shadow_margin = 60  # 阴影空间
+        # 外圈透明壳/留白去掉：把“壳”尺寸与真实面板对齐
+        shadow_margin = 0
         # 让 panel 先自适应内容
         panel.setMinimumWidth(400)
         panel_layout.activate()
         panel.adjustSize()
-        # 让壳比面板大一圈
+        # 让壳与面板对齐
         self.resize(panel.width() + shadow_margin * 2, panel.height() + shadow_margin * 2)
-        # 把面板居中放到壳里
+        # 把面板放回壳左上角
         panel.move(shadow_margin, shadow_margin)
         # ❺ 可选：实现拖动窗口（因为没了系统标题栏）
         self._drag_pos = None
