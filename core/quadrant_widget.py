@@ -206,15 +206,11 @@ class QuadrantWidget(QWidget):
         # 新增：记录当前显示的 detail_popup
         self.current_detail_popup = None
         
-        # 延迟设置窗口为底层（避免与置顶功能冲突）
-        self.bottom_layer_timer = QTimer(self)
-        self.bottom_layer_timer.setSingleShot(True)
-        self.bottom_layer_timer.timeout.connect(self.set_to_bottom_layer)
 
         # 新增：空白区域长按拖动窗口的状态与计时器
         self.long_press_timer = QTimer(self)
         self.long_press_timer.setSingleShot(True)
-        self.long_press_timer.setInterval(1000)  # 1秒长按
+        self.long_press_timer.setInterval(500)  # 0.5秒长按
         self.long_press_timer.timeout.connect(self._enable_blank_drag)
         self._pending_blank_drag = False
         self._blank_drag_active = False
@@ -305,6 +301,11 @@ class QuadrantWidget(QWidget):
         # 获取窗口尺寸
         width = self.width()
         height = self.height()
+
+        # 强制清空背景为完全透明，避免 Qt/样式残留导致外侧灰边/透明框。
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
+        painter.fillRect(0, 0, width, height, QColor(0, 0, 0, 0))
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
         
         # 计算十字线的位置
         h_line_y = height // 2
@@ -313,10 +314,8 @@ class QuadrantWidget(QWidget):
         # 获取圆角半径
         border_radius = self.config.get('ui', {}).get('border_radius', 15)
         
-        # 绘制整体背景 - 半透明
-        painter.setBrush(QBrush(QColor(245, 245, 245, 30)))
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(0, 0, width, height, border_radius, border_radius)
+        # 方案 A：不再绘制“整体半透明底色”。
+        # 这样四象限背景以外（尤其是底部未覆盖区域）会保持透明，避免“透底透明框”。
         
         # 计算内部四象限区域（留出边距）
         margin = 10
