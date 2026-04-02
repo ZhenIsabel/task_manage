@@ -58,12 +58,7 @@ class QuadrantWidget(QWidget):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint  | Qt.WindowType.Tool)
         # 设置窗口为透明背景
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        # 允许鼠标事件穿透到桌面
-        if hasattr(Qt, 'WA_TransparentForMouseEvents'):
-            self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
-        # 设置窗口不在显示桌面时隐藏
-        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
-        
+       
         # 设置大小和位置
         self.resize(config['size']['width'], config['size']['height'])
         self.move(config['position']['x'], config['position']['y'])
@@ -300,11 +295,8 @@ class QuadrantWidget(QWidget):
         # 获取圆角半径
         border_radius = self.config.get('ui', {}).get('border_radius', 15)
         
-        # 方案 A：不再绘制“整体半透明底色”。
-        # 这样四象限背景以外（尤其是底部未覆盖区域）会保持透明，避免“透底透明框”。
-        
         # 计算内部四象限区域（留出边距）
-        margin = 10
+        margin = 0
         inner_h_line_y = h_line_y
         inner_v_line_x = v_line_x
         
