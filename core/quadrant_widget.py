@@ -796,9 +796,10 @@ class QuadrantWidget(QWidget):
         
         # 样式改为用 styles.py 的 StyleManager 管理
         style_manager = StyleManager()
-        # 使用 add_task_dialog 的样式表
-        add_task_dialog_stylesheet = style_manager.get_stylesheet("add_task_dialog").format()
-        panel.setStyleSheet(add_task_dialog_stylesheet)
+        # 设置面板需要额外覆盖 QSlider / QCheckBox，因此组合专用 settings_panel 样式
+        panel_shell_stylesheet = style_manager.get_stylesheet("dialog_panel_shell").format()
+        settings_panel_stylesheet = style_manager.get_stylesheet("settings_panel").format()
+        panel.setStyleSheet(panel_shell_stylesheet + settings_panel_stylesheet)
         
         # 阴影
         apply_drop_shadow(panel, blur_radius=8, color=QColor(0, 0, 0, 60), offset_x=0, offset_y=0)

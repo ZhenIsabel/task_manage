@@ -41,6 +41,127 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{
 }}
 """
 
+PANEL_FORM_CONTROLS_STYLE = """
+QLineEdit, QTextEdit {{
+    background-color: #f5f5f5;
+    color: #333333;
+    border: 1px solid #dddddd;
+    border-radius: 8px;
+    padding: 12px;
+    font-family: '微软雅黑';
+    font-size: 13px;
+    selection-background-color: #dddddd;
+    selection-color: white;
+}}
+QLineEdit:read-only, QTextEdit:read-only {{
+    background-color: #f5f5f5;
+    color: #666666;
+}}
+QDateEdit, QTimeEdit, QSpinBox {{
+    background-color: #f5f5f5;
+    color: #333333;
+    border: 1px solid #dddddd;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-family: '微软雅黑';
+    font-size: 13px;
+    min-height: 28px;
+    selection-background-color: #dddddd;
+    selection-color: white;
+    outline: none;
+}}
+QDateEdit::drop-down, QComboBox::drop-down {{
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 28px;
+    border-left: 1px solid #dddddd;
+    background-color: #f5f5f5;
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+}}
+QDateEdit::down-arrow, QComboBox::down-arrow {{
+    image: url(./icons/down_arrow.png);
+    width: 18px;
+    height: 18px;
+}}
+QComboBox {{
+    background-color: #f5f5f5;
+    color: #333333;
+    border: 1px solid #dddddd;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: '微软雅黑';
+    font-size: 13px;
+}}
+QComboBox QAbstractItemView {{
+    background-color: #f5f5f5;
+    border: 1px solid #dddddd;
+    selection-background-color: #4ECDC4;
+    selection-color: white;
+    padding: 5px;
+    outline: 0px;
+    font-family: '微软雅黑';
+    font-size: 13px;
+    border-radius: 8px;
+}}
+QCalendarWidget {{
+    background: #f8f8f8;
+    border: 1.5px solid #4ECDC4;
+    font-family: '微软雅黑';
+    font-size: 14px;
+    color: #333;
+}}
+QCalendarWidget QWidget#qt_calendar_navigationbar {{
+    background: #f8f8f8;
+}}
+QCalendarWidget QToolButton {{
+    background: transparent;
+    color: #4ECDC4;
+    font-weight: bold;
+    font-size: 15px;
+    border: none;
+    padding: 2px 8px;
+}}
+QCalendarWidget QToolButton::menu-indicator {{
+    image: none;
+}}
+QCalendarWidget QToolButton:hover {{
+    color: #45B8B0;
+}}
+QCalendarWidget QMenu {{
+    background: #fff;
+    border: 1px solid #4ECDC4;
+}}
+QCalendarWidget QSpinBox {{
+    background: #f5f5f5;
+    border: 1px solid #4ECDC4;
+    font-size: 13px;
+    padding: 2px 6px;
+}}
+QCalendarWidget QSpinBox::up-button, QCalendarWidget QSpinBox::down-button {{
+    width: 12px;
+    height: 12px;
+}}
+QCalendarWidget QAbstractItemView {{
+    outline: none;
+    selection-background-color: #4ECDC4;
+    selection-color: white;
+    font-size: 14px;
+    background: #fff;
+}}
+QCalendarWidget QHeaderView {{
+    background: #f8f8f8;
+}}
+QCalendarWidget QHeaderView::section {{
+    background: #f8f8f8;
+    color: #4ECDC4;
+    font-weight: bold;
+    border: none;
+    font-size: 13px;
+    padding: 2px 0;
+}}
+"""
+
 
 class StyleManager:
     """负责样式管理的类"""
@@ -182,6 +303,33 @@ class StyleManager:
             }}""",
 
         # 添加任务对话框样式
+        "dialog_panel_shell": """
+            QWidget#panel {{
+            background-color: white;        /* 面板背景色 */
+            border-radius: 15px;            /* 圆角 */
+        }}
+        QLabel {{
+            color: #333;
+            font-family: '微软雅黑';
+            font-size: 13px;
+            font-weight: normal;
+            background: transparent;
+            padding: 2px 0 2px 2px;
+            margin: 0;
+            border: none;
+        }}
+        QPushButton {{
+            background-color: #4ECDC4;      /* 按钮背景色 */
+            color: white;                   /* 文字颜色 */
+            border: none;                   /* 无边框 */
+            border-radius: 8px;             /* 圆角 */
+            padding: 10px 20px;             /* 内边距 */
+            font-family: '微软雅黑';          /* 字体 */
+            font-weight: bold;              /* 加粗 */
+        }}
+        QPushButton:hover {{background-color: #45B8B0; }} /* 悬停时按钮色 */
+        """ + BASE_SCROLLBAR_STYLE,
+        # 添加任务对话框样式
         "add_task_dialog": """
             QWidget#panel {{
             background-color: white;        /* 面板背景色 */
@@ -197,40 +345,6 @@ class StyleManager:
             margin: 0;
             border: none;
         }}
-        QLineEdit, QTextEdit {{
-            background-color: #f5f5f5;      /* 输入框背景色 */
-            color: #333333;                 /* 文字颜色 */
-            border: 1px solid #dddddd;      /* 边框 */
-            border-radius: 8px;             /* 圆角 */
-            padding: 12px;                  /* 内边距 */
-            font-family: '微软雅黑';          /* 字体 */
-            font-size: 13px;                /* 字号 */
-        }}
-        QDateEdit {{
-            background-color: #f5f5f5;      /* 日期编辑背景色 */
-            color: #333;                 /* 文字颜色 */
-            border: 1.5px solid #dddddd;      /* 边框 */
-            padding: 8px 12px;                  /* 内边距 */
-            font-family: '微软雅黑';          /* 字体 */
-            font-size: 14px;                /* 字号 */
-            min-height: 28px;               /* 最小高度 */
-            selection-background-color: #dddddd;
-            selection-color: white;
-            outline: none;
-            border-radius:8px;
-        }}
-        QDateEdit::drop-down {{
-            subcontrol-origin: padding;
-            subcontrol-position: top right;
-            width: 28px;
-            border-left: 1px solid #dddddd;
-            background: #f5f5f5;
-        }}
-        QDateEdit::down-arrow {{
-            image: url(./icons/down_arrow.png);
-            width: 18px;
-            height: 18px;
-        }}
         QPushButton {{
             background-color: #4ECDC4;      /* 按钮背景色 */
             color: white;                   /* 文字颜色 */
@@ -241,95 +355,7 @@ class StyleManager:
             font-weight: bold;              /* 加粗 */
         }}
         QPushButton:hover {{background-color: #45B8B0; }} /* 悬停时按钮色 */
-        QComboBox {{
-            background-color: #f5f5f5;      /* 下拉框背景色 */
-            color: #333333;                 /* 文字颜色 */
-            border: 1px solid #dddddd;      /* 边框 */
-            border-radius: 8px;             /* 圆角 */
-            padding: 10px;                  /* 内边距 */
-            font-family: '微软雅黑';          /* 字体 */
-            font-size: 13px;                /* 字号 */
-        }}
-        QComboBox::drop-down {{
-            subcontrol-origin: padding;     /* 下拉按钮位置 */
-            subcontrol-position: top right;
-            width: 30px;                    /* 下拉按钮宽度 */
-            border-left: 1px solid #dddddd; /* 左边框 */
-            background-color: #f5f5f5;      /* 下拉按钮背景色 */
-        }}
-        QComboBox::down-arrow {{
-            image: url(./icons/down_arrow.png); /* 下拉箭头图片 */
-            width: 20px;
-            height: 20px;
-        }}
-        QComboBox QAbstractItemView {{
-            background-color: #f5f5f5;      /* 下拉列表背景色 */
-            border: 1px solid #dddddd;      /* 边框 */
-            selection-background-color: #4ECDC4; /* 选中时的背景色 */
-            selection-color: white;              /* 选中时文字白色 */
-            padding: 5px;                   /* 内边距 */
-            outline: 0px;                   /* 无外边框 */
-            font-family: '微软雅黑';          /* 字体 */
-            font-size: 13px;                /* 字号 */
-            border-radius: 8px;             /* 下拉列表本身也有圆角 */
-        }}
-        QCalendarWidget {{
-            background: #f8f8f8;
-            border: 1.5px solid #4ECDC4;
-            font-family: '微软雅黑';
-            font-size: 14px;
-            color: #333;
-        }}
-        QCalendarWidget QWidget#qt_calendar_navigationbar {{
-            background: #f8f8f8;
-        }}
-        QCalendarWidget QToolButton {{
-            background: transparent;
-            color: #4ECDC4;
-            font-weight: bold;
-            font-size: 15px;
-            border: none;
-            padding: 2px 8px;
-        }}
-        QCalendarWidget QToolButton::menu-indicator {{
-            image: none;
-        }}
-        QCalendarWidget QToolButton:hover {{
-            color: #45B8B0;
-        }}
-        QCalendarWidget QMenu {{
-            background: #fff;
-            border: 1px solid #4ECDC4;
-        }}
-        QCalendarWidget QSpinBox {{
-            background: #f5f5f5;
-            border: 1px solid #4ECDC4;
-            font-size: 13px;
-            padding: 2px 6px;
-        }}
-        QCalendarWidget QSpinBox::up-button, QCalendarWidget QSpinBox::down-button {{
-            width: 12px;
-            height: 12px;
-        }}
-        QCalendarWidget QAbstractItemView {{
-            outline: none;
-            selection-background-color: #4ECDC4;
-            selection-color: white;
-            font-size: 14px;
-            background: #fff;
-        }}
-        QCalendarWidget QHeaderView {{
-            background: #f8f8f8;
-        }}
-        QCalendarWidget QHeaderView::section {{
-            background: #f8f8f8;
-            color: #4ECDC4;
-            font-weight: bold;
-            border: none;
-            font-size: 13px;
-            padding: 2px 0;
-        }}
-        """ + BASE_SCROLLBAR_STYLE,
+        """ + PANEL_FORM_CONTROLS_STYLE + BASE_SCROLLBAR_STYLE,
         # 通用菜单样式
         "menu": """
             QMenu {{
@@ -470,16 +496,16 @@ class StyleManager:
                 background: #e0e0e0;
                 border-radius: 4px;
             }}
-            QSlider::handle:horizontal {
+            QSlider::handle:horizontal {{
                 width: 10px;
                 margin-top: -5px;
                 margin-bottom: -5px;
                 border-radius: 5px;
                 background: qradialgradient(spread:reflect, cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5, stop:0.6 rgba(210, 210, 210, 255), stop:0.7 rgba(210, 210, 210, 100));
-            }
-            QSlider::handle:horizontal:hover {
+            }}
+            QSlider::handle:horizontal:hover {{
                 background: qradialgradient(spread:reflect, cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5, stop:0.6 rgba(255, 255, 255, 255), stop:0.7 rgba(255, 255, 255, 100));
-            }
+            }}
             QPushButton {{
                 background-color: #4ECDC4;
                 color: white;
@@ -497,7 +523,8 @@ class StyleManager:
                 font-family: '微软雅黑';
                 padding: 5px;
             }}
-        """ + BASE_SCROLLBAR_STYLE,
+        """ + PANEL_FORM_CONTROLS_STYLE + BASE_SCROLLBAR_STYLE,
+        "panel_form_controls": PANEL_FORM_CONTROLS_STYLE,
         # 历史记录表格美化样式
         "history_table": """
             QTableWidget {{

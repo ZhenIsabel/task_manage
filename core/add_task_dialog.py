@@ -28,9 +28,10 @@ class AddTaskDialog(QDialog):
 
         # 样式改为用 styles.py 的 StyleManager 管理
         style_manager = StyleManager()
-        # 获取 add_task_dialog 的样式表（你需要在 styles.py 里添加对应的 key 和内容）
-        add_task_dialog_stylesheet = style_manager.get_stylesheet("add_task_dialog").format()
-        panel.setStyleSheet(add_task_dialog_stylesheet)
+        # 目标面板采用“外壳 + 共享表单控件”组合，避免重复叠加规则
+        add_task_dialog_stylesheet = style_manager.get_stylesheet("dialog_panel_shell").format()
+        panel_form_controls_stylesheet = style_manager.get_stylesheet("panel_form_controls").format()
+        panel.setStyleSheet(add_task_dialog_stylesheet + panel_form_controls_stylesheet)
 
         # # 阴影
         apply_drop_shadow(panel, blur_radius=8, color=QColor(0, 0, 0, 60), offset_x=0, offset_y=0)
