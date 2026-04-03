@@ -354,23 +354,23 @@ class QuadrantWidget(QWidget):
         q4_path.closeSubpath()
         painter.drawPath(q4_path)
         
-        # 绘制十字线 - 使用渐变效果
+        # 绘制十字线，200, 200, 200浅灰
         h_gradient = QLinearGradient(0, h_line_y, width, h_line_y)
-        h_gradient.setColorAt(0, QColor(0, 0, 0, 150))
-        h_gradient.setColorAt(0.5, QColor(0, 0, 0, 200))
-        h_gradient.setColorAt(1, QColor(0, 0, 0, 150))
+        h_gradient.setColorAt(0, QColor(200, 200, 200, 150))
+        h_gradient.setColorAt(0.5, QColor(200, 200, 200, 200))
+        h_gradient.setColorAt(1, QColor(200, 200, 200, 150))
         
         v_gradient = QLinearGradient(v_line_x, 0, v_line_x, height)
-        v_gradient.setColorAt(0, QColor(0, 0, 0, 150))
-        v_gradient.setColorAt(0.5, QColor(0, 0, 0, 200))
-        v_gradient.setColorAt(1, QColor(0, 0, 0, 150))
+        v_gradient.setColorAt(0, QColor(200, 200, 200, 150))
+        v_gradient.setColorAt(0.5, QColor(200, 200, 200, 200))
+        v_gradient.setColorAt(1, QColor(200, 200, 200, 150))
         
         # 水平线
-        painter.setPen(QPen(h_gradient, 2))
+        painter.setPen(QPen(h_gradient, 1))
         painter.drawLine(margin, h_line_y, width - margin, h_line_y)
         
         # 垂直线
-        painter.setPen(QPen(v_gradient, 2))
+        painter.setPen(QPen(v_gradient, 1))
         painter.drawLine(v_line_x, margin, v_line_x, height - margin)
         
         # 绘制标签 - 使用更好的字体和阴影效果
@@ -400,41 +400,16 @@ class QuadrantWidget(QWidget):
         
         # 不重要但紧急
         painter.setPen(shadow_color)
-        painter.drawText(QRect(width - 150 + shadow_offset, height - 40 + shadow_offset, 140, 30), Qt.AlignmentFlag.AlignRight, "不重要但紧急")
+        painter.drawText(QRect(width - 150 + shadow_offset, height - 25 + shadow_offset, 140, 30), Qt.AlignmentFlag.AlignRight, "不重要但紧急")
         painter.setPen(text_color)
-        painter.drawText(QRect(width - 150, height - 40, 140, 30), Qt.AlignmentFlag.AlignRight, "不重要但紧急")
+        painter.drawText(QRect(width - 150, height - 25, 140, 30), Qt.AlignmentFlag.AlignRight, "不重要但紧急")
         
         # 不重要不紧急
         painter.setPen(shadow_color)
-        painter.drawText(QRect(10 + shadow_offset, height - 40 + shadow_offset, 140, 30), Qt.AlignmentFlag.AlignLeft, "不重要不紧急")
+        painter.drawText(QRect(10 + shadow_offset, height - 25 + shadow_offset, 140, 30), Qt.AlignmentFlag.AlignLeft, "不重要不紧急")
         painter.setPen(text_color)
-        painter.drawText(QRect(10, height - 40, 140, 30), Qt.AlignmentFlag.AlignLeft, "不重要不紧急")
+        painter.drawText(QRect(10, height - 25, 140, 30), Qt.AlignmentFlag.AlignLeft, "不重要不紧急")
         
-        # 绘制坐标轴标签 - 带阴影效果
-        # 紧急
-        painter.setPen(shadow_color)
-        painter.drawText(QRect(width - 60 + shadow_offset, h_line_y - 25 + shadow_offset, 50, 20), Qt.AlignmentFlag.AlignCenter, "紧急")
-        painter.setPen(text_color)
-        painter.drawText(QRect(width - 60, h_line_y - 25, 50, 20), Qt.AlignmentFlag.AlignCenter, "紧急")
-        
-        # 不紧急
-        painter.setPen(shadow_color)
-        painter.drawText(QRect(10 + shadow_offset, h_line_y - 25 + shadow_offset, 50, 20), Qt.AlignmentFlag.AlignCenter, "不紧急")
-        painter.setPen(text_color)
-        painter.drawText(QRect(10, h_line_y - 25, 50, 20), Qt.AlignmentFlag.AlignCenter, "不紧急")
-        
-        # 重要
-        painter.setPen(shadow_color)
-        painter.drawText(QRect(v_line_x - 30 + shadow_offset, 10 + shadow_offset, 60, 20), Qt.AlignmentFlag.AlignCenter, "重要")
-        painter.setPen(text_color)
-        painter.drawText(QRect(v_line_x - 30, 10, 60, 20), Qt.AlignmentFlag.AlignCenter, "重要")
-        
-        # 不重要
-        painter.setPen(shadow_color)
-        painter.drawText(QRect(v_line_x - 30 + shadow_offset, height - 30 + shadow_offset, 60, 20), Qt.AlignmentFlag.AlignCenter, "不重要")
-        painter.setPen(text_color)
-        painter.drawText(QRect(v_line_x - 30, height - 30, 60, 20), Qt.AlignmentFlag.AlignCenter, "不重要")
-    
 
     def center_control_panel(self):
         # 获取控制面板尺寸
