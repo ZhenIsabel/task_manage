@@ -72,3 +72,22 @@ def show_error(
         position=position,
         duration=duration,
     )
+
+
+def show_warning(
+    widget: Optional[QWidget],
+    title: str,
+    content: str,
+    *,
+    position=InfoBarPosition.TOP,
+    duration: int = DEFAULT_ERROR_DURATION_MS,
+):
+    return _show_info_bar(
+        InfoBar.warning,
+        QMessageBox.critical,
+        widget,
+        title, 
+        content,
+        position,
+        duration
+    )

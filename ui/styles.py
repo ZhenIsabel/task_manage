@@ -2,9 +2,6 @@
 
 
 # ===== 基础样式模板 =====
-# 滚动条统一交给 qfluentwidgets 接管，避免旧 QSS 继续覆盖全局 Fluent scrollbar。
-BASE_SCROLLBAR_STYLE = ""
-
 PANEL_FORM_CONTROLS_STYLE = """
 QLineEdit, QTextEdit {{
     background-color: #f5f5f5;
@@ -64,12 +61,12 @@ class StyleManager:
                 width: {indicator_size}px;     /* 指示器宽度 */
                 height: {indicator_size}px;    /* 指示器高度 */
                 border-radius: 9px;            /* 圆角 */
-                border: 2px solid gray;        /* 灰色边框 */
+                border: 1.5px solid gray;        /* 灰色边框 */
                 background-color: rgba({bg_color_red}, {bg_color_green}, {bg_color_blue}, 0.85); /* 背景色 */
             }}
             QCheckBox::indicator:checked {{
                 background-color: rgba({bg_color_red}, {bg_color_green}, {bg_color_blue}, 0.85); /* 选中时背景色 */
-                border: 2px solid #4ECDC4;    /* 选中时边框色 */
+                border: 1.5px solid #4ECDC4;    /* 选中时边框色 */
                 image:  url(./icons/check.png); /* 选中时显示对勾图片 */
             }}
         """,
@@ -123,10 +120,6 @@ class StyleManager:
                 font-family: '微软雅黑';      /* 字体 */
                 padding: 4px;               /* 内边距 */
             }}
-            QScrollArea {{
-                border: none;               /* 无边框 */
-                background-color: transparent; /* 透明背景 */
-            }}
         """,
         # 任务标签上的按钮样式
         "task_label_button": """  
@@ -168,7 +161,7 @@ class StyleManager:
             font-weight: normal;              /* 加粗 */
         }}
         QPushButton:hover {{background-color: #45B8B0; }} /* 悬停时按钮色 */
-        """ + BASE_SCROLLBAR_STYLE,
+        """,
         # 添加任务对话框样式
         "add_task_dialog": """
             QWidget#panel {{
@@ -194,7 +187,7 @@ class StyleManager:
             font-weight: normal;              /* 加粗 */
         }}
         QPushButton:hover {{background-color: #45B8B0; }} /* 悬停时按钮色 */
-        """ + PANEL_FORM_CONTROLS_STYLE + BASE_SCROLLBAR_STYLE,
+        """ + PANEL_FORM_CONTROLS_STYLE,
         # 通用菜单样式
         "menu": """
             QMenu {{
@@ -220,7 +213,7 @@ class StyleManager:
                 background: #e0e0e0;
                 margin: 4px 0;
             }}
-        """ + BASE_SCROLLBAR_STYLE,
+        """,
         # 四象限主窗口样式
         "quadrant_widget": """
             QWidget {{
@@ -236,7 +229,7 @@ class StyleManager:
                 font-size: 11px;                /* 字号 */
                 color: #333333;                 /* 文字颜色 */
             }}
-        """ + BASE_SCROLLBAR_STYLE,
+        """,
         # 控制面板样式
         "control_panel": """
             #control_panel {
@@ -284,7 +277,7 @@ class StyleManager:
                 background: #e0e0e0;
                 margin: 4px 0;
             }
-            """ + BASE_SCROLLBAR_STYLE,
+            """,
         # 设置面板样式
         "settings_panel": """
             QDialog {{
@@ -356,7 +349,7 @@ class StyleManager:
                 font-family: '微软雅黑';
                 padding: 5px;
             }}
-        """ + PANEL_FORM_CONTROLS_STYLE + BASE_SCROLLBAR_STYLE,
+        """ + PANEL_FORM_CONTROLS_STYLE,
         "panel_form_controls": PANEL_FORM_CONTROLS_STYLE,
         
         # 通用：小号灰色标签
@@ -380,8 +373,8 @@ class StyleManager:
         "color_button": """
             QPushButton {{
                 background-color: {button_color};
-                border: 2px solid #bbb;
-                border-radius: 6px;
+                border: 1px solid #bbb;
+                border-radius: 8px;
                 margin: 0 2px;
             }}
             QPushButton:hover {{
@@ -395,96 +388,6 @@ class StyleManager:
                 border-radius: 15px;
                 border: 1px solid #ddd;
             }}
-        """,
-        # 删除确认对话框样式
-        "delete_confirm_dialog": """
-            QWidget#panel {
-                background-color: white;        /* 面板背景色 */
-                border-radius: 15px;            /* 圆角 */
-            }
-            QDialog {
-                background-color: white;
-                border-radius: 12px;
-                border: 1px solid #e0e0e0;
-            }
-            QLabel#title_label {
-                background-color: transparent;
-                color: #333333;
-                font-family: '微软雅黑';
-                font-size: 16px;
-                font-weight: normal;
-                margin-bottom: 10px;
-            }
-            QLabel#message_label {
-                background-color: transparent;
-                color: #666666;
-                font-family: '微软雅黑';
-                font-size: 14px;
-                line-height: 1.4;
-                margin: 10px 0;
-            }
-            QPushButton#cancel_button {
-                background-color: #f5f5f5;
-                color: #666666;
-                border: 1px solid #d0d0d0;
-                border-radius: 8px;
-                font-family: '微软雅黑';
-                font-size: 14px;
-                font-weight: normal;
-            }
-            QPushButton#cancel_button:hover {
-                background-color: #e8e8e8;
-                border-color: #c0c0c0;
-            }
-            QPushButton#cancel_button:pressed {
-                background-color: #d8d8d8;
-            }
-            QPushButton#delete_button {
-                background-color: #ff4757;
-                color: white;
-                border: 1px solid #ff3742;
-                border-radius: 8px;
-                font-family: '微软雅黑';
-                font-size: 14px;
-                font-weight: normal;
-            }
-            QPushButton#delete_button:hover {
-                background-color: #ff3742;
-                border-color: #ff2f3a;
-            }
-            QPushButton#delete_button:pressed {
-                background-color: #e63946;
-                border-color: #d63031;
-            }
-        """,
-        # 警告弹窗样式
-        "warning_popup": """
-            QWidget#panel {
-                background-color: white;        /* 面板背景色 */
-                border-radius: 15px;            /* 圆角 */
-            }
-            QDialog {
-                background-color: #ECECEC;
-                border-radius: 10px;
-            }
-            QLabel {
-                background-color: transparent;
-                color: #333;
-                font-family: '微软雅黑';
-                font-size: 14px;
-            }
-            QPushButton {
-                background-color: #ECECEC;
-                border: 1px solid rgba(100, 100, 100, 0.5);
-                border-radius: 6px;
-                padding: 4px 8px;
-                font-family: '微软雅黑';
-                font-size: 12px;
-                color: #333;
-            }
-            QPushButton:hover {
-                background-color: #D6D6D6;
-            }
         """,
         # 颜色对话框样式
         "color_dialog": """

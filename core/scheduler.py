@@ -6,11 +6,10 @@
 from datetime import datetime, timedelta
 from typing import Optional
 from calendar import monthrange
+from warnings import showwarning
 
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
-                            QPushButton, 
-                            QWidget,
-                            QAbstractScrollArea,QCheckBox,QMessageBox,
+                            QPushButton, QWidget,QAbstractScrollArea,QCheckBox,
                             QComboBox,QTextEdit,QLineEdit)
 from PyQt6.QtCore import Qt, QDate
 
@@ -19,7 +18,7 @@ from qfluentwidgets import MessageBox
 
 from ui.adaptive_table import AdaptiveTextTableWidget
 from ui.fluent import ComboBox, create_calendar_picker, get_date_string_from_picker, is_date_picker
-from ui.notifications import show_error, show_success
+from ui.notifications import show_error, show_success,show_warning
 from ui.styles import StyleManager
 from ui.degree_badges import create_degree_table_cell, is_degree_field
 from database.database_manager import get_db_manager
@@ -482,7 +481,7 @@ class ScheduledTaskDialog(QDialog):
         
         # 确认对话框
         reply=MessageBox(
-            title="确认删除",
+            title="确认",
             content=f"确定要将 {len(self.selected_tasks)} 个定时任务删除吗？",
             parent=self
         ).exec()
@@ -525,7 +524,7 @@ class ScheduledTaskDialog(QDialog):
         # 检查必填
         for f in task_fields:
             if f.get("required") and not task_data.get(f["name"]):
-                QMessageBox.warning(self, "提示", f"{f['label']} 为必填项")
+                show_warning(self,"提示",f"{f['label']} 为必填项")
                 return
         # 创建任务
         try:

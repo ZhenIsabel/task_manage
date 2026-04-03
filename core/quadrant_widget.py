@@ -5,11 +5,11 @@ import socket
 import time
 import threading
 from datetime import datetime
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QPushButton, QColorDialog, QSlider,  QMessageBox, QDialog,
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QPushButton, QColorDialog, QSlider,  QDialog,
                             QTabWidget, QFormLayout, QSpinBox,  QMenu, QTimeEdit, QLabel, QCheckBox, QLineEdit)
 from PyQt6.QtCore import Qt, QPoint,  QRect, QTimer,QUrl, QTime, pyqtSignal
 from PyQt6.QtWidgets import QApplication,QFileDialog
-from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont,  QPainterPath, QLinearGradient, QAction
+from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont,  QPainterPath,  QAction
 try:
     from PyQt6.QtWebEngineWidgets import QWebEngineView
     HAS_WEBENGINE = True
@@ -23,7 +23,7 @@ from config.remote_config import RemoteConfigManager
 from .add_task_dialog import AddTaskDialog
 from ui.scrollbar import FluentScrollArea
 from ui.styles import StyleManager
-from ui.notifications import show_error, show_success
+from ui.notifications import show_error, show_success,show_warning
 from database.database_manager import get_db_manager
 from gantt.app import gantt_app
 
@@ -559,7 +559,7 @@ class QuadrantWidget(QWidget):
         # 检查必填
         for f in task_fields:
             if f.get("required") and not task_data.get(f["name"]):
-                QMessageBox.warning(self, "提示", f"{f['label']} 为必填项")
+                show_warning(self,"提示",f"{f['label']} 为必填项")
                 return
                 
         # 使用传入的位置确定在哪个象限
@@ -1084,7 +1084,7 @@ class QuadrantWidget(QWidget):
         # 如果没有未完成的任务
         if not unfinished_tasks:
             logger.info("导出任务失败：没有未完成的任务可导出")
-            QMessageBox.information(self, "导出任务", "没有未完成的任务可导出")
+            show_warning(self,"导出任务","没有未完成的任务可导出")
             return
             
         # 写入文件
@@ -1092,6 +1092,7 @@ class QuadrantWidget(QWidget):
             with open(filename, 'w', encoding='utf-8') as f:
                 f.write("\n\n".join(unfinished_tasks))
             logger.info(f"成功导出 {len(unfinished_tasks)} 个未完成任务到: {filename}")
+            show_success(self,"导出成功",f"成功导出 {len(unfinished_tasks)} 个未完成任务到: {filename}")
         except Exception as e:
             show_error(self, "导出失败", f"导出任务时发生错误:\n{str(e)}")
             error_msg = f"导出任务时发生错误: {str(e)}"
@@ -1136,7 +1137,7 @@ class QuadrantWidget(QWidget):
 
         if not all_tasks_data:
             logger.info("导出任务失败：没有任务可导出")
-            QMessageBox.information(self, "导出任务", "没有任务可导出")
+            show_warning(self, "导出任务", "没有任务可导出")
             return
 
         # 获取字段配置
@@ -1165,7 +1166,7 @@ class QuadrantWidget(QWidget):
 
         if not rows:
             logger.info("导出任务失败：没有有效任务可导出")
-            QMessageBox.information(self, "导出任务", "没有有效任务可导出")
+            show_warning(self, "导出任务", "没有有效任务可导出")
             return
 
         # 定义列的顺序
@@ -1300,7 +1301,6 @@ class QuadrantWidget(QWidget):
     def show_complete_dialog(self):
         """显示已完成任务对话框"""
         from .complete_table import CompleteTableDialog
-        
         dialog = CompleteTableDialog(self)
         dialog.exec()
 
@@ -1389,7 +1389,7 @@ class QuadrantWidget(QWidget):
             return
 
         if (not getattr(self.db_manager, 'username', '').strip()) or (not getattr(self.db_manager, 'api_token', '').strip()):
-            QMessageBox.warning(self, "远程配置不完整", "远程同步已暂停。请在设置面板的“远程设置”页补全远程服务器、用户名和访问令牌。")
+            show_warning(self, "远程配置", "远程同步已暂停。请在设置面板的“远程设置”页补全远程服务器、用户名和访问令牌。")
             self.show_settings('remote')
             return
 
@@ -1587,7 +1587,7 @@ class QuadrantWidget(QWidget):
     def _apply_remote_change_selection(self, selection_rows):
         accepted_ids, rejected_ids, missing_ids = self._collect_remote_change_choices(selection_rows)
         if missing_ids:
-            QMessageBox.warning(self, '选择不完整', '还有未勾选的冲突，请为每条记录选择接受本地或接受远程。')
+            show_warning(self, '选择不完整', '还有未勾选的冲突，请为每条记录选择接受本地或接受远程。')
             return False
 
         success = self.db_manager.resolve_pending_remote_task_changes(accepted_ids, rejected_ids)

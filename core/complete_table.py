@@ -1,13 +1,15 @@
 from datetime import datetime
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout,
                             QPushButton, QCheckBox, QHeaderView,
-                            QLabel, QMessageBox, QAbstractItemView)
+                            QLabel)
 from PyQt6.QtCore import Qt
 from ui.adaptive_table import AdaptiveTextTableWidget
 from ui.notifications import show_error, show_success
 from ui.styles import StyleManager
 from database.database_manager import get_db_manager
 import logging
+
+from qfluentwidgets import MessageBox
 
 logger = logging.getLogger(__name__)
 
@@ -245,15 +247,14 @@ class CompleteTableDialog(QDialog):
             return
         
         # 确认对话框
-        reply = QMessageBox.question(
-            self, 
-            "确认还原", 
-            f"确定要将 {len(self.selected_tasks)} 个任务还原为未完成状态吗？",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
+        reply = MessageBox(
+            parent=self, 
+            title="确认", 
+            content=f"确定要将 {len(self.selected_tasks)} 个任务还原为未完成状态吗？",
+            
+        ).exec()
         
-        if reply != QMessageBox.StandardButton.Yes:
+        if reply != True:
             return
         
         try:
