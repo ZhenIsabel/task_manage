@@ -354,23 +354,13 @@ class QuadrantWidget(QWidget):
         q4_path.closeSubpath()
         painter.drawPath(q4_path)
         
-        # 绘制十字线，200, 200, 200浅灰
-        h_gradient = QLinearGradient(0, h_line_y, width, h_line_y)
-        h_gradient.setColorAt(0, QColor(200, 200, 200, 150))
-        h_gradient.setColorAt(0.5, QColor(200, 200, 200, 200))
-        h_gradient.setColorAt(1, QColor(200, 200, 200, 150))
-        
-        v_gradient = QLinearGradient(v_line_x, 0, v_line_x, height)
-        v_gradient.setColorAt(0, QColor(200, 200, 200, 150))
-        v_gradient.setColorAt(0.5, QColor(200, 200, 200, 200))
-        v_gradient.setColorAt(1, QColor(200, 200, 200, 150))
-        
+    
         # 水平线
-        painter.setPen(QPen(h_gradient, 1))
+        painter.setPen(QPen(QColor(184,184,184, 200), 1))
         painter.drawLine(margin, h_line_y, width - margin, h_line_y)
         
         # 垂直线
-        painter.setPen(QPen(v_gradient, 1))
+        painter.setPen(QPen(QColor(184,184,184, 200), 1))
         painter.drawLine(v_line_x, margin, v_line_x, height - margin)
         
         # 绘制标签 - 使用更好的字体和阴影效果
