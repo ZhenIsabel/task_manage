@@ -1,10 +1,10 @@
 from datetime import datetime
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, 
-                            QLabel, QLineEdit, QInputDialog,
-                            QMenu, QFrame, QSizePolicy, QDialog, QColorDialog, QMessageBox,
+                            QLabel, QInputDialog,
+                            QFrame, QSizePolicy, QDialog,
                             QLayout,QPushButton, QGraphicsDropShadowEffect)
-from PyQt6.QtCore import Qt, pyqtSignal, QDate, QPoint, QEvent, QUrl
-from PyQt6.QtGui import QColor, QCursor, QAction, QDesktopServices
+from PyQt6.QtCore import Qt, pyqtSignal,  QEvent, QUrl
+from PyQt6.QtGui import QColor, QCursor,  QDesktopServices
 try:
     import sip  # 用于判断 PyQt 对象是否已被销毁
 except Exception:
@@ -14,7 +14,7 @@ from datetime import datetime
 
 from .add_task_dialog import AddTaskDialog
 from ui.scrollbar import FluentScrollArea
-from ui.notifications import show_error
+from ui.notifications import show_error, resolve_notification_host,show_success,show_warning
 from ui.styles import StyleManager
 from ui.degree_badges import create_degree_display_widget, build_degree_badge_stylesheet, get_status_badge_meta
 from ui.ui import MyColorDialog
@@ -323,7 +323,7 @@ class TaskLabel(QWidget):
         # 检查必填
         for f in task_fields:
             if f.get("required") and not task_data.get(f["name"]):
-                QMessageBox.warning(self, "提示", f"{f['label']} 为必填项")
+                show_warning(self,"提示",f"{f['label']} 为必填项")
                 return
 
         # 更新任务数据
@@ -596,12 +596,15 @@ class TaskLabel(QWidget):
 
     def handle_delete(self):
         """处理删除任务"""
-        from ui.ui import DeleteConfirmDialog
+        from qfluentwidgets import MessageBox
+        host = resolve_notification_host(self) or self
+        dialog = MessageBox(
+            parent=host,
+            title="删除",
+            content="确定要删除这个任务吗？\n删除后无法恢复。",
+        ).exec()
         
-        dialog = DeleteConfirmDialog(self, '确定要删除这个任务吗？\n删除后无法恢复。')
-        dialog.exec()
-        
-        if dialog.get_result():
+        if dialog==True:
             # 使用数据库管理器进行逻辑删除
             try:
                 from database.database_manager import get_db_manager
@@ -661,10 +664,9 @@ class TaskLabel(QWidget):
                     if self.detail_popup:
                         self.detail_popup.hide()
                 else:
-                    popup = WarningPopup(self, "目录不存在！")
+                    show_warning(self,title="目录",content=f"尝试打开不存在的目录：{directory}")
                     logger.warning(f"尝试打开不存在的目录：{directory}")
-                    popup.exec()
             else:
-                popup = WarningPopup(self, "未配置目录路径！")
+                show_warning(self,title="目录",content="未配置目录路径")
                 logger.warning("尝试打开空目录路径")
-                popup.exec()
+                

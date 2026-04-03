@@ -86,8 +86,8 @@ def show_warning(
         InfoBar.warning,
         QMessageBox.critical,
         widget,
-        title, 
+        title,
         content,
-        position,
-        duration
+        position=position,
+        duration=duration,
     )

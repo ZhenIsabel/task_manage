@@ -1,7 +1,8 @@
 import os
 import tempfile
 import unittest
-from unittest.mock import Mock, patch
+from copy import deepcopy
+from unittest.mock import MagicMock, Mock, patch
 
 from core.quadrant_widget import QuadrantWidget
 from config.remote_config import RemoteConfigManager
@@ -563,11 +564,11 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
         widget.db_manager.api_token = 'token'
         widget.db_manager.username = ''
 
-        with patch('core.quadrant_widget.QMessageBox.warning') as warning_mock:
+        with patch('core.quadrant_widget.show_warning') as warning_mock:
             QuadrantWidget._bootstrap_remote_sync(widget)
 
         warning_mock.assert_called_once()
-        widget.show_settings.assert_called_once()
+        widget.show_settings.assert_called_once_with('remote')
         widget.db_manager.bootstrap_remote_sync.assert_not_called()
         widget.load_tasks.assert_not_called()
 
@@ -781,12 +782,547 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
         self.assertEqual(rejected_ids, ['task:2'])
         self.assertEqual(missing_ids, ['task:1', 'task:4'])
 
+    def test_quadrant_widget_apply_settings_preview_updates_without_save(self):
+        widget = QuadrantWidget.__new__(QuadrantWidget)
+        widget.config = {
+            'size': {'width': 1000, 'height': 800},
+            'ui': {'border_radius': 15},
+            'position': {'x': 0, 'y': 0},
+            'color_ranges': {
+                'q1': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+                'q2': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+                'q3': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+                'q4': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+            },
+        }
+        widget.save_config = Mock()
+        widget.resize = Mock()
+        widget.control_widget = Mock()
+        widget.control_widget.adjustSize = Mock()
+        widget.center_control_panel = Mock()
+        widget.update = Mock()
+        widget._position_dirty = False
+
+        new_ranges = {
+            'q1': {'hue_range': 55, 'saturation_range': 20, 'value_range': 20},
+            'q2': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+            'q3': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+            'q4': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+        }
+        QuadrantWidget.apply_settings_preview(widget, {
+            'size': {'width': 900, 'height': 600},
+            'ui': {'border_radius': 5},
+            'color_ranges': new_ranges,
+        })
+
+        widget.save_config.assert_not_called()
+        self.assertEqual(widget.config['size']['width'], 900)
+        self.assertEqual(widget.config['ui']['border_radius'], 5)
+        self.assertEqual(widget.config['color_ranges']['q1']['hue_range'], 55)
+        widget.resize.assert_called_once_with(900, 600)
+
+    def test_quadrant_widget_restore_settings_snapshot_reverts_config(self):
+        widget = QuadrantWidget.__new__(QuadrantWidget)
+        snapshot = {
+            'size': {'width': 1000, 'height': 800},
+            'ui': {'border_radius': 15},
+            'position': {'x': 0, 'y': 0},
+            'color_ranges': {
+                'q1': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+                'q2': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+                'q3': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+                'q4': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+            },
+        }
+        widget.config = deepcopy(snapshot)
+        widget.config['size']['width'] = 500
+        widget.config['color_ranges']['q1']['hue_range'] = 99
+        widget.resize = Mock()
+        widget.control_widget = Mock()
+        widget.control_widget.adjustSize = Mock()
+        widget.center_control_panel = Mock()
+        widget.update = Mock()
+        widget._position_dirty = True
+
+        QuadrantWidget.restore_settings_snapshot(widget, snapshot)
+
+        self.assertEqual(widget.config['size']['width'], 1000)
+        self.assertEqual(widget.config['color_ranges']['q1']['hue_range'], 30)
+        widget.resize.assert_called_once_with(1000, 800)
+
+    def test_quadrant_widget_apply_settings_commit_saves_remote_applies_db_and_persists_config(self):
+        widget = QuadrantWidget.__new__(QuadrantWidget)
+        widget.config = {
+            'size': {'width': 1000, 'height': 800},
+            'ui': {'border_radius': 15},
+            'position': {'x': 0, 'y': 0},
+        }
+        widget.db_manager = Mock()
+        widget._apply_remote_config_to_db_manager = Mock()
+        widget.save_config = Mock(return_value=True)
+        widget.resize = Mock()
+        widget.control_widget = Mock()
+        widget.control_widget.adjustSize = Mock()
+        widget.center_control_panel = Mock()
+        widget.update = Mock()
+        widget._position_dirty = False
+
+        remote = {
+            'enabled': True,
+            'api_base_url': 'http://example.com',
+            'api_token': 'token',
+            'username': 'alice',
+        }
+        result = {
+            'config': {
+                'size': {'width': 1100, 'height': 700},
+                'ui': {'border_radius': 8},
+            },
+            'remote_config': remote,
+        }
+
+        with patch('core.quadrant_widget.RemoteConfigManager') as rcm_mock:
+            rcm_mock.return_value.save_config.return_value = True
+            ok = QuadrantWidget.apply_settings_commit(widget, result)
+
+        self.assertTrue(ok)
+        rcm_mock.return_value.save_config.assert_called_once_with(remote)
+        widget._apply_remote_config_to_db_manager.assert_called_once_with(remote)
+        widget.save_config.assert_called_once()
+        self.assertEqual(widget.config['size']['width'], 1100)
+        self.assertEqual(widget.config['size']['height'], 700)
+        self.assertEqual(widget.config['ui']['border_radius'], 8)
+
+    def test_quadrant_widget_apply_settings_commit_applies_color_ranges(self):
+        widget = QuadrantWidget.__new__(QuadrantWidget)
+        widget.config = {
+            'size': {'width': 1000, 'height': 800},
+            'ui': {'border_radius': 15},
+            'position': {'x': 0, 'y': 0},
+            'color_ranges': {
+                'q1': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+                'q2': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+                'q3': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+                'q4': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+            },
+        }
+        widget.db_manager = Mock()
+        widget._apply_remote_config_to_db_manager = Mock()
+        widget.save_config = Mock(return_value=True)
+        widget.resize = Mock()
+        widget.control_widget = Mock()
+        widget.control_widget.adjustSize = Mock()
+        widget.center_control_panel = Mock()
+        widget.update = Mock()
+        widget._position_dirty = False
+
+        new_ranges = {
+            'q1': {'hue_range': 72, 'saturation_range': 10, 'value_range': 15},
+            'q2': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+            'q3': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+            'q4': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+        }
+        remote = {
+            'enabled': True,
+            'api_base_url': 'http://example.com',
+            'api_token': 'token',
+            'username': 'alice',
+        }
+        result = {
+            'config': {
+                'size': {'width': 1100, 'height': 700},
+                'ui': {'border_radius': 8},
+                'color_ranges': new_ranges,
+            },
+            'remote_config': remote,
+        }
+
+        with patch('core.quadrant_widget.RemoteConfigManager') as rcm_mock:
+            rcm_mock.return_value.save_config.return_value = True
+            ok = QuadrantWidget.apply_settings_commit(widget, result)
+
+        self.assertTrue(ok)
+        self.assertEqual(widget.config['color_ranges']['q1']['hue_range'], 72)
+        self.assertEqual(widget.config['color_ranges']['q1']['saturation_range'], 10)
+        self.assertEqual(widget.config['color_ranges']['q1']['value_range'], 15)
+
+    def test_quadrant_widget_apply_settings_commit_when_remote_save_fails_skips_db_and_local_save(self):
+        widget = QuadrantWidget.__new__(QuadrantWidget)
+        widget.config = {
+            'size': {'width': 1000, 'height': 800},
+            'ui': {'border_radius': 15},
+            'position': {'x': 0, 'y': 0},
+        }
+        widget.db_manager = Mock()
+        widget._apply_remote_config_to_db_manager = Mock()
+        widget.save_config = Mock()
+        widget.resize = Mock()
+        widget.control_widget = Mock()
+        widget.control_widget.adjustSize = Mock()
+        widget.center_control_panel = Mock()
+        widget.update = Mock()
+
+        remote = {'enabled': False, 'api_base_url': '', 'api_token': '', 'username': ''}
+        result = {'config': {'size': {'width': 900, 'height': 600}}, 'remote_config': remote}
+
+        with patch('core.quadrant_widget.RemoteConfigManager') as rcm_mock, \
+                patch('core.quadrant_widget.QMessageBox.warning'):
+            rcm_mock.return_value.save_config.return_value = False
+            ok = QuadrantWidget.apply_settings_commit(widget, result)
+
+        self.assertFalse(ok)
+        rcm_mock.return_value.save_config.assert_called_once_with(remote)
+        widget._apply_remote_config_to_db_manager.assert_not_called()
+        widget.save_config.assert_not_called()
+
+    def test_quadrant_widget_apply_settings_commit_when_local_save_fails_returns_false(self):
+        widget = QuadrantWidget.__new__(QuadrantWidget)
+        widget.config = {
+            'size': {'width': 1000, 'height': 800},
+            'ui': {'border_radius': 15},
+            'position': {'x': 0, 'y': 0},
+        }
+        widget.db_manager = Mock()
+        widget._apply_remote_config_to_db_manager = Mock()
+        widget.save_config = Mock(return_value=False)
+        widget.resize = Mock()
+        widget.control_widget = Mock()
+        widget.control_widget.adjustSize = Mock()
+        widget.center_control_panel = Mock()
+        widget.update = Mock()
+
+        remote = {
+            'enabled': True,
+            'api_base_url': 'http://example.com',
+            'api_token': 'token',
+            'username': 'alice',
+        }
+        result = {
+            'config': {
+                'size': {'width': 1100, 'height': 700},
+                'ui': {'border_radius': 8},
+            },
+            'remote_config': remote,
+        }
+
+        with patch('core.quadrant_widget.RemoteConfigManager') as rcm_mock:
+            rcm_mock.return_value.save_config.return_value = True
+            ok = QuadrantWidget.apply_settings_commit(widget, result)
+
+        self.assertFalse(ok)
+        widget._apply_remote_config_to_db_manager.assert_called_once_with(remote)
+        widget.save_config.assert_called_once()
+
+    def test_show_settings_uses_settings_dialog_and_passes_initial_payload(self):
+        from PyQt6.QtWidgets import QDialog
+
+        widget = QuadrantWidget.__new__(QuadrantWidget)
+        cr = {
+            'q1': {'hue_range': 40, 'saturation_range': 25, 'value_range': 18},
+            'q2': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+            'q3': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+            'q4': {'hue_range': 30, 'saturation_range': 20, 'value_range': 20},
+        }
+        widget.config = {
+            'size': {'width': 1000, 'height': 800},
+            'ui': {'border_radius': 15},
+            'position': {'x': 0, 'y': 0},
+            'color_ranges': deepcopy(cr),
+        }
+        widget.db_manager = Mock()
+        widget._apply_remote_config_to_db_manager = Mock()
+        widget.save_config = Mock()
+        widget.resize = Mock()
+        widget.update = Mock()
+        widget.control_widget = Mock()
+        widget.control_widget.adjustSize = Mock()
+        widget.center_control_panel = Mock()
+        widget._position_dirty = False
+        widget.x = Mock(return_value=0)
+        widget.y = Mock(return_value=0)
+        widget.width = Mock(return_value=1200)
+        widget.height = Mock(return_value=900)
+
+        remote_cfg = {
+            'enabled': False,
+            'api_base_url': '',
+            'api_token': '',
+            'username': '',
+        }
+        dlg = MagicMock()
+        dlg.exec.return_value = QDialog.DialogCode.Rejected
+
+        with patch('core.quadrant_widget.SettingsDialog', return_value=dlg) as sd_mock, \
+                patch('core.quadrant_widget.RemoteConfigManager') as rcm_mock:
+            rcm_mock.return_value.get_server_config.return_value = remote_cfg
+            QuadrantWidget.show_settings(widget, '')
+
+        sd_mock.assert_called_once()
+        c_args, c_kwargs = sd_mock.call_args
+        self.assertIs(c_args[0], widget)
+        initial = c_kwargs.get('initial', {})
+        self.assertEqual(initial['remote_config'], remote_cfg)
+        self.assertEqual(initial['config']['size'], {'width': 1000, 'height': 800})
+        self.assertEqual(initial['config']['ui'], {'border_radius': 15})
+        self.assertEqual(initial['config']['color_ranges'], cr)
+        dlg.previewChanged.connect.assert_called_once_with(widget.apply_settings_preview)
+        dlg.exec.assert_called_once()
+
+    def test_show_settings_on_cancel_restores_snapshot(self):
+        from PyQt6.QtWidgets import QDialog
+
+        widget = QuadrantWidget.__new__(QuadrantWidget)
+        base_config = {
+            'size': {'width': 1000, 'height': 800},
+            'ui': {'border_radius': 15},
+            'position': {'x': 0, 'y': 0},
+        }
+        widget.config = deepcopy(base_config)
+        widget.db_manager = Mock()
+        widget._apply_remote_config_to_db_manager = Mock()
+        widget.save_config = Mock()
+        widget.resize = Mock()
+        widget.update = Mock()
+        widget.control_widget = Mock()
+        widget.control_widget.adjustSize = Mock()
+        widget.center_control_panel = Mock()
+        widget._position_dirty = False
+        widget.x = Mock(return_value=0)
+        widget.y = Mock(return_value=0)
+        widget.width = Mock(return_value=1200)
+        widget.height = Mock(return_value=900)
+        widget.apply_settings_preview = Mock()
+        widget.apply_settings_commit = Mock()
+        widget.restore_settings_snapshot = Mock()
+
+        remote_cfg = {
+            'enabled': False,
+            'api_base_url': '',
+            'api_token': '',
+            'username': '',
+        }
+        dlg = MagicMock()
+        dlg.exec.return_value = QDialog.DialogCode.Rejected
+
+        with patch('core.quadrant_widget.SettingsDialog', return_value=dlg), \
+                patch('core.quadrant_widget.RemoteConfigManager') as rcm_mock:
+            rcm_mock.return_value.get_server_config.return_value = remote_cfg
+            QuadrantWidget.show_settings(widget, '')
+
+        widget.apply_settings_commit.assert_not_called()
+        widget.restore_settings_snapshot.assert_called_once()
+        snap = widget.restore_settings_snapshot.call_args[0][0]
+        self.assertEqual(snap['size'], base_config['size'])
+        self.assertEqual(snap['ui'], base_config['ui'])
+
+    def test_show_settings_on_accept_calls_commit_without_restore(self):
+        from PyQt6.QtWidgets import QDialog
+
+        widget = QuadrantWidget.__new__(QuadrantWidget)
+        widget.config = {
+            'size': {'width': 1000, 'height': 800},
+            'ui': {'border_radius': 15},
+            'position': {'x': 0, 'y': 0},
+        }
+        widget.db_manager = Mock()
+        widget._apply_remote_config_to_db_manager = Mock()
+        widget.save_config = Mock()
+        widget.resize = Mock()
+        widget.update = Mock()
+        widget.control_widget = Mock()
+        widget.control_widget.adjustSize = Mock()
+        widget.center_control_panel = Mock()
+        widget._position_dirty = False
+        widget.x = Mock(return_value=0)
+        widget.y = Mock(return_value=0)
+        widget.width = Mock(return_value=1200)
+        widget.height = Mock(return_value=900)
+        widget.apply_settings_preview = Mock()
+        widget.restore_settings_snapshot = Mock()
+
+        commit_result = {
+            'config': {
+                'size': {'width': 1100, 'height': 700},
+                'ui': {'border_radius': 8},
+            },
+            'remote_config': {
+                'enabled': True,
+                'api_base_url': 'http://x',
+                'api_token': 't',
+                'username': 'u',
+            },
+        }
+        dlg = MagicMock()
+        dlg.exec.return_value = QDialog.DialogCode.Accepted
+        dlg.get_result.return_value = commit_result
+        widget.apply_settings_commit = Mock(return_value=True)
+
+        remote_cfg = {
+            'enabled': False,
+            'api_base_url': '',
+            'api_token': '',
+            'username': '',
+        }
+        with patch('core.quadrant_widget.SettingsDialog', return_value=dlg), \
+                patch('core.quadrant_widget.RemoteConfigManager') as rcm_mock:
+            rcm_mock.return_value.get_server_config.return_value = remote_cfg
+            QuadrantWidget.show_settings(widget, '')
+
+        widget.apply_settings_commit.assert_called_once_with(commit_result)
+        widget.restore_settings_snapshot.assert_not_called()
+
+    def test_show_settings_on_accept_when_commit_fails_restores_snapshot(self):
+        from PyQt6.QtWidgets import QDialog
+
+        widget = QuadrantWidget.__new__(QuadrantWidget)
+        base_config = {
+            'size': {'width': 1000, 'height': 800},
+            'ui': {'border_radius': 15},
+            'position': {'x': 0, 'y': 0},
+        }
+        widget.config = deepcopy(base_config)
+        widget.db_manager = Mock()
+        widget._apply_remote_config_to_db_manager = Mock()
+        widget.save_config = Mock()
+        widget.resize = Mock()
+        widget.update = Mock()
+        widget.control_widget = Mock()
+        widget.control_widget.adjustSize = Mock()
+        widget.center_control_panel = Mock()
+        widget._position_dirty = False
+        widget.x = Mock(return_value=0)
+        widget.y = Mock(return_value=0)
+        widget.width = Mock(return_value=1200)
+        widget.height = Mock(return_value=900)
+        widget.apply_settings_preview = Mock()
+        widget.apply_settings_commit = Mock(return_value=False)
+        widget.restore_settings_snapshot = Mock()
+
+        dlg = MagicMock()
+        dlg.exec.return_value = QDialog.DialogCode.Accepted
+        dlg.get_result.return_value = {'config': {}, 'remote_config': {}}
+
+        remote_cfg = {
+            'enabled': False,
+            'api_base_url': '',
+            'api_token': '',
+            'username': '',
+        }
+        with patch('core.quadrant_widget.SettingsDialog', return_value=dlg), \
+                patch('core.quadrant_widget.RemoteConfigManager') as rcm_mock:
+            rcm_mock.return_value.get_server_config.return_value = remote_cfg
+            QuadrantWidget.show_settings(widget, '')
+
+        widget.apply_settings_commit.assert_called_once()
+        widget.restore_settings_snapshot.assert_called_once()
+
+    def test_show_settings_on_accept_when_local_save_fails_restores_snapshot(self):
+        from PyQt6.QtWidgets import QDialog
+
+        widget = QuadrantWidget.__new__(QuadrantWidget)
+        base_config = {
+            'size': {'width': 1000, 'height': 800},
+            'ui': {'border_radius': 15},
+            'position': {'x': 0, 'y': 0},
+        }
+        widget.config = deepcopy(base_config)
+        widget.db_manager = Mock()
+        widget._apply_remote_config_to_db_manager = Mock()
+        widget.save_config = Mock(return_value=False)
+        widget.resize = Mock()
+        widget.update = Mock()
+        widget.control_widget = Mock()
+        widget.control_widget.adjustSize = Mock()
+        widget.center_control_panel = Mock()
+        widget._position_dirty = False
+        widget.x = Mock(return_value=0)
+        widget.y = Mock(return_value=0)
+        widget.width = Mock(return_value=1200)
+        widget.height = Mock(return_value=900)
+        widget.apply_settings_preview = Mock()
+        widget.restore_settings_snapshot = Mock()
+
+        commit_result = {
+            'config': {
+                'size': {'width': 1100, 'height': 700},
+                'ui': {'border_radius': 8},
+            },
+            'remote_config': {
+                'enabled': True,
+                'api_base_url': 'http://x',
+                'api_token': 't',
+                'username': 'u',
+            },
+        }
+        dlg = MagicMock()
+        dlg.exec.return_value = QDialog.DialogCode.Accepted
+        dlg.get_result.return_value = commit_result
+
+        remote_cfg = {
+            'enabled': False,
+            'api_base_url': '',
+            'api_token': '',
+            'username': '',
+        }
+        with patch('core.quadrant_widget.SettingsDialog', return_value=dlg), \
+                patch('core.quadrant_widget.RemoteConfigManager') as rcm_mock:
+            rcm_mock.return_value.get_server_config.return_value = remote_cfg
+            rcm_mock.return_value.save_config.return_value = True
+            QuadrantWidget.show_settings(widget, '')
+
+        widget.restore_settings_snapshot.assert_called_once()
+        snap = widget.restore_settings_snapshot.call_args[0][0]
+        self.assertEqual(snap['size'], base_config['size'])
+        self.assertEqual(snap['ui'], base_config['ui'])
+
+    def test_show_settings_remote_tab_opens_same_dialog_flow(self):
+        """show_settings('remote') 仍走同一编排入口（供 _bootstrap_remote_sync 跳转）。"""
+        from PyQt6.QtWidgets import QDialog
+
+        widget = QuadrantWidget.__new__(QuadrantWidget)
+        widget.config = {
+            'size': {'width': 1000, 'height': 800},
+            'ui': {'border_radius': 15},
+            'position': {'x': 0, 'y': 0},
+        }
+        widget.db_manager = Mock()
+        widget._apply_remote_config_to_db_manager = Mock()
+        widget.save_config = Mock()
+        widget.resize = Mock()
+        widget.update = Mock()
+        widget.control_widget = Mock()
+        widget.control_widget.adjustSize = Mock()
+        widget.center_control_panel = Mock()
+        widget._position_dirty = False
+        widget.x = Mock(return_value=0)
+        widget.y = Mock(return_value=0)
+        widget.width = Mock(return_value=1200)
+        widget.height = Mock(return_value=900)
+
+        remote_cfg = {
+            'enabled': False,
+            'api_base_url': '',
+            'api_token': '',
+            'username': '',
+        }
+        dlg = MagicMock()
+        dlg.exec.return_value = QDialog.DialogCode.Rejected
+
+        with patch('core.quadrant_widget.SettingsDialog', return_value=dlg) as sd_mock, \
+                patch('core.quadrant_widget.RemoteConfigManager') as rcm_mock:
+            rcm_mock.return_value.get_server_config.return_value = remote_cfg
+            QuadrantWidget.show_settings(widget, 'remote')
+
+        sd_mock.assert_called_once()
+        dlg.previewChanged.connect.assert_called_once_with(widget.apply_settings_preview)
+        dlg.exec.assert_called_once()
+
     def test_quadrant_widget_apply_remote_change_selection_requires_each_row_to_choose_one_side(self):
         widget = QuadrantWidget.__new__(QuadrantWidget)
         widget.db_manager = Mock()
         widget.load_tasks = Mock()
 
-        with patch('core.quadrant_widget.QMessageBox.warning') as warning_mock:
+        with patch('core.quadrant_widget.show_warning') as warning_mock:
             result = QuadrantWidget._apply_remote_change_selection(widget, [
                 {'id': 'task:1', 'local_selected': False, 'remote_selected': False},
             ])
@@ -804,7 +1340,7 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
         widget.db_manager.sync_to_server.return_value = True
         widget.load_tasks = Mock()
 
-        with patch('core.quadrant_widget.QMessageBox.warning') as warning_mock:
+        with patch('core.quadrant_widget.show_warning') as warning_mock:
             result = QuadrantWidget._apply_remote_change_selection(widget, [
                 {'id': 'task:1', 'local_selected': True, 'remote_selected': False},
                 {'id': 'scheduled:sched-1', 'local_selected': False, 'remote_selected': True},

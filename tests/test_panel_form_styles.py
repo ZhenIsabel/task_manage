@@ -26,11 +26,11 @@ class PanelFormStyleIntegrationTests(unittest.TestCase):
         )
 
     def test_settings_panel_should_use_shared_form_style(self):
-        quadrant_widget_py = self._read("core/quadrant_widget.py")
+        settings_dialog_py = self._read("core/settings_dialog.py")
         self.assertIn(
             'get_stylesheet("settings_panel")',
-            quadrant_widget_py,
-            "设置面板应接入 settings_panel 样式以覆盖滑块和复选框",
+            settings_dialog_py,
+            "设置对话框应接入 settings_panel 样式以覆盖滑块和复选框",
         )
 
     def test_settings_panel_stylesheet_should_define_slider_and_checkbox_rules(self):
