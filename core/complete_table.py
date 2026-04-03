@@ -3,9 +3,7 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTableWidget,
                             QTableWidgetItem, QPushButton, QCheckBox, QHeaderView,
                             QLabel, QMessageBox, QAbstractItemView)
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor
 from ui.styles import StyleManager
-from ui.ui import apply_drop_shadow
 from database.database_manager import get_db_manager
 import logging
 

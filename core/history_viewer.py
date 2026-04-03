@@ -3,11 +3,10 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                             QHeaderView, QAbstractItemView, QWidget,
                             QAbstractScrollArea)
 from PyQt6.QtCore import Qt, QDate
-from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtGui import QFont
 from datetime import datetime
 
 from ui.styles import StyleManager
-from ui.ui import apply_drop_shadow
 from database.database_manager import get_db_manager
 import logging
 logger = logging.getLogger(__name__)
@@ -86,9 +85,6 @@ class HistoryViewer(QDialog):
         # 居中显示
         self.adjustSize()
         self.center_on_parent()
-        # 添加阴影
-        apply_drop_shadow(panel, blur_radius=10, color=QColor(0, 0, 0, 60), offset_x=0, offset_y=0)
-        
     def load_history_records(self, layout):
         """从数据库加载历史记录并合并显示到一个表格"""
         try:

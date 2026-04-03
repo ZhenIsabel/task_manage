@@ -70,20 +70,7 @@ QDateEdit, QTimeEdit, QSpinBox {{
     selection-color: white;
     outline: none;
 }}
-QDateEdit::drop-down, QComboBox::drop-down {{
-    subcontrol-origin: padding;
-    subcontrol-position: top right;
-    width: 28px;
-    border-left: 1px solid #dddddd;
-    background-color: #f5f5f5;
-    border-top-right-radius: 8px;
-    border-bottom-right-radius: 8px;
-}}
-QDateEdit::down-arrow, QComboBox::down-arrow {{
-    image: url(./icons/down_arrow.png);
-    width: 18px;
-    height: 18px;
-}}
+
 QComboBox {{
     background-color: #f5f5f5;
     color: #333333;
@@ -103,62 +90,6 @@ QComboBox QAbstractItemView {{
     font-family: '微软雅黑';
     font-size: 13px;
     border-radius: 8px;
-}}
-QCalendarWidget {{
-    background: #f8f8f8;
-    border: 1.5px solid #4ECDC4;
-    font-family: '微软雅黑';
-    font-size: 14px;
-    color: #333;
-}}
-QCalendarWidget QWidget#qt_calendar_navigationbar {{
-    background: #f8f8f8;
-}}
-QCalendarWidget QToolButton {{
-    background: transparent;
-    color: #4ECDC4;
-    font-weight: bold;
-    font-size: 15px;
-    border: none;
-    padding: 2px 8px;
-}}
-QCalendarWidget QToolButton::menu-indicator {{
-    image: none;
-}}
-QCalendarWidget QToolButton:hover {{
-    color: #45B8B0;
-}}
-QCalendarWidget QMenu {{
-    background: #fff;
-    border: 1px solid #4ECDC4;
-}}
-QCalendarWidget QSpinBox {{
-    background: #f5f5f5;
-    border: 1px solid #4ECDC4;
-    font-size: 13px;
-    padding: 2px 6px;
-}}
-QCalendarWidget QSpinBox::up-button, QCalendarWidget QSpinBox::down-button {{
-    width: 12px;
-    height: 12px;
-}}
-QCalendarWidget QAbstractItemView {{
-    outline: none;
-    selection-background-color: #4ECDC4;
-    selection-color: white;
-    font-size: 14px;
-    background: #fff;
-}}
-QCalendarWidget QHeaderView {{
-    background: #f8f8f8;
-}}
-QCalendarWidget QHeaderView::section {{
-    background: #f8f8f8;
-    color: #4ECDC4;
-    font-weight: bold;
-    border: none;
-    font-size: 13px;
-    padding: 2px 0;
 }}
 """
 
@@ -306,7 +237,6 @@ class StyleManager:
         "dialog_panel_shell": """
             QWidget#panel {{
             background-color: white;        /* 面板背景色 */
-            border-radius: 15px;            /* 圆角 */
         }}
         QLabel {{
             color: #333;
@@ -333,7 +263,6 @@ class StyleManager:
         "add_task_dialog": """
             QWidget#panel {{
             background-color: white;        /* 面板背景色 */
-            border-radius: 15px;            /* 圆角 */
         }}
         QLabel {{
             color: #333;
@@ -360,7 +289,6 @@ class StyleManager:
         "menu": """
             QMenu {{
                 background-color: #ffffff;
-                border-radius: 10px;
                 padding: 6px 0;
                 min-width: 60px;
                 font-family: "微软雅黑";
@@ -370,7 +298,6 @@ class StyleManager:
             QMenu::item {{
                 background: transparent;
                 padding: 8px 8px 8px 8px;
-                border-radius: 6px;
                 margin: 2px 8px;
                 color: #333333;
             }}
@@ -388,8 +315,6 @@ class StyleManager:
         "quadrant_widget": """
             QWidget {{
                 background-color: #F8F9FA;      /* 主窗口背景色 */
-                border: 1px solid #E0E0E0;      /* 边框 */
-                border-radius: 8px;             /* 圆角 */
             }}
             QLabel {{
                 background-color: #FFFFFF;       /* 标签背景色 */
@@ -454,8 +379,6 @@ class StyleManager:
         "settings_panel": """
             QDialog {{
                 background-color: white;
-                border-radius: 15px;
-                border: 1px solid #e0e0e0;
             }}
             QTabWidget::pane {{
                 border: 1px solid #e0e0e0;

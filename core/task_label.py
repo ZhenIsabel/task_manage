@@ -14,7 +14,7 @@ from datetime import datetime
 
 from .add_task_dialog import AddTaskDialog
 from ui.styles import StyleManager
-from ui.ui import MyColorDialog, WarningPopup, apply_drop_shadow
+from ui.ui import MyColorDialog, WarningPopup
 from config.config_manager import load_config
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
@@ -164,9 +164,6 @@ class TaskLabel(QWidget):
             indicator_size=indicator_size
         )
         self.setStyleSheet(stylesheet)
-        
-        # 添加阴影效果
-        apply_drop_shadow(self, blur_radius=8, color=QColor(0, 0, 0, 60), offset_x=2, offset_y=3)
     
     def on_status_changed(self, state):
         """复选框状态改变时的处理"""
@@ -405,9 +402,6 @@ class TaskLabel(QWidget):
         # 不再使用透明背景，避免弹窗外侧出现可透底的透明区域
         self.detail_popup.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.detail_popup.setStyleSheet(style_manager.get_stylesheet("detail_popup").format())
-        
-        # 设置阴影效果
-        apply_drop_shadow(self.detail_popup, blur_radius=10, color=QColor(0, 0, 0, 60), offset_x=2, offset_y=2)
         
         # 创建布局
         layout = QVBoxLayout(self.detail_popup)

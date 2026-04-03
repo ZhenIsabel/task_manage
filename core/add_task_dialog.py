@@ -1,12 +1,11 @@
 from PyQt6.QtCore import Qt,QDate
 from PyQt6.QtWidgets import (QDialog, QWidget, QVBoxLayout,
                              QLabel, QLineEdit,
-                             QDateEdit, QPushButton, QHBoxLayout, QComboBox, QTextEdit,QFileDialog)
-from PyQt6.QtGui import QColor, QMouseEvent
+                             QPushButton, QHBoxLayout, QComboBox, QTextEdit,QFileDialog)
+from PyQt6.QtGui import QMouseEvent
 
-
+from ui.fluent import create_calendar_picker, get_date_string_from_picker, is_date_picker
 from ui.styles import StyleManager
-from ui.ui import apply_drop_shadow
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
 
@@ -33,9 +32,6 @@ class AddTaskDialog(QDialog):
         panel_form_controls_stylesheet = style_manager.get_stylesheet("panel_form_controls").format()
         panel.setStyleSheet(add_task_dialog_stylesheet + panel_form_controls_stylesheet)
 
-        # # 阴影
-        apply_drop_shadow(panel, blur_radius=8, color=QColor(0, 0, 0, 60), offset_x=0, offset_y=0)
-
         # ------- 下面放你的字段、按钮 ------- #
         self.inputs = {}
         for f in task_fields:
@@ -46,15 +42,8 @@ class AddTaskDialog(QDialog):
             default_value = f.get('default', '')
             # 根据字段类型创建不同的控件
             if f['type'] == 'date':
-                w = QDateEdit()
-                w.setStyleSheet(style_manager.get_stylesheet("calender"))
-                w.setCalendarPopup(True)
-                w.setDisplayFormat("yyyy-MM-dd")
-                # 如果有默认值则设置日期，否则保持原逻辑
-                if default_value:
-                    w.setDate(QDate.fromString(default_value, "yyyy-MM-dd"))
-                else:
-                    w.setDate(QDate.currentDate().addDays(0))
+                initial_date = QDate.fromString(default_value, "yyyy-MM-dd") if default_value else QDate.currentDate()
+                w = create_calendar_picker(panel, initial_date)
             elif f['type'] == 'select':
                 # 创建下拉选择框
                 w = QComboBox()
@@ -136,8 +125,8 @@ class AddTaskDialog(QDialog):
         """把表单内容打包成 dict 返回"""
         data = {}
         for name, w in self.inputs.items():
-            if isinstance(w, QDateEdit):
-                data[name] = w.date().toString("yyyy-MM-dd")
+            if is_date_picker(w):
+                data[name] = get_date_string_from_picker(w)
             elif isinstance(w, QComboBox):
                 data[name] = w.currentText()
             elif isinstance(w, QTextEdit):

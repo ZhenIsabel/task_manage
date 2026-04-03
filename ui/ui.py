@@ -1,6 +1,5 @@
-from PyQt6.QtWidgets import QWidget, QApplication, QColorDialog, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QGraphicsDropShadowEffect
+from PyQt6.QtWidgets import QWidget, QApplication, QColorDialog, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
 from PyQt6.QtCore import QPropertyAnimation, QEasingCurve, QTimer, pyqtSignal, QObject, Qt
-from PyQt6.QtGui import QColor
 import logging
 
 logger = logging.getLogger(__name__)
@@ -481,16 +480,3 @@ class DeleteConfirmDialog(QDialog):
     def get_result(self):
         """获取用户选择结果"""
         return self.result
-
-
-def apply_drop_shadow(target_widget: QWidget,
-                      blur_radius: int = 20,
-                      color: QColor = QColor(0, 0, 0, 150),
-                      offset_x: int = 0,
-                      offset_y: int = 0) -> None:
-    """为任意控件统一应用阴影效果"""
-    effect = QGraphicsDropShadowEffect(target_widget)
-    effect.setBlurRadius(blur_radius)
-    effect.setColor(color)
-    effect.setOffset(offset_x, offset_y)
-    target_widget.setGraphicsEffect(effect)

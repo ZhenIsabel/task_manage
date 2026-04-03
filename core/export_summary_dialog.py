@@ -9,13 +9,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from PyQt6.QtCore import Qt, QDate, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QDateEdit, QPushButton, QProgressBar,
+    QLabel, QPushButton, QProgressBar,
     QMessageBox, QFileDialog, QTextEdit
 )
-from PyQt6.QtGui import QColor, QMouseEvent
+from PyQt6.QtGui import QMouseEvent
 
+from ui.fluent import create_calendar_picker, get_date_from_picker, get_date_string_from_picker, set_date_on_picker
 from ui.styles import StyleManager
-from ui.ui import apply_drop_shadow
 from database.database_manager import get_db_manager
 from core.LLMService import get_llm_service
 
@@ -340,17 +340,11 @@ class ExportSummaryDialog(QDialog):
         
         # 开始日期
         start_label = QLabel("开始日期:")
-        self.start_date_edit = QDateEdit()
-        self.start_date_edit.setCalendarPopup(True)
-        self.start_date_edit.setDisplayFormat("yyyy-MM-dd")
-        self.start_date_edit.setDate(QDate.currentDate().addDays(-30))  # 默认30天前
+        self.start_date_edit = create_calendar_picker(panel, QDate.currentDate().addDays(-30))  # 默认30天前
         
         # 结束日期
         end_label = QLabel("结束日期:")
-        self.end_date_edit = QDateEdit()
-        self.end_date_edit.setCalendarPopup(True)
-        self.end_date_edit.setDisplayFormat("yyyy-MM-dd")
-        self.end_date_edit.setDate(QDate.currentDate())
+        self.end_date_edit = create_calendar_picker(panel, QDate.currentDate())
         
         date_layout.addWidget(start_label)
         date_layout.addWidget(self.start_date_edit)
@@ -416,9 +410,6 @@ class ExportSummaryDialog(QDialog):
         # 居中显示
         self.adjustSize()
         self.center_on_parent()
-        # 添加阴影
-        apply_drop_shadow(panel, blur_radius=10, color=QColor(0, 0, 0, 60), offset_x=0, offset_y=0)
-        
     def center_on_parent(self):
         """居中显示窗口"""
         if self.parent():
@@ -438,13 +429,13 @@ class ExportSummaryDialog(QDialog):
     
     def _set_date_range(self, days: int):
         """设置日期范围"""
-        self.end_date_edit.setDate(QDate.currentDate())
-        self.start_date_edit.setDate(QDate.currentDate().addDays(-days))
+        set_date_on_picker(self.end_date_edit, QDate.currentDate())
+        set_date_on_picker(self.start_date_edit, QDate.currentDate().addDays(-days))
     
     def _generate_summary(self):
         """生成概要"""
-        start_date = self.start_date_edit.date().toString("yyyy-MM-dd")
-        end_date = self.end_date_edit.date().toString("yyyy-MM-dd")
+        start_date = get_date_string_from_picker(self.start_date_edit)
+        end_date = get_date_string_from_picker(self.end_date_edit)
         
         # 验证日期
         if start_date > end_date:
@@ -504,7 +495,7 @@ class ExportSummaryDialog(QDialog):
         desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
         default_filename = os.path.join(
             desktop_path,
-            f"任务概要_{self.start_date_edit.date().toString('yyyyMMdd')}-{self.end_date_edit.date().toString('yyyyMMdd')}.xlsx"
+            f"任务概要_{get_date_from_picker(self.start_date_edit).toString('yyyyMMdd')}-{get_date_from_picker(self.end_date_edit).toString('yyyyMMdd')}.xlsx"
         )
         
         filename, _ = QFileDialog.getSaveFileName(

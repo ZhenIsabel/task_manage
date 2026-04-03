@@ -23,7 +23,6 @@ from config.remote_config import RemoteConfigManager
 from .add_task_dialog import AddTaskDialog
 from ui.styles import StyleManager
 from database.database_manager import get_db_manager
-from ui.ui import apply_drop_shadow
 from gantt.app import gantt_app
 
 import logging
@@ -159,8 +158,6 @@ class QuadrantWidget(QWidget):
         self.control_layout.addWidget(self.settings_button)
         self.control_layout.addWidget(self.exit_button)
         
-        # 添加控制面板阴影效果
-        apply_drop_shadow(self.control_widget, blur_radius=10, color=QColor(0, 0, 0, 50), offset_x=0, offset_y=0)
         # 设置控制面板为悬浮式
         self.control_widget.setParent(self)
         # 自动计算初始尺寸
@@ -800,9 +797,6 @@ class QuadrantWidget(QWidget):
         panel_shell_stylesheet = style_manager.get_stylesheet("dialog_panel_shell").format()
         settings_panel_stylesheet = style_manager.get_stylesheet("settings_panel").format()
         panel.setStyleSheet(panel_shell_stylesheet + settings_panel_stylesheet)
-        
-        # 阴影
-        apply_drop_shadow(panel, blur_radius=8, color=QColor(0, 0, 0, 60), offset_x=0, offset_y=0)
         
         # 创建标签页
         tab_widget = QTabWidget()
