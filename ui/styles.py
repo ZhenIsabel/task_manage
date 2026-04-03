@@ -358,31 +358,7 @@ class StyleManager:
             }}
         """ + PANEL_FORM_CONTROLS_STYLE + BASE_SCROLLBAR_STYLE,
         "panel_form_controls": PANEL_FORM_CONTROLS_STYLE,
-        # 历史记录表格美化样式
-        "history_table": """
-            QTableWidget {{
-                border: 1px solid #ddd;
-                border-radius: 8px;
-                background-color: white;
-                gridline-color: #eee;
-            }}
-            QTableWidget::item {{
-                border: none;
-                padding: 8px;
-            }}
-            QTableWidget::item:selected {{
-                background-color: #4ECDC4;
-            }}
-            QHeaderView::section {{
-                background-color: white;
-                padding: 5px;
-                border: none;
-                border-right: 1px solid #ddd;
-                font-weight: normal;
-                color: #333;
-                gridline-color: #eee;
-            }}
-            """ + BASE_SCROLLBAR_STYLE,
+        
         # 通用：小号灰色标签
         "label_small_muted": """
             QLabel {{

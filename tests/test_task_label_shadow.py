@@ -1,0 +1,48 @@
+import os
+import unittest
+
+from PyQt6.QtWidgets import QApplication, QGraphicsDropShadowEffect, QWidget
+
+from core.task_label import TaskLabel
+
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+
+class TaskLabelShadowTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_task_label_should_apply_a_subtle_drop_shadow(self):
+        host = QWidget()
+        label = TaskLabel(
+            task_id="shadow-test",
+            color="#7ED6DF",
+            parent=host,
+            field_definitions=[
+                {"name": "text", "label": "任务内容", "type": "text", "required": True},
+                {"name": "due_date", "label": "到期日期", "type": "date", "required": False},
+            ],
+            text="带轻阴影的任务",
+            due_date="",
+        )
+        self.addCleanup(label.deleteLater)
+        self.addCleanup(host.deleteLater)
+
+        effect = label.graphicsEffect()
+
+        self.assertIsInstance(
+            effect,
+            QGraphicsDropShadowEffect,
+            "TaskLabel 应挂载一个轻量阴影效果，增强轻微悬浮层次",
+        )
+        self.assertLessEqual(effect.blurRadius(), 10)
+        self.assertEqual(effect.xOffset(), 0.0)
+        self.assertLessEqual(effect.yOffset(), 2.0)
+        self.assertGreater(effect.color().alpha(), 0)
+        self.assertLessEqual(effect.color().alpha(), 80)
+
+
+if __name__ == "__main__":
+    unittest.main()

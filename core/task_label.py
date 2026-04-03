@@ -2,7 +2,7 @@ from datetime import datetime
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, 
                             QLabel, QLineEdit, QInputDialog,
                             QMenu, QFrame, QSizePolicy, QDialog, QColorDialog, QMessageBox,
-                            QLayout,QPushButton)
+                            QLayout,QPushButton, QGraphicsDropShadowEffect)
 from PyQt6.QtCore import Qt, pyqtSignal, QDate, QPoint, QEvent, QUrl
 from PyQt6.QtGui import QColor, QCursor, QAction, QDesktopServices
 try:
@@ -121,6 +121,7 @@ class TaskLabel(QWidget):
         #     layout.addWidget(self.due_date_label)
         
         self.setLayout(layout)
+        self._ensure_subtle_shadow()
         
         # 初始化时检查到期状态
         self.check_overdue_status()
@@ -132,6 +133,17 @@ class TaskLabel(QWidget):
         self.layout().setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
         # 设置鼠标追踪
         self.setMouseTracking(True)
+
+    def _ensure_subtle_shadow(self):
+        """给任务标签增加一层很淡的悬浮感，不改变原有布局。"""
+        effect = self.graphicsEffect()
+        if not isinstance(effect, QGraphicsDropShadowEffect):
+            effect = QGraphicsDropShadowEffect(self)
+            self.setGraphicsEffect(effect)
+
+        effect.setBlurRadius(8)
+        effect.setOffset(0, 2)
+        effect.setColor(QColor(0, 0, 0, 58))
     
     def update_appearance(self):
         """更新标签外观"""
@@ -166,6 +178,7 @@ class TaskLabel(QWidget):
             indicator_size=indicator_size
         )
         self.setStyleSheet(stylesheet)
+        self._ensure_subtle_shadow()
     
     def on_status_changed(self, state):
         """复选框状态改变时的处理"""
