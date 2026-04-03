@@ -549,6 +549,7 @@ class QuadrantWidget(QWidget):
         """在指定位置创建新任务"""
         # 从配置中获取任务字段定义
         task_fields = self.config.get('task_fields', [])
+        task_fields = [field for field in task_fields if field.get("name") != "completed_date"]
         
         dialog = AddTaskDialog(self, task_fields)
         if dialog.exec() != QDialog.DialogCode.Accepted:
