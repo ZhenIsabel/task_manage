@@ -1,14 +1,14 @@
-from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
-                            QTableWidget, QTableWidgetItem, QPushButton, 
-                            QHeaderView, QAbstractItemView, QWidget,
-                            QAbstractScrollArea)
-from PyQt6.QtCore import Qt, QDate
-from PyQt6.QtGui import QFont
+from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
+                            QPushButton, QWidget)
+from PyQt6.QtCore import Qt
 from datetime import datetime
 
+
+from ui.adaptive_table import AdaptiveTextTableWidget
 from ui.styles import StyleManager
 from database.database_manager import get_db_manager
 import logging
+
 logger = logging.getLogger(__name__)
 
 class HistoryViewer(QDialog):
@@ -45,7 +45,7 @@ class HistoryViewer(QDialog):
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(20,20,20,20)
         panel_layout.setSpacing(15)
-        panel.setMaximumWidth(600)
+        panel.setMinimumWidth(600)
         
         # 样式表
         panel.setStyleSheet(style_manager.get_stylesheet("add_task_dialog").format())
@@ -123,6 +123,7 @@ class HistoryViewer(QDialog):
                         'action': record.get('action', 'update'),
                         'value': record.get('value', '')
                     })
+                # 清洗字段
 
             # 按时间排序
             merged_history.sort(key=lambda x: x['timestamp'])
@@ -136,12 +137,8 @@ class HistoryViewer(QDialog):
 
     def create_merged_history_table(self, layout, merged_history):
         """创建合并后的历史记录表格"""
-        table = QTableWidget()
-        table.setColumnCount(4)
-        table.setHorizontalHeaderLabels(["时间", "字段", "操作", "值"])
-        table.setRowCount(len(merged_history))
-
-        for row, record in enumerate(merged_history):
+        rows = []
+        for record in merged_history:
             # 时间
             timestamp = record['timestamp']
             if timestamp:
@@ -152,52 +149,22 @@ class HistoryViewer(QDialog):
                     time_str = timestamp
             else:
                 time_str = 'N/A'
-            time_item = QTableWidgetItem(time_str)
-            time_item.setFlags(time_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            table.setItem(row, 0, time_item)
-
-            # 字段
-            field_item = QTableWidgetItem(record['field'])
-            field_item.setFlags(field_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            table.setItem(row, 1, field_item)
-
-            # 操作
             action = record['action']
             action_text = "创建" if action == 'create' else "更新"
-            action_item = QTableWidgetItem(action_text)
-            action_item.setFlags(action_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            table.setItem(row, 2, action_item)
+            rows.append([
+                time_str,
+                record['field'],
+                action_text,
+                str(record['value']),
+            ])
 
-            # 值
-            value_item = QTableWidgetItem(str(record['value']))
-            value_item.setFlags(value_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            table.setItem(row, 3, value_item)
+        table = AdaptiveTextTableWidget(
+            headers=["时间", "字段", "操作", "值"],
+            rows=rows,
+            fixed_width_columns={3: 300},
+            multiline_columns={3},
+        )
 
-        # 按内容自动调整列宽
-        header = table.horizontalHeader()
-        for i in range(table.columnCount()):
-            header.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
-
-        # 不拉伸最后一列
-        header.setStretchLastSection(False)
-        # 启用自动换行
-        table.setWordWrap(True)
-        # 按内容调整行高
-        table.resizeRowsToContents()
-        # 关闭省略策略：
-        table.setTextElideMode(Qt.TextElideMode.ElideNone)
-        table.horizontalHeader().setTextElideMode(Qt.TextElideMode.ElideNone)
-        # 允许滚动
-        table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        table.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
-        # 按行选择
-        table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-
-        table.setMaximumHeight(400)
-        # 应用美化样式
-        style_manager = StyleManager()
-        table.setStyleSheet(style_manager.get_stylesheet("history_table").format())
         layout.addWidget(table)
     
     def center_on_parent(self):

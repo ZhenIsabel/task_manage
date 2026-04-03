@@ -8,13 +8,14 @@ from typing import Dict, List, Any, Optional
 from calendar import monthrange
 
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
-                            QTableWidget, QTableWidgetItem, QPushButton, 
+                            QTableWidgetItem, QPushButton, 
                             QHeaderView, QAbstractItemView, QWidget,
                             QAbstractScrollArea,QCheckBox,QMessageBox,
                             QComboBox,QTextEdit,QLineEdit)
 from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QFont
 
+from ui.adaptive_table import AdaptiveTextTableWidget
 from ui.fluent import ComboBox, create_calendar_picker, get_date_string_from_picker, is_date_picker
 from ui.styles import StyleManager
 from ui.degree_badges import create_degree_table_cell, is_degree_field
@@ -417,51 +418,42 @@ class ScheduledTaskDialog(QDialog):
     def create_table(self, layout, scheduled_tasks):
         """创建表格"""
         logger.info(f"加载定时任务表条数{len(scheduled_tasks)}")
-        self.table = QTableWidget()
-        self.table.setRowCount(len(scheduled_tasks))
-        self.table.setColumnCount(7)
-        self.table.setHorizontalHeaderLabels(["选择", "任务内容", "频率", "下次运行","紧急程度", "重要程度", "备注"])
+        rows = [
+            [
+                "",
+                scheduled_task["title"],
+                scheduled_task["frequency"],
+                scheduled_task["next_run_at"],
+                "",
+                "",
+                scheduled_task.get("notes", ""),
+            ]
+            for scheduled_task in scheduled_tasks
+        ]
+        self.table = AdaptiveTextTableWidget(
+            headers=["选择", "任务内容", "频率", "下次运行", "紧急程度", "重要程度", "备注"],
+            rows=rows,
+            fixed_width_columns={6: 300},
+            multiline_columns={6},
+        )
         header = self.table.verticalHeader()
-        header.setMinimumSectionSize(35) 
+        header.setMinimumSectionSize(35)
+        self.table.setSortingEnabled(False)
         for row, scheduled_task in enumerate(scheduled_tasks):
             # 复选框
             checkbox = QCheckBox()
             checkbox.stateChanged.connect(self.on_selection_changed)
             checkbox.setProperty('id', scheduled_task['id'])
             self.table.setCellWidget(row, 0, checkbox)
-            self.table.setItem(row, 1, QTableWidgetItem(scheduled_task['title']))
-            self.table.setItem(row, 2, QTableWidgetItem(scheduled_task['frequency']))
-            self.table.setItem(row, 3, QTableWidgetItem(scheduled_task['next_run_at']))
             self.table.setCellWidget(row, 4, create_degree_table_cell('urgency', scheduled_task.get('urgency', '低'), self.table))
             self.table.setCellWidget(row, 5, create_degree_table_cell('importance', scheduled_task.get('importance', '低'), self.table))
-            self.table.setItem(row, 6, QTableWidgetItem(scheduled_task.get('notes', '')))
-        layout.addWidget(self.table)
-        # 按内容自动调整列宽
-        header = self.table.horizontalHeader()
-        for i in range(self.table.columnCount()):
-            header.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
-
-        # 不拉伸最后一列
-        header.setStretchLastSection(False)
-        # 启用自动换行
-        self.table.setWordWrap(True)
-        # 按内容调整行高
         self.table.resizeRowsToContents()
+        self.table.setSortingEnabled(True)
         
-        # 关闭省略策略：
-        self.table.setTextElideMode(Qt.TextElideMode.ElideNone)
-        self.table.horizontalHeader().setTextElideMode(Qt.TextElideMode.ElideNone)
         # 允许滚动
-        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.table.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
-        # 按行选择
-        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
 
         self.table.setMaximumHeight(400)
-        # 应用美化样式
-        style_manager = StyleManager()
-        self.table.setStyleSheet(style_manager.get_stylesheet("history_table").format())
         layout.addWidget(self.table)
 
     def center_on_parent(self):
