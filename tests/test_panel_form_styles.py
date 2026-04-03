@@ -91,5 +91,24 @@ class PanelFormStyleIntegrationTests(unittest.TestCase):
         self.assertIn('panel.setObjectName("dialog_panel")', history_viewer_py)
 
 
+    def test_task_label_styles_should_scope_to_task_label_root(self):
+        styles_py = self._read('ui/styles.py')
+        task_label_py = self._read('core/task_label.py')
+
+        self.assertIn('QWidget#task_label_root', styles_py)
+        self.assertIn('QWidget#task_label_root QLabel#TagText', styles_py)
+        self.assertIn('QWidget#task_label_root QCheckBox', styles_py)
+        self.assertIn('self.setObjectName("task_label_root")', task_label_py)
+
+
+    def test_task_label_base_style_should_keep_tag_text_border_radius(self):
+        styles_py = self._read('ui/styles.py')
+        marker = 'QWidget#task_label_root QLabel#TagText {{'
+        start = styles_py.index(marker)
+        end = styles_py.index('            }}', start)
+        tag_text_rule = styles_py[start:end]
+
+        self.assertIn('border-radius: 10px;', tag_text_rule)
+
 if __name__ == '__main__':
     unittest.main()

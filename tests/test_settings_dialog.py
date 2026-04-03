@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import QApplication, QCheckBox, QLineEdit, QSlider, QSpinBo
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from core.settings_dialog import SettingsDialog
+from ui.ui import MyColorDialog
 
 
 def _sample_color_ranges():
@@ -160,6 +161,17 @@ class SettingsDialogTests(unittest.TestCase):
         self.assertEqual(dlg.findChild(QSlider, "settings_q1_hue_range_slider").value(), 30)
         self.assertEqual(dlg.findChild(QSlider, "settings_q1_saturation_range_slider").value(), 20)
         self.assertEqual(dlg.findChild(QSlider, "settings_q1_value_range_slider").value(), 20)
+
+    def test_task_label_color_dialog_should_not_force_a_custom_stylesheet(self):
+        """详情入口的颜色面板应与设置页保持一致，不再单独套用自定义 QSS。"""
+        dlg = MyColorDialog()
+        self.addCleanup(dlg.deleteLater)
+
+        self.assertEqual(
+            dlg.styleSheet(),
+            "",
+            "任务详情入口的颜色对话框不应再强制挂载 color_dialog 样式",
+        )
 
     def test_frameless_drag_mouse_handlers_move_dialog(self):
         """直接调用与 AddTaskDialog 一致的拖动三事件，窗口左上角应随拖动偏移。"""

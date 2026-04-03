@@ -332,13 +332,5 @@ class UIManager(QObject):
 
 
 class MyColorDialog(QColorDialog):
-    """自定义颜色对话框（迁移至 ui.py 管理 UI 组件）"""
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._apply_custom_style()
-    
-    def _apply_custom_style(self):
-        """应用自定义样式"""
-        from ui.styles import StyleManager
-        style_manager = StyleManager()
-        self.setStyleSheet(style_manager.get_stylesheet("color_dialog"))
+    """颜色对话框包装类，保持与原生 QColorDialog 一致的外观。"""
+    pass

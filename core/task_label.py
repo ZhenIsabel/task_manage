@@ -60,6 +60,7 @@ class TaskLabel(QWidget):
             logger.error(f"任务标签初始化失败 (task_id: {task_id}): {str(e)}", exc_info=True)
             raise
         self.task_id = task_id
+        self.setObjectName("task_label_root")
         self.color = QColor(color)
 
         # ---- 自动把 EDITABLE_FIELDS 里声明的 key 赋成属性 ----
