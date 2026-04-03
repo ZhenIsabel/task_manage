@@ -6,7 +6,7 @@ import time
 import threading
 from datetime import datetime
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QPushButton, QColorDialog, QSlider,  QMessageBox, QDialog,
-                            QTabWidget, QFormLayout, QSpinBox,  QMenu, QTimeEdit, QLabel, QCheckBox, QScrollArea, QLineEdit)
+                            QTabWidget, QFormLayout, QSpinBox,  QMenu, QTimeEdit, QLabel, QCheckBox, QLineEdit)
 from PyQt6.QtCore import Qt, QPoint,  QRect, QTimer,QUrl, QTime, pyqtSignal
 from PyQt6.QtWidgets import QApplication,QFileDialog
 from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont,  QPainterPath, QLinearGradient, QAction
@@ -21,6 +21,7 @@ from .task_label import TaskLabel
 from config.config_manager import save_config, save_tasks
 from config.remote_config import RemoteConfigManager
 from .add_task_dialog import AddTaskDialog
+from ui.scrollbar import FluentScrollArea
 from ui.styles import StyleManager
 from database.database_manager import get_db_manager
 from gantt.app import gantt_app
@@ -1618,7 +1619,7 @@ class QuadrantWidget(QWidget):
         message.setWordWrap(True)
         layout.addWidget(message)
 
-        scroll_area = QScrollArea(dialog)
+        scroll_area = FluentScrollArea(dialog)
         scroll_area.setWidgetResizable(True)
         table_container = QWidget()
         table_layout = QGridLayout(table_container)

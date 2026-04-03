@@ -6,6 +6,7 @@ from datetime import datetime, time
 
 from config.config_manager import load_config
 from core.quadrant_widget import QuadrantWidget
+from ui.scrollbar import install_global_fluent_scrollbars
 from ui.ui import UIManager
 from gantt.app import gantt_app
 from core.utils import init_logging
@@ -30,6 +31,7 @@ class TaskManagerApp:
             logger.info("程序启动中...")
             self.app = QApplication(sys.argv)
             logger.info("QApplication初始化完成")
+            install_global_fluent_scrollbars(self.app)
 
             # 加载配置
             self.config = load_config()

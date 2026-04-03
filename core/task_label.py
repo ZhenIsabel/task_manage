@@ -1,7 +1,7 @@
 from datetime import datetime
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, 
                             QLabel, QLineEdit, QInputDialog,
-                            QMenu, QFrame, QScrollArea, QSizePolicy, QDialog, QColorDialog, QMessageBox,
+                            QMenu, QFrame, QSizePolicy, QDialog, QColorDialog, QMessageBox,
                             QLayout,QPushButton)
 from PyQt6.QtCore import Qt, pyqtSignal, QDate, QPoint, QEvent, QUrl
 from PyQt6.QtGui import QColor, QCursor, QAction, QDesktopServices
@@ -13,6 +13,7 @@ import os
 from datetime import datetime
 
 from .add_task_dialog import AddTaskDialog
+from ui.scrollbar import FluentScrollArea
 from ui.styles import StyleManager
 from ui.ui import MyColorDialog, WarningPopup
 from config.config_manager import load_config
@@ -483,7 +484,7 @@ class TaskLabel(QWidget):
             notes_label.setStyleSheet("padding: 5px; color: black;")
             
             # 使用滚动区域显示长文本
-            scroll_area = QScrollArea()
+            scroll_area = FluentScrollArea()
             scroll_area.setWidget(notes_label)
             scroll_area.setWidgetResizable(True)
             scroll_area.setMaximumHeight(100)

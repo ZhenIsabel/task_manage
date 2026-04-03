@@ -2,44 +2,8 @@
 
 
 # ===== 基础样式模板 =====
-BASE_SCROLLBAR_STYLE = """
-QScrollBar:vertical {{
-    background: transparent;
-    width: 6px;
-    margin: 2px 1px 2px 0;
-    border-radius: 3px;
-    border: none;
-}}
-QScrollBar::handle:vertical {{
-    background: #D6D6D6;
-    min-height: 20px;
-    border-radius: 3px;
-}}
-QScrollBar:horizontal {{
-    background: transparent;
-    height: 6px;
-    margin: 0 2px 0 2px;
-    border-radius: 3px;
-    border: none;
-}}
-QScrollBar::handle:horizontal {{
-    background: #D6D6D6;
-    min-width: 20px;
-    border-radius: 3px;
-}}
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-    height: 0px;
-}}
-QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
-    background: none;
-}}
-QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
-    width: 0px;
-}}
-QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{
-    background: none;
-}}
-"""
+# 滚动条统一交给 qfluentwidgets 接管，避免旧 QSS 继续覆盖全局 Fluent scrollbar。
+BASE_SCROLLBAR_STYLE = ""
 
 PANEL_FORM_CONTROLS_STYLE = """
 QLineEdit, QTextEdit {{
@@ -182,40 +146,6 @@ class StyleManager:
             QScrollArea {{
                 border: none;               /* 无边框 */
                 background-color: transparent; /* 透明背景 */
-            }}
-            QScrollBar:vertical {{
-                background: transparent;
-                width: 8px;
-                margin: 4px 2px 4px 0;
-                border-radius: 4px;
-            }}
-            QScrollBar::handle:vertical {{
-                background: #D6D6D6;
-                min-height: 30px;
-                border-radius: 4px;
-            }}
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-                height: 0px;
-            }}
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
-                background: none;
-            }}
-            QScrollBar:horizontal {{
-                background: transparent;
-                height: 8px;
-                margin: 0 4px 0 4px;
-                border-radius: 4px;
-            }}
-            QScrollBar::handle:horizontal {{
-                background: #D6D6D6;
-                min-width: 30px;
-                border-radius: 4px;
-            }}
-            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
-                width: 0px;
-            }}
-            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{
-                background: none;
             }}
         """,
         # 任务标签上的按钮样式

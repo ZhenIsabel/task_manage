@@ -24,7 +24,6 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-FLUENT_AVAILABLE = False
 _CALENDAR_WARNING_PATCHED = False
 _CALENDAR_POPUP_SHELL_PATCHED = False
 _CALENDAR_POPUP_ANIMATION_PATCHED = False
@@ -48,7 +47,6 @@ try:
         setThemeColor,
     )
 
-    FLUENT_AVAILABLE = True
 except ImportError:
     Action = QAction
     
@@ -86,15 +84,11 @@ except ImportError:
             super().__init__(parent)
 
 
-FLUENT_THEME_COLOR = QColor("#4ECDC4")
-
 
 def _patch_calendar_disconnect_warning() -> None:
     """Avoid Qt warnings from qfluentwidgets calendar animation cleanup."""
     global _CALENDAR_WARNING_PATCHED
 
-    if _CALENDAR_WARNING_PATCHED or not FLUENT_AVAILABLE:
-        return
 
     try:
         from qfluentwidgets.components.date_time.calendar_view import ScrollViewBase  # type: ignore
@@ -117,9 +111,6 @@ def _patch_calendar_popup_shell() -> None:
     """Remove the extra outer shell around CalendarPicker popups."""
     global _CALENDAR_POPUP_SHELL_PATCHED
 
-    if _CALENDAR_POPUP_SHELL_PATCHED or not FLUENT_AVAILABLE:
-        return
-
     try:
         from qfluentwidgets.components.date_time.calendar_view import CalendarView  # type: ignore
     except ImportError:
@@ -140,9 +131,6 @@ def _patch_calendar_popup_shell() -> None:
 def _patch_calendar_popup_animation() -> None:
     """Disable CalendarPicker popup animations for instant opening."""
     global _CALENDAR_POPUP_ANIMATION_PATCHED
-
-    if _CALENDAR_POPUP_ANIMATION_PATCHED or not FLUENT_AVAILABLE:
-        return
 
     try:
         from qfluentwidgets.components.date_time.calendar_view import CalendarView  # type: ignore
@@ -187,64 +175,6 @@ def create_calendar_picker(
     if date is not None:
         set_date_on_picker(picker, date)
     return picker
-
-
-def configure_fluent_theme(app: Optional[QApplication]) -> bool:
-    """Initialize the global Fluent theme once QApplication is ready."""
-    if not FLUENT_AVAILABLE or app is None:
-        return False
-
-    setTheme(Theme.AUTO, lazy=True)
-    setThemeColor(FLUENT_THEME_COLOR, lazy=True)
-    return True
-
-
-def _show_fluent_message(parent: QWidget, title: str, content: str, yes_text: str) -> int:
-    message_box = MessageBox(title, content, parent)
-    message_box.yesButton.setText(yes_text)
-    message_box.hideCancelButton()
-    return message_box.exec()
-
-
-def show_info_message(parent: Optional[QWidget], title: str, content: str) -> int:
-    if FLUENT_AVAILABLE and parent is not None:
-        return _show_fluent_message(parent, title, content, "确定")
-    return QMessageBox.information(parent, title, content)
-
-
-def show_warning_message(parent: Optional[QWidget], title: str, content: str) -> int:
-    if FLUENT_AVAILABLE and parent is not None:
-        return _show_fluent_message(parent, title, content, "我知道了")
-    return QMessageBox.warning(parent, title, content)
-
-
-def show_error_message(parent: Optional[QWidget], title: str, content: str) -> int:
-    if FLUENT_AVAILABLE and parent is not None:
-        return _show_fluent_message(parent, title, content, "关闭")
-    return QMessageBox.critical(parent, title, content)
-
-
-def ask_yes_no(
-    parent: Optional[QWidget],
-    title: str,
-    content: str,
-    yes_text: str = "确定",
-    cancel_text: str = "取消",
-) -> bool:
-    if FLUENT_AVAILABLE and parent is not None:
-        message_box = MessageBox(title, content, parent)
-        message_box.yesButton.setText(yes_text)
-        message_box.cancelButton.setText(cancel_text)
-        return message_box.exec() == 1
-
-    result = QMessageBox.question(
-        parent,
-        title,
-        content,
-        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-        QMessageBox.StandardButton.No,
-    )
-    return result == QMessageBox.StandardButton.Yes
 
 
 def set_date_on_picker(picker: QWidget, date: QDate) -> None:
