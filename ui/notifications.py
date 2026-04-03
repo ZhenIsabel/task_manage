@@ -9,7 +9,7 @@ from qfluentwidgets import InfoBar, InfoBarPosition
 
 DEFAULT_SUCCESS_DURATION_MS = 1000
 DEFAULT_ERROR_DURATION_MS = -1
-
+DEFAULT_WARNING_DURATION_MS = 3000
 
 def resolve_notification_host(widget: Optional[QWidget]) -> Optional[QWidget]:
     """Resolve the top-level host widget so InfoBar appears on the main window."""
@@ -80,7 +80,7 @@ def show_warning(
     content: str,
     *,
     position=InfoBarPosition.TOP,
-    duration: int = DEFAULT_ERROR_DURATION_MS,
+    duration: int = DEFAULT_WARNING_DURATION_MS,
 ):
     return _show_info_bar(
         InfoBar.warning,
