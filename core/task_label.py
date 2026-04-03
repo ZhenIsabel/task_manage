@@ -17,7 +17,7 @@ from ui.scrollbar import FluentScrollArea
 from ui.notifications import show_error
 from ui.styles import StyleManager
 from ui.degree_badges import create_degree_display_widget, build_degree_badge_stylesheet, get_status_badge_meta
-from ui.ui import MyColorDialog, WarningPopup
+from ui.ui import MyColorDialog
 from config.config_manager import load_config
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
