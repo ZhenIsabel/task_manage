@@ -6,6 +6,7 @@ from PyQt6.QtGui import QMouseEvent
 
 from ui.fluent import create_calendar_picker, get_date_string_from_picker, is_date_picker
 from ui.styles import StyleManager
+from ui.degree_badges import is_degree_field
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
 
@@ -34,52 +35,18 @@ class AddTaskDialog(QDialog):
 
         # ------- 下面放你的字段、按钮 ------- #
         self.inputs = {}
-        for f in task_fields:
-            lab = QLabel(f"{f['label']}{' *' if f.get('required') else ''}")
-            panel_layout.addWidget(lab)
+        index = 0
+        while index < len(task_fields):
+            field = task_fields[index]
+            next_field = task_fields[index + 1] if index + 1 < len(task_fields) else None
 
-            # 创建控件时设置默认值
-            default_value = f.get('default', '')
-            # 根据字段类型创建不同的控件
-            if f['type'] == 'date':
-                initial_date = QDate.fromString(default_value, "yyyy-MM-dd") if default_value else QDate.currentDate()
-                w = create_calendar_picker(panel, initial_date)
-            elif f['type'] == 'select':
-                # 创建下拉选择框
-                w = QComboBox()
-                # 添加选项
-                for option in f.get('options', []):
-                    w.addItem(option)
-                # 设置默认值
-                if default_value and default_value in f.get('options', []):
-                    w.setCurrentText(default_value)
-            elif f['type'] == 'multiline':
-                # 创建多行文本输入框
-                w = QTextEdit()
-                w.setPlaceholderText("请输入备注...")
-                w.setMinimumHeight(100)  # 设置最小高度
-                if default_value:
-                    w.setText(str(default_value))
-            elif f['type'] == 'file':
-                dir_layout = QHBoxLayout()
-                path_edit = QLineEdit()
-                path_edit.setPlaceholderText("请选择文件夹路径...")
-                path_edit.setReadOnly(True)
-                if default_value:
-                    path_edit.setText(str(default_value))
-                btn = QPushButton("选择")
-                # 使用lambda绑定当前path_edit实例
-                btn.clicked.connect(lambda _, we=path_edit: self.choose_dir(we))
-                dir_layout.addWidget(path_edit)
-                dir_layout.addWidget(btn)
-                panel_layout.addLayout(dir_layout)
-                self.inputs[f['name']] = path_edit  # 存储正确的控件引用
+            if self._should_group_degree_fields(field, next_field):
+                self._add_degree_field_row(panel, panel_layout, field, next_field)
+                index += 2
                 continue
-            else:
-                w = QLineEdit(str(default_value))  # 设置文本默认值
-                
-            panel_layout.addWidget(w)
-            self.inputs[f['name']] = w
+
+            self._add_single_field(panel, panel_layout, field)
+            index += 1
 
         # 按钮
         btn_row = QHBoxLayout()
@@ -101,6 +68,80 @@ class AddTaskDialog(QDialog):
         panel.move(shadow_margin, shadow_margin)
         # ❺ 可选：实现拖动窗口（因为没了系统标题栏）
         self._drag_pos = None
+
+    def _should_group_degree_fields(self, current_field, next_field):
+        return (
+            current_field
+            and next_field
+            and current_field.get('name') == 'urgency'
+            and next_field.get('name') == 'importance'
+            and is_degree_field(current_field.get('name'))
+            and is_degree_field(next_field.get('name'))
+        )
+
+    def _create_field_input(self, parent, field):
+        default_value = field.get('default', '')
+        if field['type'] == 'date':
+            initial_date = QDate.fromString(default_value, "yyyy-MM-dd") if default_value else QDate.currentDate()
+            return create_calendar_picker(parent, initial_date)
+        if field['type'] == 'select':
+            widget = QComboBox()
+            for option in field.get('options', []):
+                widget.addItem(option)
+            if default_value and default_value in field.get('options', []):
+                widget.setCurrentText(default_value)
+            return widget
+        if field['type'] == 'multiline':
+            widget = QTextEdit()
+            widget.setPlaceholderText("请输入备注...")
+            widget.setMinimumHeight(100)
+            if default_value:
+                widget.setText(str(default_value))
+            return widget
+        if field['type'] == 'file':
+            return None
+        return QLineEdit(str(default_value))
+
+    def _add_single_field(self, panel, parent_layout, field):
+        lab = QLabel(f"{field['label']}{' *' if field.get('required') else ''}")
+        parent_layout.addWidget(lab)
+
+        if field['type'] == 'file':
+            dir_layout = QHBoxLayout()
+            path_edit = QLineEdit()
+            path_edit.setPlaceholderText("请选择文件夹路径...")
+            path_edit.setReadOnly(True)
+            default_value = field.get('default', '')
+            if default_value:
+                path_edit.setText(str(default_value))
+            btn = QPushButton("选择")
+            btn.clicked.connect(lambda _, we=path_edit: self.choose_dir(we))
+            dir_layout.addWidget(path_edit)
+            dir_layout.addWidget(btn)
+            parent_layout.addLayout(dir_layout)
+            self.inputs[field['name']] = path_edit
+            return
+
+        widget = self._create_field_input(panel, field)
+        parent_layout.addWidget(widget)
+        self.inputs[field['name']] = widget
+
+    def _add_degree_field_row(self, panel, parent_layout, first_field, second_field):
+        row = QHBoxLayout()
+        row.setSpacing(12)
+
+        for field in (first_field, second_field):
+            column_widget = QWidget(panel)
+            column_layout = QVBoxLayout(column_widget)
+            column_layout.setContentsMargins(0, 0, 0, 0)
+            column_layout.setSpacing(5)
+            column_layout.addWidget(QLabel(f"{field['label']}{' *' if field.get('required') else ''}"))
+            widget = self._create_field_input(panel, field)
+            column_layout.addWidget(widget)
+            row.addWidget(column_widget, 1)
+            self.inputs[field['name']] = widget
+
+        parent_layout.addLayout(row)
 
     # ---------- 拖动实现 ----------
     def mousePressEvent(self, e: QMouseEvent):

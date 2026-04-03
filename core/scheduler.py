@@ -17,6 +17,7 @@ from PyQt6.QtGui import QFont
 
 from ui.fluent import create_calendar_picker, get_date_string_from_picker, is_date_picker
 from ui.styles import StyleManager
+from ui.degree_badges import create_degree_table_cell, is_degree_field
 from database.database_manager import get_db_manager
 from config.config_manager import load_config
 import logging
@@ -431,9 +432,9 @@ class ScheduledTaskDialog(QDialog):
             self.table.setItem(row, 1, QTableWidgetItem(scheduled_task['title']))
             self.table.setItem(row, 2, QTableWidgetItem(scheduled_task['frequency']))
             self.table.setItem(row, 3, QTableWidgetItem(scheduled_task['next_run_at']))
-            self.table.setItem(row, 4, QTableWidgetItem(scheduled_task.get('urgency', '低')))
-            self.table.setItem(row, 5, QTableWidgetItem(scheduled_task.get('importance', '低')))
-            self.table.setItem(row, 6, QTableWidgetItem(scheduled_task['notes']))
+            self.table.setCellWidget(row, 4, create_degree_table_cell('urgency', scheduled_task.get('urgency', '低'), self.table))
+            self.table.setCellWidget(row, 5, create_degree_table_cell('importance', scheduled_task.get('importance', '低'), self.table))
+            self.table.setItem(row, 6, QTableWidgetItem(scheduled_task.get('notes', '')))
         layout.addWidget(self.table)
         # 按内容自动调整列宽
         header = self.table.horizontalHeader()
@@ -618,36 +619,19 @@ class AddScheduleDialog(QDialog):
 
         # 输入字段
         self.inputs = {}
-        
-        for f in self.task_fields:
-            lab = QLabel(f"{f['label']}{' *' if f.get('required') else ''}")
-            panel_layout.addWidget(lab)
-            # 创建控件时设置默认值
-            default_value = f.get('default', '')
-            # 根据字段类型创建不同的控件
-            if f['type'] == 'date':
-                initial_date = QDate.fromString(default_value, "yyyy-MM-dd") if default_value else QDate.currentDate()
-                w = create_calendar_picker(panel, initial_date)
-            elif f['type'] == 'select':
-                # 创建下拉选择框
-                w = QComboBox()
-                # 添加选项
-                for option in f.get('options', []):
-                    w.addItem(option)
-                # 设置默认值
-                if default_value and default_value in f.get('options', []):
-                    w.setCurrentText(default_value)
-            elif f['type'] == 'multiline':
-                # 创建多行文本输入框
-                w = QTextEdit()
-                w.setPlaceholderText("请输入备注...")
-                w.setMinimumHeight(100)  # 设置最小高度
-                if default_value:
-                    w.setText(str(default_value))
-            else:
-                w = QLineEdit(str(default_value))  # 设置文本默认值
-            panel_layout.addWidget(w)
-            self.inputs[f['name']] = w
+
+        index = 0
+        while index < len(self.task_fields):
+            field = self.task_fields[index]
+            next_field = self.task_fields[index + 1] if index + 1 < len(self.task_fields) else None
+
+            if self._should_group_degree_fields(field, next_field):
+                self._add_degree_field_row(panel, panel_layout, field, next_field)
+                index += 2
+                continue
+
+            self._add_single_field(panel, panel_layout, field)
+            index += 1
 
         # 按钮布局
         button_layout = QHBoxLayout()
@@ -682,6 +666,60 @@ class AddScheduleDialog(QDialog):
         self.resize(panel.width() + shadow_margin * 2, panel.height() + shadow_margin * 2)
         # 把面板放回壳左上角
         panel.move(shadow_margin, shadow_margin)
+
+    def _should_group_degree_fields(self, current_field, next_field):
+        return (
+            current_field
+            and next_field
+            and current_field.get('name') == 'urgency'
+            and next_field.get('name') == 'importance'
+            and is_degree_field(current_field.get('name'))
+            and is_degree_field(next_field.get('name'))
+        )
+
+    def _create_field_input(self, parent, field):
+        default_value = field.get('default', '')
+        if field['type'] == 'date':
+            initial_date = QDate.fromString(default_value, "yyyy-MM-dd") if default_value else QDate.currentDate()
+            return create_calendar_picker(parent, initial_date)
+        if field['type'] == 'select':
+            widget = QComboBox()
+            for option in field.get('options', []):
+                widget.addItem(option)
+            if default_value and default_value in field.get('options', []):
+                widget.setCurrentText(default_value)
+            return widget
+        if field['type'] == 'multiline':
+            widget = QTextEdit()
+            widget.setPlaceholderText("请输入备注...")
+            widget.setMinimumHeight(100)
+            if default_value:
+                widget.setText(str(default_value))
+            return widget
+        return QLineEdit(str(default_value))
+
+    def _add_single_field(self, panel, parent_layout, field):
+        parent_layout.addWidget(QLabel(f"{field['label']}{' *' if field.get('required') else ''}"))
+        widget = self._create_field_input(panel, field)
+        parent_layout.addWidget(widget)
+        self.inputs[field['name']] = widget
+
+    def _add_degree_field_row(self, panel, parent_layout, first_field, second_field):
+        row = QHBoxLayout()
+        row.setSpacing(12)
+
+        for field in (first_field, second_field):
+            column_widget = QWidget(panel)
+            column_layout = QVBoxLayout(column_widget)
+            column_layout.setContentsMargins(0, 0, 0, 0)
+            column_layout.setSpacing(5)
+            column_layout.addWidget(QLabel(f"{field['label']}{' *' if field.get('required') else ''}"))
+            widget = self._create_field_input(panel, field)
+            column_layout.addWidget(widget)
+            row.addWidget(column_widget, 1)
+            self.inputs[field['name']] = widget
+
+        parent_layout.addLayout(row)
 
     def get_data(self):
         """把表单内容打包成 dict 返回"""

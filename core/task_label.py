@@ -15,6 +15,7 @@ from datetime import datetime
 from .add_task_dialog import AddTaskDialog
 from ui.scrollbar import FluentScrollArea
 from ui.styles import StyleManager
+from ui.degree_badges import create_degree_display_widget, build_degree_badge_stylesheet, get_status_badge_meta
 from ui.ui import MyColorDialog, WarningPopup
 from config.config_manager import load_config
 import logging
@@ -467,14 +468,30 @@ class TaskLabel(QWidget):
             due_date_label = QLabel(f"<b>到期日期:</b> {self.due_date}")
             layout.addWidget(due_date_label)
         
-        # 显示紧急程度和重要程度
+        # 显示状态、紧急程度和重要程度
+        meta_row = QWidget(self.detail_popup)
+        meta_layout = QHBoxLayout(meta_row)
+        meta_layout.setContentsMargins(0, 0, 0, 0)
+        meta_layout.setSpacing(5)
+
         if hasattr(self, 'urgency') and self.urgency:
-            urgency_label = QLabel(f"<b>紧急程度:</b> {self.urgency}")
-            layout.addWidget(urgency_label)
-        
+            urgency_widget = create_degree_display_widget('urgency', self.urgency, parent=meta_row)
+            urgency_widget.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+            meta_layout.addWidget(urgency_widget)
+
         if hasattr(self, 'importance') and self.importance:
-            importance_label = QLabel(f"<b>重要程度:</b> {self.importance}")
-            layout.addWidget(importance_label)
+            importance_widget = create_degree_display_widget('importance', self.importance, parent=meta_row)
+            importance_widget.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+            meta_layout.addWidget(importance_widget)
+
+        self.status_label = QLabel(meta_row)
+        self.status_label.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+        self.update_status_label()
+        meta_layout.addWidget(self.status_label)
+
+
+        meta_layout.addStretch()
+        layout.addWidget(meta_row)
         
         if self.notes:
             notes_html = self.notes.replace('\n', '<br>')
@@ -490,11 +507,6 @@ class TaskLabel(QWidget):
             scroll_area.setMaximumHeight(100)
             scroll_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
             layout.addWidget(scroll_area)
-        
-        # 完成状态
-        self.status_label = QLabel()
-        self.update_status_label()  # 单独用一个方法来设置文字
-        layout.addWidget(self.status_label)
         
         # 创建日期
         date_label = QLabel(f"<b>创建于:</b> {self.create_date}")
@@ -606,9 +618,10 @@ class TaskLabel(QWidget):
         """刷新状态文字"""
         if not hasattr(self, 'status_label') or self.status_label is None:
             return
-        status_text = "已完成" if self.checkbox.isChecked() else "未完成"
-        status_color = "#4ECDC4" if self.checkbox.isChecked() else "#FF6B6B"
-        self.status_label.setText(f"<b>状态:</b> <font color='{status_color}'>{status_text}</font>")
+        meta = get_status_badge_meta(self.checkbox.isChecked())
+        self.status_label.setText(meta["display_text"])
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_label.setStyleSheet(build_degree_badge_stylesheet(meta))
 
     def show_history(self):
         """显示历史记录"""
