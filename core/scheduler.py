@@ -7,13 +7,10 @@ from datetime import datetime, timedelta
 from typing import Optional
 from calendar import monthrange
 
-from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
+from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QMessageBox,
                             QPushButton, QWidget,QAbstractScrollArea,QCheckBox,
                             QComboBox,QTextEdit,QLineEdit)
 from PyQt6.QtCore import Qt, QDate
-
-from qfluentwidgets import MessageBox
-
 
 from ui.adaptive_table import AdaptiveTextTableWidget
 from ui.fluent import ComboBox, create_calendar_picker, get_date_string_from_picker, is_date_picker
@@ -479,16 +476,14 @@ class ScheduledTaskDialog(QDialog):
             return
         
         # 确认对话框
-        from qfluentwidgets import MessageBox
-        host = resolve_notification_host(self) or self
-        reply=MessageBox(
-            title="确认",
-            content=f"确定要将 {len(self.selected_tasks)} 个定时任务删除吗？",
-            parent=host
-        ).exec()
-
-        
-        if reply != True:
+        reply = QMessageBox.question(
+            self,
+            "确认",
+            "确定要删除吗？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
             return
         try:
             deleted_count=0

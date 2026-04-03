@@ -1,5 +1,5 @@
 from datetime import datetime
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, 
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QCheckBox,
                             QLabel, QInputDialog,
                             QFrame, QSizePolicy, QDialog,
                             QLayout,QPushButton, QGraphicsDropShadowEffect)
