@@ -96,3 +96,6 @@ sqlite3.exe
 tasks.db
 *.db
 config/remote_config.json
+
+#cursor
+.cursor/
