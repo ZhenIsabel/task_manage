@@ -356,11 +356,11 @@ class QuadrantWidget(QWidget):
         
     
         # 水平线
-        painter.setPen(QPen(QColor(184,184,184, 200), 1))
+        painter.setPen(QPen(QColor(184,184,184, 150), 1))
         painter.drawLine(margin, h_line_y, width - margin, h_line_y)
         
         # 垂直线
-        painter.setPen(QPen(QColor(184,184,184, 200), 1))
+        painter.setPen(QPen(QColor(184,184,184, 150), 1))
         painter.drawLine(v_line_x, margin, v_line_x, height - margin)
         
         # 绘制标签 - 使用更好的字体和阴影效果
