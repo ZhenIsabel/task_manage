@@ -45,7 +45,7 @@ class CompleteTableDialog(QDialog):
         # 创建白色圆角面板
         from PyQt6.QtWidgets import QWidget
         self.panel = QWidget()
-        self.panel.setObjectName("panel")
+        self.panel.setObjectName("dialog_panel")
         panel_layout = QVBoxLayout(self.panel)
         panel_layout.setContentsMargins(20, 20, 20, 20)
         panel_layout.setSpacing(15)

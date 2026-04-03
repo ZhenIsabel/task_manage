@@ -25,7 +25,7 @@ class AddTaskDialog(QDialog):
 
         # ❸ 真正的白色圆角面板
         panel = QWidget(self)
-        panel.setObjectName("panel")
+        panel.setObjectName("dialog_panel")
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(30, 30, 30, 30)
         panel_layout.setSpacing(5)

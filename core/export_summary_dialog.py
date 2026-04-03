@@ -321,7 +321,7 @@ class ExportSummaryDialog(QDialog):
         
         # 创建主面板
         panel = QWidget(self)
-        panel.setObjectName("panel")
+        panel.setObjectName("dialog_panel")
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(20,20,20,20)
         panel_layout.setSpacing(15)

@@ -1098,7 +1098,7 @@ class QuadrantWidget(QWidget):
 
         # 白色圆角面板
         panel = QWidget(dlg)
-        panel.setObjectName("panel")
+        panel.setObjectName("dialog_panel")
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(10, 10, 10, 10)
         panel_layout.setSpacing(10)

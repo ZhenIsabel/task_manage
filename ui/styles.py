@@ -3,7 +3,8 @@
 
 # ===== 基础样式模板 =====
 PANEL_FORM_CONTROLS_STYLE = """
-QLineEdit, QTextEdit {{
+QWidget#dialog_panel QLineEdit, QWidget#dialog_panel QTextEdit,
+QWidget#settings_panel QLineEdit, QWidget#settings_panel QTextEdit {{
     background-color: #f5f5f5;
     color: #333333;
     border: 1px solid #dddddd;
@@ -14,11 +15,13 @@ QLineEdit, QTextEdit {{
     selection-background-color: #dddddd;
     selection-color: white;
 }}
-QLineEdit:read-only, QTextEdit:read-only {{
+QWidget#dialog_panel QLineEdit:read-only, QWidget#dialog_panel QTextEdit:read-only,
+QWidget#settings_panel QLineEdit:read-only, QWidget#settings_panel QTextEdit:read-only {{
     background-color: #f5f5f5;
     color: #666666;
 }}
-QDateEdit, QTimeEdit, QSpinBox {{
+QWidget#dialog_panel QDateEdit, QWidget#dialog_panel QTimeEdit, QWidget#dialog_panel QSpinBox,
+QWidget#settings_panel QDateEdit, QWidget#settings_panel QTimeEdit, QWidget#settings_panel QSpinBox {{
     background-color: #f5f5f5;
     color: #333333;
     border: 1px solid #dddddd;
@@ -110,12 +113,12 @@ class StyleManager:
         """,
         # 详情弹窗样式
         "detail_popup": """
-            QFrame {{
+            QFrame#task_detail_popup {{
                 background-color: #ECECEC;  /* 浅灰背景 */
                 border-radius: 10px;        /* 圆角 */
                 border: 1px solid rgba(100, 100, 100, 0.5); /* 半透明边框 */
             }}
-            QLabel {{
+            QFrame#task_detail_popup QLabel {{
                 color: black;               /* 文字黑色 */
                 font-family: '微软雅黑';      /* 字体 */
                 padding: 4px;               /* 内边距 */
@@ -138,10 +141,10 @@ class StyleManager:
 
         # 添加任务对话框样式
         "dialog_panel_shell": """
-            QWidget#panel {{
+            QWidget#dialog_panel {{
             background-color: white;        /* 面板背景色 */
         }}
-        QLabel {{
+        QWidget#dialog_panel QLabel {{
             color: #333;
             font-family: '微软雅黑';
             font-size: 13px;
@@ -151,7 +154,7 @@ class StyleManager:
             margin: 0;
             border: none;
         }}
-        QPushButton {{
+        QWidget#dialog_panel QPushButton {{
             background-color: #4ECDC4;      /* 按钮背景色 */
             color: white;                   /* 文字颜色 */
             border: none;                   /* 无边框 */
@@ -160,14 +163,14 @@ class StyleManager:
             font-family: '微软雅黑';          /* 字体 */
             font-weight: normal;              /* 加粗 */
         }}
-        QPushButton:hover {{background-color: #45B8B0; }} /* 悬停时按钮色 */
+        QWidget#dialog_panel QPushButton:hover {{background-color: #45B8B0; }} /* 悬停时按钮色 */
         """,
         # 添加任务对话框样式
         "add_task_dialog": """
-            QWidget#panel {{
+            QWidget#dialog_panel {{
             background-color: white;        /* 面板背景色 */
         }}
-        QLabel {{
+        QWidget#dialog_panel QLabel {{
             color: #333;
             font-family: '微软雅黑';
             font-size: 13px;
@@ -177,7 +180,7 @@ class StyleManager:
             margin: 0;
             border: none;
         }}
-        QPushButton {{
+        QWidget#dialog_panel QPushButton {{
             background-color: #4ECDC4;      /* 按钮背景色 */
             color: white;                   /* 文字颜色 */
             border: none;                   /* 无边框 */
@@ -186,7 +189,7 @@ class StyleManager:
             font-family: '微软雅黑';          /* 字体 */
             font-weight: normal;              /* 加粗 */
         }}
-        QPushButton:hover {{background-color: #45B8B0; }} /* 悬停时按钮色 */
+        QWidget#dialog_panel QPushButton:hover {{background-color: #45B8B0; }} /* 悬停时按钮色 */
         """ + PANEL_FORM_CONTROLS_STYLE,
         # 通用菜单样式
         "menu": """
@@ -280,15 +283,15 @@ class StyleManager:
             """,
         # 设置面板样式
         "settings_panel": """
-            QDialog {{
+            QWidget#settings_panel {{
                 background-color: white;
             }}
-            QTabWidget::pane {{
+            QWidget#settings_panel QTabWidget::pane {{
                 border: 1px solid #e0e0e0;
                 background-color: white;
                 border-radius: 8px;
             }}
-            QTabBar::tab {{
+            QWidget#settings_panel QTabBar::tab {{
                 background-color: #f5f5f5;
                 color: #505050;
                 border: 1px solid #e0e0e0;
@@ -299,17 +302,17 @@ class StyleManager:
                 border-top-right-radius: 8px;
                 font-family: '微软雅黑';
             }}
-            QTabBar::tab:selected {{
+            QWidget#settings_panel QTabBar::tab:selected {{
                 background-color: white;
                 color: #4ECDC4;
                 font-weight: normal;
             }}
-            QLabel {{
+            QWidget#settings_panel QLabel {{
                 color: #505050;
                 font-family: '微软雅黑';
                 font-size: 13px;
             }}
-            QSpinBox {{
+            QWidget#settings_panel QSpinBox {{
                 background-color: #f5f5f5;
                 color: #505050;
                 border: 1px solid #e0e0e0;
@@ -317,22 +320,22 @@ class StyleManager:
                 padding: 8px;
                 min-height: 24px;
             }}
-            QSlider::groove:horizontal {{
+            QWidget#settings_panel QSlider::groove:horizontal {{
                 height: 8px;
                 background: #e0e0e0;
                 border-radius: 4px;
             }}
-            QSlider::handle:horizontal {{
+            QWidget#settings_panel QSlider::handle:horizontal {{
                 width: 10px;
                 margin-top: -5px;
                 margin-bottom: -5px;
                 border-radius: 5px;
                 background: qradialgradient(spread:reflect, cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5, stop:0.6 rgba(210, 210, 210, 255), stop:0.7 rgba(210, 210, 210, 100));
             }}
-            QSlider::handle:horizontal:hover {{
+            QWidget#settings_panel QSlider::handle:horizontal:hover {{
                 background: qradialgradient(spread:reflect, cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5, stop:0.6 rgba(255, 255, 255, 255), stop:0.7 rgba(255, 255, 255, 100));
             }}
-            QPushButton {{
+            QWidget#settings_panel QPushButton {{
                 background-color: #4ECDC4;
                 color: white;
                 border: none;
@@ -341,10 +344,10 @@ class StyleManager:
                 font-family: '微软雅黑';
                 font-weight: normal;
             }}
-            QPushButton:hover {{
+            QWidget#settings_panel QPushButton:hover {{
                 background-color: #45B8B0;
             }}
-            QCheckBox {{
+            QWidget#settings_panel QCheckBox {{
                 color: #505050;
                 font-family: '微软雅黑';
                 padding: 5px;

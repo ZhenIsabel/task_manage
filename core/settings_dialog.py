@@ -138,7 +138,7 @@ class SettingsDialog(QDialog):
     # ------------------------------------------------------------------ UI
     def _build_ui(self, initial_tab: str) -> None:
         panel = QWidget(self)
-        panel.setObjectName("panel")
+        panel.setObjectName("settings_panel")
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(30, 30, 30, 30)
         panel_layout.setSpacing(20)
