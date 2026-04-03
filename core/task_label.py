@@ -14,6 +14,7 @@ from datetime import datetime
 
 from .add_task_dialog import AddTaskDialog
 from ui.scrollbar import FluentScrollArea
+from ui.notifications import show_error
 from ui.styles import StyleManager
 from ui.degree_badges import create_degree_display_widget, build_degree_badge_stylesheet, get_status_badge_meta
 from ui.ui import MyColorDialog, WarningPopup
@@ -622,10 +623,10 @@ class TaskLabel(QWidget):
                         pass
                     self.deleteRequested.emit(self)  # 再发出删除自己的信号
                 else:
-                    QMessageBox.warning(self, "删除失败", "删除任务失败，请重试")
+                    show_error(self, "删除失败", "删除任务失败，请重试")
             except Exception as e:
                 logger.error(f"删除任务失败: {str(e)}")
-                QMessageBox.warning(self, "删除失败", f"删除任务失败: {str(e)}")
+                show_error(self, "删除失败", f"删除任务失败: {str(e)}")
 
     def update_status_label(self):
         """刷新状态文字"""

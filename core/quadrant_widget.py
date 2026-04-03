@@ -23,6 +23,7 @@ from config.remote_config import RemoteConfigManager
 from .add_task_dialog import AddTaskDialog
 from ui.scrollbar import FluentScrollArea
 from ui.styles import StyleManager
+from ui.notifications import show_error, show_success
 from database.database_manager import get_db_manager
 from gantt.app import gantt_app
 
@@ -1008,7 +1009,7 @@ class QuadrantWidget(QWidget):
                 'username': remote_username_edit.text().strip(),
             }
             if not remote_config_manager.save_config(remote_config_payload):
-                QMessageBox.warning(self, "保存失败", "远程配置保存失败，请稍后重试。")
+                show_error(self, "保存失败", "远程配置保存失败，请稍后重试。")
                 return
 
             self._apply_remote_config_to_db_manager(remote_config_payload)
@@ -1092,7 +1093,7 @@ class QuadrantWidget(QWidget):
                 f.write("\n\n".join(unfinished_tasks))
             logger.info(f"成功导出 {len(unfinished_tasks)} 个未完成任务到: {filename}")
         except Exception as e:
-            QMessageBox.critical(self, "导出失败", f"导出任务时发生错误:\n{str(e)}")
+            show_error(self, "导出失败", f"导出任务时发生错误:\n{str(e)}")
             error_msg = f"导出任务时发生错误: {str(e)}"
             logger.error(error_msg)
 
@@ -1101,14 +1102,14 @@ class QuadrantWidget(QWidget):
         try:
             import pandas as pd
         except ImportError:
-            QMessageBox.critical(self, "导出失败", "未安装pandas库，无法导出为Excel。请先安装pandas。")
+            show_error(self, "导出失败", "未安装pandas库，无法导出为Excel。请先安装pandas。")
             logger.error("导出失败：未安装pandas库")
             return
         
         try:
             import openpyxl
         except ImportError:
-            QMessageBox.critical(self, "导出失败", "未安装openpyxl库，无法导出为Excel。请先安装openpyxl。\n\n安装命令：pip install openpyxl")
+            show_error(self, "导出失败", "未安装openpyxl库，无法导出为Excel。请先安装openpyxl。\n\n安装命令：pip install openpyxl")
             logger.error("导出失败：未安装openpyxl库")
             return
 
@@ -1130,7 +1131,7 @@ class QuadrantWidget(QWidget):
             all_tasks_data=db_manager.load_tasks(all_tasks=True)
         except Exception as e:
             logger.error(f"读取任务文件失败: {str(e)}")
-            QMessageBox.critical(self, "导出失败", f"读取任务文件失败: {str(e)}")
+            show_error(self, "导出失败", f"读取任务文件失败: {str(e)}")
             return
 
         if not all_tasks_data:
@@ -1184,9 +1185,9 @@ class QuadrantWidget(QWidget):
             # 导出到Excel
             df.to_excel(filename, index=False)
             logger.info(f"成功导出 {len(df)} 个任务到: {filename}")
-            QMessageBox.information(self, "导出成功", f"成功导出 {len(df)} 个任务到:\n{filename}")
+            show_success(self, "导出成功", f"成功导出 {len(df)} 个任务到:\n{filename}")
         except Exception as e:
-            QMessageBox.critical(self, "导出失败", f"导出任务时发生错误:\n{str(e)}")
+            show_error(self, "导出失败", f"导出任务时发生错误:\n{str(e)}")
             logger.error(f"导出任务时发生错误: {str(e)}")
 
     def _is_port_open(self, host='127.0.0.1', port=5000) -> bool:
@@ -1591,7 +1592,7 @@ class QuadrantWidget(QWidget):
 
         success = self.db_manager.resolve_pending_remote_task_changes(accepted_ids, rejected_ids)
         if not success:
-            QMessageBox.warning(self, '同步失败', '处理远程修改失败，请稍后重试。')
+            show_error(self, "同步失败", "处理远程修改失败，请稍后重试。")
             return False
 
         self.db_manager.flush_cache_to_db()
@@ -1776,7 +1777,7 @@ class QuadrantWidget(QWidget):
             logger.info(f"成功加载了 {len(self.tasks)} 个任务")
         except Exception as e:
             logger.error(f"加载任务失败: {str(e)}")
-            QMessageBox.warning(self, "加载失败", f"加载任务失败: {str(e)}")
+            show_error(self, "加载失败", f"加载任务失败: {str(e)}")
         finally:
             self._sync_refresh_pending = False
             self.setUpdatesEnabled(True)

@@ -4,19 +4,22 @@
 """
 
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
+from typing import Optional
 from calendar import monthrange
 
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
-                            QTableWidgetItem, QPushButton, 
-                            QHeaderView, QAbstractItemView, QWidget,
+                            QPushButton, 
+                            QWidget,
                             QAbstractScrollArea,QCheckBox,QMessageBox,
                             QComboBox,QTextEdit,QLineEdit)
 from PyQt6.QtCore import Qt, QDate
-from PyQt6.QtGui import QFont
+
+from qfluentwidgets import MessageBox
+
 
 from ui.adaptive_table import AdaptiveTextTableWidget
 from ui.fluent import ComboBox, create_calendar_picker, get_date_string_from_picker, is_date_picker
+from ui.notifications import show_error, show_success
 from ui.styles import StyleManager
 from ui.degree_badges import create_degree_table_cell, is_degree_field
 from database.database_manager import get_db_manager
@@ -478,15 +481,14 @@ class ScheduledTaskDialog(QDialog):
             return
         
         # 确认对话框
-        reply = QMessageBox.question(
-            self, 
-            "确认删除", 
-            f"确定要将 {len(self.selected_tasks)} 个定时任务删除吗？",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
+        reply=MessageBox(
+            title="确认删除",
+            content=f"确定要将 {len(self.selected_tasks)} 个定时任务删除吗？",
+            parent=self
+        ).exec()
+
         
-        if reply != QMessageBox.StandardButton.Yes:
+        if reply != True:
             return
         try:
             deleted_count=0
@@ -496,18 +498,14 @@ class ScheduledTaskDialog(QDialog):
                     deleted_count+=1
             
             # 显示成功消息
-            QMessageBox.information(
-                self, 
-                "删除成功", 
-                f"成功删除 {deleted_count} 个定时任务"
-            )
+            show_success(self, "删除成功", f"成功删除 {deleted_count} 个定时任务")
             
             # 刷新任务列表 - 关闭对话框以触发父窗口刷新
             self.close()
 
         except Exception as e:
             logger.error(f"删除任务失败: {str(e)}")
-            QMessageBox.critical(self, "删除失败", f"删除任务时发生错误: {str(e)}")
+            show_error(self, "删除失败", f"删除任务时发生错误: {str(e)}")
         
         
     
@@ -543,13 +541,13 @@ class ScheduledTaskDialog(QDialog):
                 start_time=task_data.get('start_time')
             )
             if result_id:
-                QMessageBox.information(self, "成功", f"定时任务创建成功")
+                show_success(self, "成功", "定时任务创建成功")
                 # 刷新任务列表
                 self.close()
             else:
-                QMessageBox.warning(self, "失败", "定时任务创建失败，请查看日志")
+                show_error(self, "失败", "定时任务创建失败，请查看日志")
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"创建定时任务时发生错误: {str(e)}")
+            show_error(self, "错误", f"创建定时任务时发生错误: {str(e)}")
             logger.error(f"创建定时任务异常: {str(e)}", exc_info=True)
 
 

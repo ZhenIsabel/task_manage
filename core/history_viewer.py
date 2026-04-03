@@ -5,6 +5,7 @@ from datetime import datetime
 
 
 from ui.adaptive_table import AdaptiveTextTableWidget
+from ui.notifications import show_error, show_success
 from ui.styles import StyleManager
 from database.database_manager import get_db_manager
 import logging
@@ -188,17 +189,16 @@ class HistoryViewer(QDialog):
         try:
             import pandas as pd
         except ImportError:
-            from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.critical(self, "导出失败", "未安装pandas库，无法导出为Excel/CSV。请先安装pandas。\n\n安装命令：pip install pandas openpyxl")
+            show_error(self, "导出失败", "未安装pandas库，无法导出为Excel/CSV。请先安装pandas。\n\n安装命令：pip install pandas openpyxl")
             return
         
-        from PyQt6.QtWidgets import QFileDialog, QMessageBox
+        from PyQt6.QtWidgets import QFileDialog
         import os
         
         # 从数据库获取历史记录
         task_id = self.task_data.get('id')
         if not task_id:
-            QMessageBox.critical(self, "导出失败", "未找到任务ID")
+            show_error(self, "导出失败", "未找到任务ID")
             return
         
         try:
@@ -206,7 +206,7 @@ class HistoryViewer(QDialog):
             field_history = db_manager.get_task_history(task_id)
             
             if not field_history:
-                QMessageBox.information(self, "导出历史记录", "没有历史记录可导出")
+                show_error(self, "导出失败", "没有历史记录可导出")
                 return
             
             # 合并所有字段的历史记录
@@ -234,7 +234,7 @@ class HistoryViewer(QDialog):
                     })
             
             if not merged_history:
-                QMessageBox.information(self, "导出历史记录", "没有历史记录可导出")
+                show_error(self, "导出失败", "没有历史记录可导出")
                 return
             
             # 按时间排序
@@ -263,9 +263,9 @@ class HistoryViewer(QDialog):
                     # 默认Excel
                     df.to_excel(filename, index=False)
                 
-                QMessageBox.information(self, "导出成功", f"成功导出历史记录到:\n{filename}")
+                show_success(self, "导出成功", f"成功导出历史记录到:\n{filename}")
             except Exception as e:
-                QMessageBox.critical(self, "导出失败", f"导出历史记录时发生错误:\n{str(e)}")
+                show_error(self, "导出失败", f"导出历史记录时发生错误:\n{str(e)}")
                 
         except Exception as e:
-            QMessageBox.critical(self, "导出失败", f"获取历史记录时发生错误:\n{str(e)}") 
+            show_error(self, "导出失败", f"获取历史记录时发生错误:\n{str(e)}")

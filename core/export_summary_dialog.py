@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QMouseEvent
 
 from ui.fluent import create_calendar_picker, get_date_from_picker, get_date_string_from_picker, set_date_on_picker
+from ui.notifications import show_error, show_success
 from ui.styles import StyleManager
 from database.database_manager import get_db_manager
 from core.LLMService import get_llm_service
@@ -482,13 +483,13 @@ class ExportSummaryDialog(QDialog):
         try:
             import pandas as pd
         except ImportError:
-            QMessageBox.critical(self, "导出失败", "未安装pandas库，无法导出为Excel。\n\n请先安装: pip install pandas")
+            show_error(self, "导出失败", "未安装pandas库，无法导出为Excel。\n\n请先安装: pip install pandas")
             return
         
         try:
             import openpyxl
         except ImportError:
-            QMessageBox.critical(self, "导出失败", "未安装openpyxl库，无法导出为Excel。\n\n请先安装: pip install openpyxl")
+            show_error(self, "导出失败", "未安装openpyxl库，无法导出为Excel。\n\n请先安装: pip install openpyxl")
             return
         
         # 选择保存位置
@@ -553,14 +554,14 @@ class ExportSummaryDialog(QDialog):
                     )
                     worksheet.column_dimensions[chr(65 + i)].width = min(max_length + 2, 50)
             
-            QMessageBox.information(self, "导出成功", f"任务概要已导出到:\n{filename}")
+            show_success(self, "导出成功", f"任务概要已导出到:\n{filename}")
             logger.info(f"成功导出 {len(df)} 个任务概要到: {filename}")
             
             # 导出成功后关闭对话框
             self.accept()
             
         except Exception as e:
-            QMessageBox.critical(self, "导出失败", f"导出任务概要时发生错误:\n{str(e)}")
+            show_error(self, "导出失败", f"导出任务概要时发生错误:\n{str(e)}")
             logger.error(f"导出任务概要失败: {str(e)}", exc_info=True)
     
     # 拖动实现

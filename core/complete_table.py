@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout,
                             QLabel, QMessageBox, QAbstractItemView)
 from PyQt6.QtCore import Qt
 from ui.adaptive_table import AdaptiveTextTableWidget
+from ui.notifications import show_error, show_success
 from ui.styles import StyleManager
 from database.database_manager import get_db_manager
 import logging
@@ -189,7 +190,7 @@ class CompleteTableDialog(QDialog):
                 
         except Exception as e:
             logger.error(f"加载已完成任务失败: {str(e)}")
-            QMessageBox.critical(self, "错误", f"加载已完成任务失败: {str(e)}")
+            show_error(self, "错误", f"加载已完成任务失败: {str(e)}")
 
     def _create_table(self, rows):
         table = AdaptiveTextTableWidget(
@@ -278,11 +279,7 @@ class CompleteTableDialog(QDialog):
                 # 强制写入数据库
                 self.db_manager.flush_cache_to_db()
                 
-                QMessageBox.information(
-                    self, 
-                    "还原成功", 
-                    f"成功还原 {restored_count} 个任务为未完成状态"
-                )
+                show_success(self, "还原成功", f"成功还原 {restored_count} 个任务为未完成状态")
                 
                 # 刷新表格
                 self._load_completed_tasks()
@@ -295,11 +292,11 @@ class CompleteTableDialog(QDialog):
                     self.parent_widget.load_tasks()
                     
             else:
-                QMessageBox.warning(self, "还原失败", "没有找到要还原的任务")
+                show_error(self, "还原失败", "没有找到要还原的任务")
                 
         except Exception as e:
             logger.error(f"还原任务失败: {str(e)}")
-            QMessageBox.critical(self, "还原失败", f"还原任务时发生错误: {str(e)}")
+            show_error(self, "还原失败", f"还原任务时发生错误: {str(e)}")
     
     def mousePressEvent(self, event):
         """鼠标按下事件，用于拖动窗口"""
