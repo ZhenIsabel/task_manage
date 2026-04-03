@@ -44,5 +44,12 @@ class TaskLabelShadowTests(unittest.TestCase):
         self.assertLessEqual(effect.color().alpha(), 80)
 
 
+    def test_detail_notes_formatter_should_preserve_line_breaks(self):
+        self.assertEqual(
+            TaskLabel._format_detail_notes_html("第一行\n第二行"),
+            "第一行<br>第二行",
+        )
+
 if __name__ == "__main__":
     unittest.main()
+

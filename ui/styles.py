@@ -103,26 +103,115 @@ class StyleManager:
                 width: {indicator_size}px;     /* 指示器宽度 */
                 height: {indicator_size}px;    /* 指示器高度 */
                 border-radius: 9px;            /* 圆角 */
-                border: 2px solid gray;        /* 灰色边框 */
+                border: 1.5px solid gray;        /* 灰色边框 */
                 background-color: rgba({bg_color_red}, {bg_color_green}, {bg_color_blue}, 0.85); /* 背景色 */
             }}
             QWidget#task_label_root QCheckBox::indicator:checked {{
                 background-color: rgba({bg_color_red}, {bg_color_green}, {bg_color_blue}, 0.85); /* 选中时背景色 */
-                border: 2px solid #4ECDC4;    /* 选中时边框色 */
+                border: 1.5px solid #4ECDC4;    /* 选中时边框色 */
                 image:  url(./icons/check.png); /* 选中时显示对勾图片 */
             }}
         """,
         # 详情弹窗样式
         "detail_popup": """
             QFrame#task_detail_popup {{
-                background-color: #ECECEC;  /* 浅灰背景 */
-                border-radius: 10px;        /* 圆角 */
-                border: 1px solid rgba(100, 100, 100, 0.5); /* 半透明边框 */
+                background-color: rgba(246, 246, 247, 0.8);
+                border-radius: 12px;
+                border: 1px solid #d7d7db;
             }}
             QFrame#task_detail_popup QLabel {{
-                color: black;               /* 文字黑色 */
-                font-family: '微软雅黑';      /* 字体 */
-                padding: 4px;               /* 内边距 */
+                color: #1f1f1f;
+                font-family: '微软雅黑';
+                background: transparent;
+                padding: 0;
+                border: none;
+            }}
+            QFrame#task_detail_popup QWidget#detail_header_section {{
+                background-color: #fbfbfc;
+                border: 1px solid #e3e3e8;
+                border-radius: 10px;
+            }}
+            QFrame#task_detail_popup QWidget#detail_button_row {{
+                background: transparent;
+                border: none;
+            }}
+            QFrame#task_detail_popup QWidget#detail_section_card,
+            QFrame#task_detail_popup QWidget#detail_meta_section,
+            QFrame#task_detail_popup QWidget#detail_notes_section {{
+                background-color: #fcfcfd;
+                border: 1px solid #e3e3e8;
+                border-radius: 10px;
+            }}
+            QFrame#task_detail_popup QWidget#detail_created_section {{
+                background: transparent;
+                border: none;
+            }}
+            QFrame#task_detail_popup QLabel#detail_field_label {{
+                color: #6a6a72;
+                font-size: 11px;
+                font-weight: normal;
+                padding: 0;
+            }}
+            QFrame#task_detail_popup QLabel#detail_field_value {{
+                color: #1f1f1f;
+                font-size: 12px;
+                font-weight: normal;
+                padding: 0;
+            }}
+            QFrame#task_detail_popup QLabel#detail_small_label {{
+                background: transparent;
+                color: #1f1f1f;
+                font-size: 11px;
+                font-weight: normal;
+                padding: 0;
+            }}
+            QFrame#task_detail_popup QLabel#detail_small_value {{
+                color: #1f1f1f;
+                background: transparent;
+                font-size: 12px;
+                font-weight: normal;
+                padding: 0;
+            }}
+            QFrame#task_detail_popup QLabel#detail_status_badge {{
+                background-color: #eef1f5;
+                border: 1px solid #d8dde6;
+                border-radius: 8px;
+                color: #2a2f36;
+                padding: 4px 8px;
+            }}
+            QFrame#task_detail_popup QWidget#detail_meta_row {{
+                background: transparent;
+                border: none;
+            }}
+            QFrame#task_detail_popup QAbstractScrollArea#detail_notes_scroll {{
+                background-color: #f7f7f9;
+                border: 1px solid #e4e4e9;
+                border-radius: 8px;
+            }}
+            QFrame#task_detail_popup QAbstractScrollArea#detail_notes_scroll QWidget {{
+                background: transparent;
+            }}
+            QFrame#task_detail_popup QLabel#detail_notes_content {{
+                color: #1f1f1f;
+                line-height: 1.4;
+            }}
+        """,
+        "detail_popup_button": """
+            QPushButton {{
+                background-color: #f9f9fa;
+                border: 1px solid #d9d9de;
+                border-radius: 8px;
+                padding: 5px 8px;
+                font-family: '微软雅黑';
+                font-size: 12px;
+                color: #202020;
+            }}
+            QPushButton:hover {{
+                background-color: #f0f2f5;
+                border: 1px solid #cbced6;
+            }}
+            QPushButton:pressed {{
+                background-color: #e8ebef;
             }}
         """,
         # 任务标签上的按钮样式
@@ -448,3 +537,7 @@ class StyleManager:
         if component_name in self.stylesheets:
             del self.stylesheets[component_name]
         
+
+
+
+

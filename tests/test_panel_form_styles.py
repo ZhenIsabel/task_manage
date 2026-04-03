@@ -101,6 +101,14 @@ class PanelFormStyleIntegrationTests(unittest.TestCase):
         self.assertIn('self.setObjectName("task_label_root")', task_label_py)
 
 
+    def test_detail_popup_should_define_scoped_win11_card_styles(self):
+        styles_py = self._read('ui/styles.py')
+        task_label_py = self._read('core/task_label.py')
+
+        self.assertIn('QFrame#task_detail_popup QWidget#detail_section_card', styles_py)
+        self.assertIn('setObjectName("detail_header_section")', task_label_py)
+        self.assertIn('setObjectName("detail_meta_section")', task_label_py)
+        self.assertIn('setObjectName("detail_notes_section")', task_label_py)
     def test_task_label_base_style_should_keep_tag_text_border_radius(self):
         styles_py = self._read('ui/styles.py')
         marker = 'QWidget#task_label_root QLabel#TagText {{'
@@ -112,3 +120,5 @@ class PanelFormStyleIntegrationTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+

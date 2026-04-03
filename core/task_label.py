@@ -53,6 +53,11 @@ class TaskLabel(QWidget):
 
         return cls._editable_fields_cache
     
+    @staticmethod
+    def _format_detail_notes_html(notes):
+        if notes is None:
+            return ""
+        return str(notes).replace("\n", "<br>")
     def __init__(self, task_id, color,completed=False, parent=None, field_definitions=None, **fields):
         try:
             super().__init__(parent)
@@ -411,131 +416,155 @@ class TaskLabel(QWidget):
     def create_detail_popup(self):
         """创建详情弹出窗口"""
         style_manager = StyleManager()
-        # 创建一个无边框窗口作为弹出窗口
         parent_widget = self.parent()
-        # 保护性判断：确保父级存在
         self.detail_popup = QFrame(parent_widget if parent_widget else self)
         self.detail_popup.setObjectName("task_detail_popup")
         self.detail_popup.setWindowFlags(Qt.WindowType.FramelessWindowHint)
-        # 不再使用透明背景，避免弹窗外侧出现可透底的透明区域
         self.detail_popup.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.detail_popup.setStyleSheet(style_manager.get_stylesheet("detail_popup").format())
-        
-        # 创建布局
-        layout = QVBoxLayout(self.detail_popup)
-        layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(8)
-        
-        # 标题 - 任务内容
-        # 创建标题行布局
-        title_layout = QHBoxLayout()
-        title_layout.setSpacing(8)
 
-        # 确保使用正确的文本内容（字符串而非元组）
+        layout = QVBoxLayout(self.detail_popup)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(6)
+
         title_text = self.text
         if isinstance(self.text, tuple):
             title_text = self.text[0]
-        title_label = QLabel(title_text)
+
+        header_section = QWidget(self.detail_popup)
+        header_section.setObjectName("detail_header_section")
+        header_layout = QHBoxLayout(header_section)
+        header_layout.setContentsMargins(10, 8, 10, 8)
+        header_layout.setSpacing(8)
+
+        title_label = QLabel(title_text, header_section)
+        title_label.setObjectName("detail_title_text")
         title_label.setWordWrap(True)
         title_label.setStyleSheet(style_manager.get_stylesheet("detail_title_label"))
-        title_layout.addWidget(title_label)
-        
-        # 更改颜色按钮
-        color_button = QPushButton()
+        header_layout.addWidget(title_label, 1)
+
+        color_button = QPushButton(header_section)
+        color_button.setObjectName("detail_color_button")
         color_button.setFixedSize(24, 24)
-        color_button.setStyleSheet(StyleManager().get_stylesheet("color_button").format(button_color=self.color.name()))
+        color_button.setStyleSheet(style_manager.get_stylesheet("color_button").format(button_color=self.color.name()))
         color_button.clicked.connect(self.change_color)
-        title_layout.addWidget(color_button)
-        layout.addLayout(title_layout)
+        header_layout.addWidget(color_button, 0, Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(header_section)
 
-        # 按钮布局
-        button_layout = QHBoxLayout()
-        button_layout.setSpacing(8)
+        button_row = QWidget(self.detail_popup)
+        button_row.setObjectName("detail_button_row")
+        button_layout = QHBoxLayout(button_row)
+        button_layout.setContentsMargins(0, 0, 0, 0)
+        button_layout.setSpacing(6)
 
-        # 打开目录按钮
-        open_dir_button = QPushButton("目录")
-        open_dir_button.clicked.connect(self.open_directory)
-        open_dir_button.setStyleSheet(style_manager.get_stylesheet("task_label_button").format())
-        button_layout.addWidget(open_dir_button)
+        for label, handler in [
+            ("目录", self.open_directory),
+            ("编辑", self.edit_task),
+            ("历史记录", self.show_history),
+            ("删除", self.handle_delete),
+        ]:
+            button = QPushButton(label, button_row)
+            button.setStyleSheet(style_manager.get_stylesheet("detail_popup_button").format())
+            button.clicked.connect(handler)
+            button_layout.addWidget(button)
+        layout.addWidget(button_row)
 
-        # 编辑按钮
-        edit_button = QPushButton("编辑")
-        edit_button.clicked.connect(self.edit_task)
-        edit_button.setStyleSheet(style_manager.get_stylesheet("task_label_button").format())
-        button_layout.addWidget(edit_button)
-
-        # 查看历史记录按钮
-        history_button = QPushButton("历史记录")
-        history_button.clicked.connect(self.show_history)
-        history_button.setStyleSheet(style_manager.get_stylesheet("task_label_button").format())
-        button_layout.addWidget(history_button)
-
-        # 删除按钮
-        delete_button = QPushButton("删除")
-        delete_button.clicked.connect(self.handle_delete)
-        delete_button.setStyleSheet(style_manager.get_stylesheet("task_label_button").format())
-        button_layout.addWidget(delete_button)
-
-        # 把按钮布局加到主 layout
-        layout.addLayout(button_layout)
-
-        # 添加所有可用的任务信息
         if self.due_date:
-            due_date_label = QLabel(f"<b>到期日期:</b> {self.due_date}")
-            layout.addWidget(due_date_label)
-        
-        # 显示状态、紧急程度和重要程度
-        meta_row = QWidget(self.detail_popup)
-        meta_layout = QHBoxLayout(meta_row)
-        meta_layout.setContentsMargins(0, 0, 0, 0)
-        meta_layout.setSpacing(5)
+            due_section = QWidget(self.detail_popup)
+            due_section.setObjectName("detail_section_card")
+            due_layout = QHBoxLayout(due_section)
+            due_layout.setContentsMargins(10, 8, 10, 8)
+            due_layout.setSpacing(2)
+
+            due_label = QLabel("ddl", due_section)
+            due_label.setObjectName("detail_field_label")
+            due_value = QLabel(str(self.due_date), due_section)
+            due_value.setObjectName("detail_field_value")
+            due_layout.addWidget(due_label)
+            due_layout.addWidget(due_value)
+            layout.addWidget(due_section)
+
+        meta_section = QWidget(self.detail_popup)
+        meta_section.setObjectName("detail_meta_section")
+        meta_layout = QVBoxLayout(meta_section)
+        meta_layout.setContentsMargins(10, 8, 10, 8)
+        meta_layout.setSpacing(6)
+
+        meta_title = QLabel("任务状态", meta_section)
+        meta_title.setObjectName("detail_field_label")
+        meta_layout.addWidget(meta_title)
+
+        meta_row = QWidget(meta_section)
+        meta_row.setObjectName("detail_meta_row")
+        meta_row_layout = QHBoxLayout(meta_row)
+        meta_row_layout.setContentsMargins(0, 0, 0, 0)
+        meta_row_layout.setSpacing(6)
 
         if hasattr(self, 'urgency') and self.urgency:
             urgency_widget = create_degree_display_widget('urgency', self.urgency, parent=meta_row)
             urgency_widget.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
-            meta_layout.addWidget(urgency_widget)
+            meta_row_layout.addWidget(urgency_widget)
 
         if hasattr(self, 'importance') and self.importance:
             importance_widget = create_degree_display_widget('importance', self.importance, parent=meta_row)
             importance_widget.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
-            meta_layout.addWidget(importance_widget)
+            meta_row_layout.addWidget(importance_widget)
 
         self.status_label = QLabel(meta_row)
+        self.status_label.setObjectName("detail_status_badge")
         self.status_label.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
         self.update_status_label()
-        meta_layout.addWidget(self.status_label)
+        meta_row_layout.addWidget(self.status_label)
+        meta_row_layout.addStretch()
+        meta_layout.addWidget(meta_row)
+        layout.addWidget(meta_section)
 
-
-        meta_layout.addStretch()
-        layout.addWidget(meta_row)
-        
         if self.notes:
-            notes_html = self.notes.replace('\n', '<br>')
-            notes_label = QLabel(f"<b>备注:</b><br>{notes_html}")
+            notes_section = QWidget(self.detail_popup)
+            notes_section.setObjectName("detail_notes_section")
+            notes_layout = QVBoxLayout(notes_section)
+            notes_layout.setContentsMargins(10, 8, 10, 8)
+            notes_layout.setSpacing(4)
+
+            notes_title = QLabel("备注", notes_section)
+            notes_title.setObjectName("detail_field_label")
+            notes_layout.addWidget(notes_title)
+
+            notes_html = self._format_detail_notes_html(self.notes)
+            notes_label = QLabel(notes_section)
+            notes_label.setObjectName("detail_notes_content")
+            notes_label.setText(f"<span>{notes_html}</span>")
             notes_label.setTextFormat(Qt.TextFormat.RichText)
             notes_label.setWordWrap(True)
-            notes_label.setStyleSheet("padding: 5px; color: black;")
-            
-            # 使用滚动区域显示长文本
-            scroll_area = FluentScrollArea()
+            notes_label.setStyleSheet("padding: 0; color: #1f1f1f; background: transparent; border: none;")
+
+            scroll_area = FluentScrollArea(notes_section)
+            scroll_area.setObjectName("detail_notes_scroll")
             scroll_area.setWidget(notes_label)
             scroll_area.setWidgetResizable(True)
-            scroll_area.setMaximumHeight(100)
+            scroll_area.setMaximumHeight(96)
             scroll_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-            layout.addWidget(scroll_area)
-        
-        # 创建日期
-        date_label = QLabel(f"<b>创建于:</b> {self.create_date}")
-        layout.addWidget(date_label)
-        
+            notes_layout.addWidget(scroll_area)
+            layout.addWidget(notes_section)
+
+        created_section = QWidget(self.detail_popup)
+        created_section.setObjectName("detail_created_section")
+        created_layout = QHBoxLayout(created_section)
+        created_layout.setContentsMargins(10, 0, 10, 0)
+        created_layout.setSpacing(2)
+
+        created_label = QLabel("创建时间", created_section)
+        created_label.setObjectName("detail_small_label")
+        created_value = QLabel(str(self.create_date), created_section)
+        created_value.setObjectName("detail_small_value")
+        created_layout.addWidget(created_label)
+        created_layout.addWidget(created_value)
+        layout.addWidget(created_section)
+
         self.detail_popup.setFixedWidth(250)
-        self.detail_popup.adjustSize()  # 确保窗口大小适合内容
-        
-        # 确保初始状态为隐藏
+        self.detail_popup.adjustSize()
         self.detail_popup.hide()
-        # 安装事件过滤器，以便在详情窗口关闭时隐藏它
         self.detail_popup.installEventFilter(self)
-        # 在父窗口（通常是QuadrantWidget）上也装上过滤器
         self.parent().installEventFilter(self)
 
     def eventFilter(self, obj, event):
@@ -672,3 +701,5 @@ class TaskLabel(QWidget):
                 show_warning(self,title="目录",content="未配置目录路径")
                 logger.warning("尝试打开空目录路径")
                 
+
+
