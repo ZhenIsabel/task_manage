@@ -17,7 +17,6 @@ from PyQt6.QtWidgets import (
     QDialog,
     QLineEdit,
     QMenu,
-    QMessageBox,
     QPushButton,
     QTableWidget,
     QTextEdit,

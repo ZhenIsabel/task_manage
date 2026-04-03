@@ -6,11 +6,11 @@ import socket
 import time
 import threading
 from datetime import datetime
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QPushButton, QColorDialog, QMessageBox, QDialog,
-                            QMenu, QLabel, QCheckBox)
-from PyQt6.QtCore import Qt, QPoint, QRect, QTimer, QUrl, pyqtSignal
-from PyQt6.QtWidgets import QApplication, QFileDialog
-from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont, QPainterPath, QAction
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QPushButton, QColorDialog, QSlider,  QDialog,
+                            QTabWidget, QFormLayout, QSpinBox,  QMenu, QTimeEdit, QLabel, QCheckBox, QLineEdit)
+from PyQt6.QtCore import Qt, QPoint,  QRect, QTimer,QUrl, QTime, pyqtSignal
+from PyQt6.QtWidgets import QApplication,QFileDialog
+from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont,  QPainterPath,  QAction
 try:
     from PyQt6.QtWebEngineWidgets import QWebEngineView
     HAS_WEBENGINE = True
@@ -836,7 +836,7 @@ class QuadrantWidget(QWidget):
         remote = dict(result.get('remote_config') or {})
         remote_config_manager = RemoteConfigManager()
         if not remote_config_manager.save_config(remote):
-            QMessageBox.warning(self, "保存失败", "远程配置保存失败，请稍后重试。")
+            show_error(parent=self, title="保存失败", content="远程配置保存失败，请稍后重试。")
             return False
         self._apply_remote_config_to_db_manager(remote)
         cfg = result.get('config') or {}

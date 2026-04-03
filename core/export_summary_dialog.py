@@ -10,12 +10,12 @@ from PyQt6.QtCore import Qt, QDate, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QProgressBar,
-    QMessageBox, QFileDialog, QTextEdit
+    QFileDialog
 )
 from PyQt6.QtGui import QMouseEvent
 
 from ui.fluent import create_calendar_picker, get_date_from_picker, get_date_string_from_picker, set_date_on_picker
-from ui.notifications import show_error, show_success
+from ui.notifications import _show_info_bar, show_error, show_success,show_warning
 from ui.styles import StyleManager
 from database.database_manager import get_db_manager
 from core.LLMService import get_llm_service
@@ -440,7 +440,7 @@ class ExportSummaryDialog(QDialog):
         
         # 验证日期
         if start_date > end_date:
-            QMessageBox.warning(self, "日期错误", "开始日期不能晚于结束日期")
+            show_error(parent=self, title="日期错误", content="开始日期不能晚于结束日期")
             return
         
         # 禁用按钮
@@ -477,7 +477,7 @@ class ExportSummaryDialog(QDialog):
     def _export_to_excel(self):
         """导出到Excel"""
         if not self.summary_data:
-            QMessageBox.warning(self, "提示", "没有可导出的数据")
+            _show_info_bar(parent=self, title="提示", content="没有可导出的数据")
             return
         
         try:
