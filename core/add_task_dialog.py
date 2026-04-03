@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (QDialog, QWidget, QVBoxLayout,
 from PyQt6.QtGui import QMouseEvent
 
 from ui.fluent import ComboBox, create_calendar_picker, get_date_string_from_picker, is_date_picker
+from ui.notifications import show_warning
 from ui.styles import StyleManager
 from ui.degree_badges import is_degree_field
 import logging
@@ -16,6 +17,9 @@ class AddTaskDialog(QDialog):
         super().__init__(parent, flags=Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         # 不再使用透明背景，避免对话框外侧出现可透底的透明区域
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+
+        task_fields = task_fields or []
+        self._task_fields = task_fields
 
         # ------- 外层透明壳，什么都不画 ------- #
 
@@ -50,7 +54,7 @@ class AddTaskDialog(QDialog):
 
         # 按钮
         btn_row = QHBoxLayout()
-        ok = QPushButton("确定"); ok.clicked.connect(self.accept)
+        ok = QPushButton("确定"); ok.clicked.connect(self._try_accept)
         cancel = QPushButton("取消"); cancel.clicked.connect(self.reject)
         btn_row.addWidget(ok); btn_row.addWidget(cancel)
         panel_layout.addLayout(btn_row)
@@ -161,6 +165,14 @@ class AddTaskDialog(QDialog):
         if path:
             widget.setText(path)
 
+
+    def _try_accept(self):
+        task_data = self.get_data()
+        for f in self._task_fields:
+            if f.get("required") and not task_data.get(f["name"]):
+                show_warning(widget=self,title= "提示",content= f"{f['label']} 为必填项")
+                return
+        self.accept()
 
     def get_data(self):
         """把表单内容打包成 dict 返回"""

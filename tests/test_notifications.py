@@ -32,6 +32,22 @@ class NotificationHelpersTests(unittest.TestCase):
 
         self.assertIs(resolve_notification_host(child), main_window)
 
+    def test_show_success_uses_active_window_when_top_level(self):
+        main_window = QWidget()
+        front = QWidget()
+        child = QWidget(main_window)
+        self.addCleanup(child.deleteLater)
+        self.addCleanup(front.deleteLater)
+        self.addCleanup(main_window.deleteLater)
+
+        with patch("ui.notifications.InfoBar.success") as success_mock, patch(
+            "ui.notifications.QApplication.activeWindow", return_value=front
+        ):
+            show_success(child, "成功", "操作完成")
+
+        success_mock.assert_called_once()
+        self.assertIs(success_mock.call_args.kwargs["parent"], front)
+
     def test_show_success_binds_infobar_to_top_level_parent(self):
         main_window = QWidget()
         dialog = QWidget(main_window)
@@ -40,7 +56,9 @@ class NotificationHelpersTests(unittest.TestCase):
         self.addCleanup(dialog.deleteLater)
         self.addCleanup(main_window.deleteLater)
 
-        with patch("ui.notifications.InfoBar.success") as success_mock:
+        with patch("ui.notifications.InfoBar.success") as success_mock, patch(
+            "ui.notifications.QApplication.activeWindow", return_value=None
+        ):
             show_success(child, "成功", "操作完成")
 
         success_mock.assert_called_once_with(

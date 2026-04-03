@@ -19,8 +19,16 @@ def resolve_notification_host(widget: Optional[QWidget]) -> Optional[QWidget]:
     return host
 
 
+def _infobar_parent(widget: Optional[QWidget]) -> Optional[QWidget]:
+    """Prefer the active top-level window so InfoBar stays above other in-app windows."""
+    active = QApplication.activeWindow()
+    if active is not None and active.isWindow():
+        return active
+    return resolve_notification_host(widget)
+
+
 def _show_info_bar(factory, fallback, widget: Optional[QWidget], title: str, content: str, *, position, duration: int):
-    host = resolve_notification_host(widget)
+    host = _infobar_parent(widget)
     if host is None:
         fallback(None, title, content)
         return None

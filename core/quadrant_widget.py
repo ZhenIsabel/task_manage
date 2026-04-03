@@ -6,16 +6,12 @@ import socket
 import time
 import threading
 from datetime import datetime
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QPushButton, QColorDialog, QSlider,  QDialog,
-                            QTabWidget, QFormLayout, QSpinBox,  QMenu, QTimeEdit, QLabel, QCheckBox, QLineEdit)
-from PyQt6.QtCore import Qt, QPoint,  QRect, QTimer,QUrl, QTime, pyqtSignal
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QPushButton, QColorDialog, QDialog,
+                             QMenu, QLabel, QCheckBox)
+from PyQt6.QtCore import Qt, QPoint,  QRect, QTimer,QUrl, pyqtSignal
 from PyQt6.QtWidgets import QApplication,QFileDialog
 from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont,  QPainterPath,  QAction
-try:
-    from PyQt6.QtWebEngineWidgets import QWebEngineView
-    HAS_WEBENGINE = True
-except Exception:
-    HAS_WEBENGINE = False
+
 
 
 from .task_label import TaskLabel
@@ -557,13 +553,7 @@ class QuadrantWidget(QWidget):
 
         # 从对话框中获取字段值
         task_data = dialog.get_data()   # ← 只要这一行就拿到全部字段值
-        
-        # 检查必填
-        for f in task_fields:
-            if f.get("required") and not task_data.get(f["name"]):
-                show_warning(self,"提示",f"{f['label']} 为必填项")
-                return
-                
+
         # 使用传入的位置确定在哪个象限
         local_pos = position
         
