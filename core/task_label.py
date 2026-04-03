@@ -424,7 +424,7 @@ class TaskLabel(QWidget):
         self.detail_popup.setStyleSheet(style_manager.get_stylesheet("detail_popup").format())
 
         layout = QVBoxLayout(self.detail_popup)
-        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setContentsMargins(8, 8, 8, 4)
         layout.setSpacing(6)
 
         title_text = self.text
@@ -481,6 +481,7 @@ class TaskLabel(QWidget):
             due_value = QLabel(str(self.due_date), due_section)
             due_value.setObjectName("detail_field_value")
             due_layout.addWidget(due_label)
+            due_layout.addStretch()
             due_layout.addWidget(due_value)
             layout.addWidget(due_section)
 
@@ -502,20 +503,21 @@ class TaskLabel(QWidget):
 
         if hasattr(self, 'urgency') and self.urgency:
             urgency_widget = create_degree_display_widget('urgency', self.urgency, parent=meta_row)
-            urgency_widget.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
-            meta_row_layout.addWidget(urgency_widget)
+            urgency_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            meta_row_layout.addWidget(urgency_widget, 1)
 
         if hasattr(self, 'importance') and self.importance:
             importance_widget = create_degree_display_widget('importance', self.importance, parent=meta_row)
-            importance_widget.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
-            meta_row_layout.addWidget(importance_widget)
+            importance_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            meta_row_layout.addWidget(importance_widget, 1)
 
         self.status_label = QLabel(meta_row)
         self.status_label.setObjectName("detail_status_badge")
-        self.status_label.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+        self.status_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.update_status_label()
-        meta_row_layout.addWidget(self.status_label)
-        meta_row_layout.addStretch()
+        meta_row_layout.addWidget(self.status_label, 1)
+
         meta_layout.addWidget(meta_row)
         layout.addWidget(meta_section)
 
