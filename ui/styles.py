@@ -35,26 +35,6 @@ QDateEdit, QTimeEdit, QSpinBox {{
     outline: none;
 }}
 
-QComboBox {{
-    background-color: #f5f5f5;
-    color: #333333;
-    border: 1px solid #dddddd;
-    border-radius: 8px;
-    padding: 10px 12px;
-    font-family: '微软雅黑';
-    font-size: 13px;
-}}
-QComboBox QAbstractItemView {{
-    background-color: #f5f5f5;
-    border: 1px solid #dddddd;
-    selection-background-color: #4ECDC4;
-    selection-color: white;
-    padding: 5px;
-    outline: 0px;
-    font-family: '微软雅黑';
-    font-size: 13px;
-    border-radius: 8px;
-}}
 """
 
 
@@ -185,7 +165,7 @@ class StyleManager:
             border-radius: 8px;             /* 圆角 */
             padding: 10px 20px;             /* 内边距 */
             font-family: '微软雅黑';          /* 字体 */
-            font-weight: bold;              /* 加粗 */
+            font-weight: normal;              /* 加粗 */
         }}
         QPushButton:hover {{background-color: #45B8B0; }} /* 悬停时按钮色 */
         """ + BASE_SCROLLBAR_STYLE,
@@ -211,7 +191,7 @@ class StyleManager:
             border-radius: 8px;             /* 圆角 */
             padding: 10px 20px;             /* 内边距 */
             font-family: '微软雅黑';          /* 字体 */
-            font-weight: bold;              /* 加粗 */
+            font-weight: normal;              /* 加粗 */
         }}
         QPushButton:hover {{background-color: #45B8B0; }} /* 悬停时按钮色 */
         """ + PANEL_FORM_CONTROLS_STYLE + BASE_SCROLLBAR_STYLE,
@@ -329,7 +309,7 @@ class StyleManager:
             QTabBar::tab:selected {{
                 background-color: white;
                 color: #4ECDC4;
-                font-weight: bold;
+                font-weight: normal;
             }}
             QLabel {{
                 color: #505050;
@@ -366,7 +346,7 @@ class StyleManager:
                 border-radius: 8px;
                 padding: 10px 20px;
                 font-family: '微软雅黑';
-                font-weight: bold;
+                font-weight: normal;
             }}
             QPushButton:hover {{
                 background-color: #45B8B0;
@@ -398,7 +378,7 @@ class StyleManager:
                 padding: 5px;
                 border: none;
                 border-right: 1px solid #ddd;
-                font-weight: bold;
+                font-weight: normal;
                 color: #333;
                 gridline-color: #eee;
             }}
@@ -456,7 +436,7 @@ class StyleManager:
                 color: #333333;
                 font-family: '微软雅黑';
                 font-size: 16px;
-                font-weight: bold;
+                font-weight: normal;
                 margin-bottom: 10px;
             }
             QLabel#message_label {
@@ -474,7 +454,7 @@ class StyleManager:
                 border-radius: 8px;
                 font-family: '微软雅黑';
                 font-size: 14px;
-                font-weight: bold;
+                font-weight: normal;
             }
             QPushButton#cancel_button:hover {
                 background-color: #e8e8e8;
@@ -490,7 +470,7 @@ class StyleManager:
                 border-radius: 8px;
                 font-family: '微软雅黑';
                 font-size: 14px;
-                font-weight: bold;
+                font-weight: normal;
             }
             QPushButton#delete_button:hover {
                 background-color: #ff3742;

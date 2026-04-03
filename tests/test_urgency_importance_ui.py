@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import QApplication, QComboBox, QHBoxLayout, QLabel, QVBoxL
 
 from core.add_task_dialog import AddTaskDialog
 from core.scheduler import AddScheduleDialog
+from ui.fluent import ComboBox as FluentComboBox
 
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -48,8 +49,8 @@ class UrgencyImportanceUiTests(unittest.TestCase):
         urgency_combo = dialog.inputs["urgency"]
         importance_combo = dialog.inputs["importance"]
 
-        self.assertIsInstance(urgency_combo, QComboBox)
-        self.assertIsInstance(importance_combo, QComboBox)
+        self.assertIsInstance(urgency_combo, (QComboBox, FluentComboBox))
+        self.assertIsInstance(importance_combo, (QComboBox, FluentComboBox))
         self.assertEqual(
             urgency_combo.mapToGlobal(urgency_combo.rect().topLeft()).y(),
             importance_combo.mapToGlobal(importance_combo.rect().topLeft()).y(),
@@ -72,8 +73,8 @@ class UrgencyImportanceUiTests(unittest.TestCase):
         urgency_combo = dialog.inputs["urgency"]
         importance_combo = dialog.inputs["importance"]
 
-        self.assertIsInstance(urgency_combo, QComboBox)
-        self.assertIsInstance(importance_combo, QComboBox)
+        self.assertIsInstance(urgency_combo, (QComboBox, FluentComboBox))
+        self.assertIsInstance(importance_combo, (QComboBox, FluentComboBox))
         self.assertEqual(
             urgency_combo.mapToGlobal(urgency_combo.rect().topLeft()).y(),
             importance_combo.mapToGlobal(importance_combo.rect().topLeft()).y(),

@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QFont
 
-from ui.fluent import create_calendar_picker, get_date_string_from_picker, is_date_picker
+from ui.fluent import ComboBox, create_calendar_picker, get_date_string_from_picker, is_date_picker
 from ui.styles import StyleManager
 from ui.degree_badges import create_degree_table_cell, is_degree_field
 from database.database_manager import get_db_manager
@@ -683,7 +683,7 @@ class AddScheduleDialog(QDialog):
             initial_date = QDate.fromString(default_value, "yyyy-MM-dd") if default_value else QDate.currentDate()
             return create_calendar_picker(parent, initial_date)
         if field['type'] == 'select':
-            widget = QComboBox()
+            widget = ComboBox()
             for option in field.get('options', []):
                 widget.addItem(option)
             if default_value and default_value in field.get('options', []):
@@ -727,7 +727,7 @@ class AddScheduleDialog(QDialog):
         for name, w in self.inputs.items():
             if is_date_picker(w):
                 data[name] = get_date_string_from_picker(w)
-            elif isinstance(w, QComboBox):
+            elif isinstance(w, (QComboBox, ComboBox)):
                 data[name] = w.currentText()
             elif isinstance(w, QTextEdit):
                 data[name] = w.toPlainText()

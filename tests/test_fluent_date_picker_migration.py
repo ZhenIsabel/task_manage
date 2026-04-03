@@ -81,6 +81,44 @@ class FluentDatePickerMigrationTests(unittest.TestCase):
         )
         view.close()
 
+    def test_fluent_combobox_should_patch_popup_shell(self):
+        if not fluent.FLUENT_AVAILABLE:
+            self.skipTest("qfluentwidgets 不可用时无需验证 ComboBox 去壳补丁")
+
+        combo = fluent.ComboBox()
+        combo.addItems(["高", "低"])
+        menu = combo._createComboMenu()
+        margins = menu.hBoxLayout.contentsMargins()
+
+        self.assertEqual(
+            (margins.left(), margins.top(), margins.right(), margins.bottom()),
+            (0, 0, 0, 0),
+            "ComboBoxMenu 外层边距应被清零，避免出现额外外壳",
+        )
+        self.assertIsNone(
+            menu.view.graphicsEffect(),
+            "ComboBoxMenu 阴影应被移除，避免下拉列表外再包一层壳",
+        )
+        menu.close()
+        combo.deleteLater()
+
+    def test_fluent_combobox_should_shorten_popup_animation(self):
+        if not fluent.FLUENT_AVAILABLE:
+            self.skipTest("qfluentwidgets 不可用时无需验证 ComboBox 动画时长补丁")
+
+        combo = fluent.ComboBox()
+        combo.addItems(["高", "低"])
+        menu = combo._createComboMenu()
+        menu.exec(QPoint(0, 0))
+
+        self.assertEqual(
+            menu.aniManager.ani.duration(),
+            fluent.COMBOBOX_POPUP_ANIMATION_DURATION_MS,
+            "ComboBox 下拉动画时长应使用统一的较短配置",
+        )
+        menu.close()
+        combo.deleteLater()
+
     def test_core_dialogs_should_use_fluent_calendar_picker_helpers(self):
         for rel_path in (
             "core/add_task_dialog.py",

@@ -27,13 +27,14 @@ from PyQt6.QtWidgets import (
 _CALENDAR_WARNING_PATCHED = False
 _CALENDAR_POPUP_SHELL_PATCHED = False
 _CALENDAR_POPUP_ANIMATION_PATCHED = False
+COMBOBOX_POPUP_ANIMATION_DURATION_MS = 120
+FLUENT_AVAILABLE = False
 
 try:
     from qfluentwidgets import (  # type: ignore
         Action,
         CalendarPicker,
-        ComboBox,
-        DatePicker,
+        ComboBox as FluentComboBox,
         Dialog,
         LineEdit,
         MessageBox,
@@ -46,6 +47,10 @@ try:
         setTheme,
         setThemeColor,
     )
+    from qfluentwidgets.components.widgets.combo_box import ComboBoxMenu as FluentComboBoxMenu  # type: ignore
+    from qfluentwidgets.components.widgets.menu import MenuAnimationManager, MenuAnimationType  # type: ignore
+
+    FLUENT_AVAILABLE = True
 
 except ImportError:
     Action = QAction
@@ -64,7 +69,6 @@ except ImportError:
         def setDateFormat(self, format: str) -> None:
             self.setDisplayFormat(format)
 
-    ComboBox = QComboBox
     Dialog = QDialog
     LineEdit = QLineEdit
     MessageBox = None
@@ -82,6 +86,39 @@ except ImportError:
 
         def __init__(self, parent: Optional[QWidget] = None, format=0, isMonthTight=True):
             super().__init__(parent)
+
+
+if FLUENT_AVAILABLE:
+    class _ShelllessComboBoxMenu(FluentComboBoxMenu):
+        """ComboBox popup menu without the extra outer shell."""
+
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self.hBoxLayout.setContentsMargins(0, 0, 0, 0)
+            self.view.setGraphicsEffect(None)
+            self.adjustSize()
+
+        def exec(self, pos, ani=True, aniType=MenuAnimationType.DROP_DOWN):
+            self.view.adjustSize(pos, aniType)
+            self.adjustSize()
+
+            self.aniManager = MenuAnimationManager.make(self, aniType)
+            self.aniManager.ani.setDuration(COMBOBOX_POPUP_ANIMATION_DURATION_MS)
+            self.aniManager.exec(pos)
+            self.show()
+
+            if self.isSubMenu:
+                self.menuItem.setSelected(True)
+
+
+    class ComboBox(FluentComboBox):
+        """Fluent ComboBox with a shellless popup menu."""
+
+        def _createComboMenu(self):
+            return _ShelllessComboBoxMenu(self)
+
+else:
+    ComboBox = QComboBox
 
 
 
