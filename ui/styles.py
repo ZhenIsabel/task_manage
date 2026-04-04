@@ -54,7 +54,7 @@ class StyleManager:
             QWidget#task_label_root QLabel#TagText {{{{
                 background-color: rgba({{bg_color_red}}, {{bg_color_green}}, {{bg_color_blue}}, 217);  /* 标签背景色，带透明度 */
                 color: rgb({{text_color_red}}, {{text_color_green}}, {{text_color_blue}});             /* 文字颜色 */
-                font-weight: bold;        /* 加粗 */
+                font-weight: normal;        /* 加粗 */
                 font-family: {APP_FONT_STACK_QSS};  /* 字体 */
                 padding: 2px 8px;         /* 上下 2px、左右 8px 内边距 */
                 border-radius: 10px;      /* 保持普通标签与到期标签一致的圆角 */
@@ -92,7 +92,7 @@ class StyleManager:
                     stop:1 rgba(255, 165, 0, 0.8)
                 );
             color: rgb({{text_color_red}}, {{text_color_green}}, {{text_color_blue}});
-            font-weight: bold;
+            font-weight: normal;
             font-family: {APP_FONT_STACK_QSS};
             padding: 2px 8px;
             border-radius: 10px;
@@ -339,7 +339,7 @@ class StyleManager:
                 border-radius: 8px;                        /* 圆角 */
                 padding: 8px 15px;                         /* 内边距 */
                 font-family: {APP_FONT_FAMILY_QSS};                    /* 字体 */
-                font-weight: bold;                         /* 加粗 */
+                font-weight: normal;                         /* 加粗 */
             }}
             #control_panel QPushButton:hover {{
                 background-color: rgba(80, 80, 80, 0.9);   /* 悬停时按钮色 */
@@ -458,7 +458,7 @@ class StyleManager:
         """,
         # 详情标题标签
         "detail_title_label": f"""
-            QLabel {{ font-size: 14px; font-weight: bold; color: black; }}
+            QLabel {{ font-size: 14px; font-weight: normal; color: black; }}
         """,
         # 到期日期标签
         "due_date_label": f"""
