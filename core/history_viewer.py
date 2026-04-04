@@ -49,7 +49,7 @@ class HistoryViewer(QDialog):
         panel.setMinimumWidth(600)
         
         # 样式表
-        panel.setStyleSheet(style_manager.get_stylesheet("add_task_dialog").format())
+        panel.setStyleSheet(style_manager.get_stylesheet("add_task_dialog"))
         
         # 任务基本信息
         if self.task_data.get('text'):

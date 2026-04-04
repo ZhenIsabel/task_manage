@@ -52,7 +52,7 @@ class CompleteTableDialog(QDialog):
         
         # 应用样式
         style_manager = StyleManager()
-        self.panel.setStyleSheet(style_manager.get_stylesheet("add_task_dialog").format())
+        self.panel.setStyleSheet(style_manager.get_stylesheet("add_task_dialog"))
         
         
         # 标题

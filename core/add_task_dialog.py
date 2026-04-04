@@ -33,8 +33,8 @@ class AddTaskDialog(QDialog):
         # 样式改为用 styles.py 的 StyleManager 管理
         style_manager = StyleManager()
         # 目标面板采用“外壳 + 共享表单控件”组合，避免重复叠加规则
-        add_task_dialog_stylesheet = style_manager.get_stylesheet("dialog_panel_shell").format()
-        panel_form_controls_stylesheet = style_manager.get_stylesheet("panel_form_controls").format()
+        add_task_dialog_stylesheet = style_manager.get_stylesheet("dialog_panel_shell")
+        panel_form_controls_stylesheet = style_manager.get_stylesheet("panel_form_controls")
         panel.setStyleSheet(add_task_dialog_stylesheet + panel_form_controls_stylesheet)
 
         # ------- 下面放你的字段、按钮 ------- #

@@ -1,6 +1,8 @@
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QWidget
 
+from font_families import APP_FONT_FAMILY_QSS
+
 
 DEGREE_BADGE_CONFIG = {
     "urgency": {
@@ -88,7 +90,7 @@ def build_degree_badge_stylesheet(meta):
         f"border: 1px solid {meta['border_color']};"
         "border-radius: 10px;"
         "padding: 3px 10px;"
-        "font-family: '微软雅黑';"
+        f"font-family: {APP_FONT_FAMILY_QSS};"
         "font-size: 12px;"
         "font-weight: 600;"
         "}"

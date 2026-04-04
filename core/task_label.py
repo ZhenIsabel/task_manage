@@ -421,7 +421,7 @@ class TaskLabel(QWidget):
         self.detail_popup.setObjectName("task_detail_popup")
         self.detail_popup.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.detail_popup.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.detail_popup.setStyleSheet(style_manager.get_stylesheet("detail_popup").format())
+        self.detail_popup.setStyleSheet(style_manager.get_stylesheet("detail_popup"))
 
         layout = QVBoxLayout(self.detail_popup)
         layout.setContentsMargins(8, 8, 8, 4)
@@ -464,7 +464,7 @@ class TaskLabel(QWidget):
             ("删除", self.handle_delete),
         ]:
             button = QPushButton(label, button_row)
-            button.setStyleSheet(style_manager.get_stylesheet("detail_popup_button").format())
+            button.setStyleSheet(style_manager.get_stylesheet("detail_popup_button"))
             button.clicked.connect(handler)
             button_layout.addWidget(button)
         layout.addWidget(button_row)

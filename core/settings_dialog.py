@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from font_families import APP_FONT_FAMILY_QSS
 from ui.styles import StyleManager
 
 
@@ -144,8 +145,8 @@ class SettingsDialog(QDialog):
         panel_layout.setSpacing(20)
 
         style_manager = StyleManager()
-        shell = style_manager.get_stylesheet("dialog_panel_shell").format()
-        settings_sheet = style_manager.get_stylesheet("settings_panel").format()
+        shell = style_manager.get_stylesheet("dialog_panel_shell")
+        settings_sheet = style_manager.get_stylesheet("settings_panel")
         panel.setStyleSheet(shell + settings_sheet)
 
         tab_widget = QTabWidget()
@@ -154,7 +155,7 @@ class SettingsDialog(QDialog):
             "QTabBar::tab { background-color: #f5f5f5; color: #333; border: 1px solid #dddddd; "
             "border-bottom: none; padding: 10px 20px; margin-right: 2px; "
             "border-top-left-radius: 8px; border-top-right-radius: 8px; "
-            "font-family: '微软雅黑'; font-size: 13px; }"
+            f"font-family: {APP_FONT_FAMILY_QSS}; font-size: 13px; }}"
             "QTabBar::tab:selected { background-color: white; color: #4ECDC4; font-weight: bold; }"
         )
 

@@ -328,7 +328,7 @@ class ExportSummaryDialog(QDialog):
         panel.setMaximumWidth(600)
         
         # 样式表
-        panel.setStyleSheet(style_manager.get_stylesheet("add_task_dialog").format())
+        panel.setStyleSheet(style_manager.get_stylesheet("add_task_dialog"))
         
         # 说明
         desc_label = QLabel("选择时间区间，系统将导出该期间内所有更新过的任务概要。")

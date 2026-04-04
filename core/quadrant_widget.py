@@ -12,6 +12,7 @@ from PyQt6.QtCore import Qt, QPoint,  QRect, QTimer,QUrl, pyqtSignal
 from PyQt6.QtWidgets import QApplication,QFileDialog
 from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont,  QPainterPath,  QAction
 
+from font_families import APP_FONT_FAMILY
 
 
 from .task_label import TaskLabel
@@ -361,7 +362,7 @@ class QuadrantWidget(QWidget):
         painter.drawLine(v_line_x, margin, v_line_x, height - margin)
         
         # 绘制标签 - 使用更好的字体和阴影效果
-        font_family = self.config.get('ui', {}).get('font_family', '微软雅黑')
+        font_family = self.config.get('ui', {}).get('font_family', APP_FONT_FAMILY)
         font = QFont(font_family)
         font.setBold(True)
         font.setPointSize(10)
@@ -1105,7 +1106,7 @@ class QuadrantWidget(QWidget):
         
         # 使用统一样式
         style_manager = StyleManager()
-        add_task_dialog_stylesheet = style_manager.get_stylesheet("add_task_dialog").format()
+        add_task_dialog_stylesheet = style_manager.get_stylesheet("add_task_dialog")
         panel.setStyleSheet(add_task_dialog_stylesheet)
         
         # 内部内容

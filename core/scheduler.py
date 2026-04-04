@@ -344,7 +344,7 @@ class ScheduledTaskDialog(QDialog):
         panel.setMaximumWidth(600)
         
         # 样式表
-        panel.setStyleSheet(style_manager.get_stylesheet("add_task_dialog").format())
+        panel.setStyleSheet(style_manager.get_stylesheet("add_task_dialog"))
         
         # 加载
         self.load_scheduled_tasks(panel_layout)
@@ -600,7 +600,7 @@ class AddScheduleDialog(QDialog):
         panel_layout.setSpacing(5)
         
         # 样式表
-        panel.setStyleSheet(style_manager.get_stylesheet("add_task_dialog").format())
+        panel.setStyleSheet(style_manager.get_stylesheet("add_task_dialog"))
 
         # 输入字段
         self.inputs = {}

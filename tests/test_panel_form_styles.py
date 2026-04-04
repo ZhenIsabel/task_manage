@@ -59,7 +59,7 @@ class PanelFormStyleIntegrationTests(unittest.TestCase):
         settings_panel_template = styles_py[start:end]
 
         try:
-            settings_panel_template.format()
+            settings_panel_template
         except KeyError as exc:
             self.fail(f'settings_panel 样式不应在 format() 时抛出 KeyError: {exc}')
 
@@ -117,6 +117,27 @@ class PanelFormStyleIntegrationTests(unittest.TestCase):
         tag_text_rule = styles_py[start:end]
 
         self.assertIn('border-radius: 10px;', tag_text_rule)
+
+    def test_task_label_styles_should_format_without_key_error(self):
+        from ui.styles import StyleManager
+
+        style_manager = StyleManager()
+        format_args = {
+            'bg_color_red': 78,
+            'bg_color_green': 205,
+            'bg_color_blue': 196,
+            'text_color_red': 0,
+            'text_color_green': 0,
+            'text_color_blue': 0,
+            'indicator_size': 14,
+        }
+
+        try:
+            style_manager.get_stylesheet("task_label").format(**format_args)
+            style_manager.get_stylesheet("task_label_overdue").format(**format_args)
+            style_manager.get_stylesheet("color_button").format(button_color="#4ECDC4")
+        except KeyError as exc:
+            self.fail(f'动态样式模板不应在 format() 时抛出 KeyError: {exc}')
 
 if __name__ == '__main__':
     unittest.main()

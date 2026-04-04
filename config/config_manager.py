@@ -1,6 +1,7 @@
 import json
 from datetime import datetime
 import logging
+from font_families import APP_FONT_FAMILY
 logger = logging.getLogger(__name__)
 
 # 导入数据库管理器
@@ -33,7 +34,7 @@ DEFAULT_CONFIG = {
     'ui': {
         'border_radius': 15,
         'shadow_effect': True,
-        'font_family': '微软雅黑',
+        'font_family': APP_FONT_FAMILY,
         'animation_enabled': True,
         'desktop_mode': True,  # 桌面融合模式
         'control_panel_opacity': 0.0  # 控制面板初始透明度
