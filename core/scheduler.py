@@ -17,7 +17,7 @@ from PyQt6.QtGui import QColor
 from ui.adaptive_table import AdaptiveTextTableWidget
 from ui.fluent import ComboBox, create_calendar_picker, get_date_string_from_picker, is_date_picker
 from ui.notifications import show_error, show_success,show_warning,resolve_notification_host
-from ui.styles import StyleManager
+from ui.styles import StyleManager, apply_button_role
 from ui.degree_badges import create_degree_table_cell, is_degree_field
 from database.database_manager import get_db_manager
 from config.config_manager import load_config
@@ -364,39 +364,20 @@ class ScheduledTaskDialog(QDialog):
         
         # 添加按钮
         add_button=QPushButton("添加")
+        apply_button_role(add_button, "secondary")
         add_button.clicked.connect(self.add)
-        add_button.setStyleSheet(style_manager.get_stylesheet("task_label_button"))
-        add_button.setFixedHeight(35)
         button_layout.addWidget(add_button)
 
         # 删除按钮
         delete_button=QPushButton("删除")
+        apply_button_role(delete_button, "danger")
         delete_button.clicked.connect(self.delete_task)
-        delete_button.setStyleSheet("""
-            QPushButton {
-                background-color: #FF6B6B;
-                color: white;
-                border: none;
-                padding: 10px 20px;
-                border-radius: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #ff5252;
-            }
-            QPushButton:disabled {
-                background-color: #ccc;
-                color: #666;
-            }
-        """)
-        delete_button.setFixedHeight(35)
         button_layout.addWidget(delete_button)
 
         # 关闭按钮
         close_button = QPushButton("关闭")
+        apply_button_role(close_button, "ghost")
         close_button.clicked.connect(self.close)
-        close_button.setStyleSheet(style_manager.get_stylesheet("task_label_button"))
-        close_button.setFixedHeight(35)
         button_layout.addWidget(close_button)
         
         panel_layout.addLayout(button_layout)
@@ -632,16 +613,14 @@ class AddScheduleDialog(QDialog):
         
         # 添加按钮
         add_button=QPushButton("添加")
+        apply_button_role(add_button, "primary")
         add_button.clicked.connect(self.accept)
-        add_button.setStyleSheet(style_manager.get_stylesheet("task_label_button"))
-        add_button.setFixedHeight(35)
         button_layout.addWidget(add_button)
 
         # 关闭按钮
         close_button = QPushButton("关闭")
+        apply_button_role(close_button, "ghost")
         close_button.clicked.connect(self.reject)
-        close_button.setStyleSheet(style_manager.get_stylesheet("task_label_button"))
-        close_button.setFixedHeight(35)
         button_layout.addWidget(close_button)
         
         panel_layout.addLayout(button_layout)

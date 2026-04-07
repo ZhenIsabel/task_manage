@@ -15,7 +15,7 @@ from datetime import datetime
 from .add_task_dialog import AddTaskDialog
 from ui.scrollbar import FluentScrollArea
 from ui.notifications import show_error, resolve_notification_host,show_success,show_warning
-from ui.styles import StyleManager
+from ui.styles import StyleManager, apply_button_role
 from ui.degree_badges import create_degree_display_widget, build_degree_badge_stylesheet, get_status_badge_meta
 from ui.ui import MyColorDialog
 from config.config_manager import load_config
@@ -460,11 +460,11 @@ class TaskLabel(QWidget):
         for label, handler in [
             ("目录", self.open_directory),
             ("编辑", self.edit_task),
-            ("历史记录", self.show_history),
+            ("历史", self.show_history),
             ("删除", self.handle_delete),
         ]:
             button = QPushButton(label, button_row)
-            button.setStyleSheet(style_manager.get_stylesheet("detail_popup_button"))
+            apply_button_role(button, "danger" if label == "删除" else "secondary", size="sm")
             button.clicked.connect(handler)
             button_layout.addWidget(button)
         layout.addWidget(button_row)

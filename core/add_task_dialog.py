@@ -7,7 +7,7 @@ from PyQt6.QtGui import QMouseEvent, QColor
 
 from ui.fluent import ComboBox, create_calendar_picker, get_date_string_from_picker, is_date_picker
 from ui.notifications import show_warning
-from ui.styles import StyleManager
+from ui.styles import StyleManager, apply_button_role
 from ui.degree_badges import is_degree_field
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
@@ -62,7 +62,9 @@ class AddTaskDialog(QDialog):
         # 按钮
         btn_row = QHBoxLayout()
         ok = QPushButton("确定"); ok.clicked.connect(self._try_accept)
+        apply_button_role(ok, "primary")
         cancel = QPushButton("取消"); cancel.clicked.connect(self.reject)
+        apply_button_role(cancel, "ghost")
         btn_row.addWidget(ok); btn_row.addWidget(cancel)
         panel_layout.addLayout(btn_row)
 
@@ -127,6 +129,7 @@ class AddTaskDialog(QDialog):
                 path_edit.setText(str(default_value))
             self._apply_non_fluent_input_chrome(path_edit)
             btn = QPushButton("选择")
+            apply_button_role(btn, "secondary")
             btn.clicked.connect(lambda _, we=path_edit: self.choose_dir(we))
             dir_layout.addWidget(path_edit)
             dir_layout.addWidget(btn)

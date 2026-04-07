@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (
 )
 
 from font_families import APP_FONT_FAMILY_QSS
-from ui.styles import StyleManager
+from ui.styles import StyleManager, apply_button_role
 
 
 def _coerce_int_in_range(raw, default, lo, hi):
@@ -178,8 +178,10 @@ class SettingsDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_row.addStretch()
         ok_btn = QPushButton("确定")
+        apply_button_role(ok_btn, "primary")
         ok_btn.clicked.connect(self.accept)
         cancel_btn = QPushButton("取消")
+        apply_button_role(cancel_btn, "ghost")
         cancel_btn.clicked.connect(self.reject)
         btn_row.addWidget(ok_btn)
         btn_row.addWidget(cancel_btn)

@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout,QMessageBox,
 from PyQt6.QtCore import Qt
 from ui.adaptive_table import AdaptiveTextTableWidget
 from ui.notifications import show_error, show_success
-from ui.styles import StyleManager
+from ui.styles import StyleManager, apply_button_role
 from database.database_manager import get_db_manager
 import logging
 
@@ -76,58 +76,18 @@ class CompleteTableDialog(QDialog):
         # 全选/取消全选按钮
         self.select_all_button = QPushButton("全选")
         self.select_all_button.clicked.connect(self.toggle_select_all)
-        self.select_all_button.setStyleSheet("""
-            QPushButton {
-                background-color: #4ECDC4;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #45b7b8;
-            }
-        """)
+        apply_button_role(self.select_all_button, "secondary")
         
         # 还原按钮
         self.restore_button = QPushButton("还原选中任务")
         self.restore_button.clicked.connect(self.restore_selected_tasks)
         self.restore_button.setEnabled(False)
-        self.restore_button.setStyleSheet("""
-            QPushButton {
-                background-color: #FF6B6B;
-                color: white;
-                border: none;
-                padding: 10px 20px;
-                border-radius: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #ff5252;
-            }
-            QPushButton:disabled {
-                background-color: #ccc;
-                color: #666;
-            }
-        """)
+        apply_button_role(self.restore_button, "primary")
         
         # 关闭按钮
         self.close_button = QPushButton("关闭")
         self.close_button.clicked.connect(self.accept)
-        self.close_button.setStyleSheet("""
-            QPushButton {
-                background-color: #95a5a6;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #7f8c8d;
-            }
-        """)
+        apply_button_role(self.close_button, "ghost")
         
         button_layout.addWidget(self.select_all_button)
         button_layout.addStretch()
