@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QDialog,
     QFormLayout,
     QHBoxLayout,
+    QGridLayout,
     QLabel,
     QLineEdit,
     QPushButton,
@@ -194,70 +195,91 @@ class SettingsDialog(QDialog):
     # ---- 颜色标签页 ----
     def _build_color_tab(self) -> QWidget:
         widget = QWidget()
-        layout = QFormLayout(widget)
-        layout.setSpacing(15)
+        layout = QGridLayout(widget)
+        layout.setSpacing(16)
         layout.setContentsMargins(20, 20, 20, 20)
 
         self._color_buttons: dict[str, QPushButton] = {}
         self._opacity_sliders: dict[str, QSlider] = {}
         self._color_range_sliders: dict[str, dict[str, QSlider]] = {}
 
+        positions = {"q1": (0, 0), "q2": (0, 1), "q3": (1, 0), "q4": (1, 1)}
         for q_id, q_name in QUADRANT_NAMES.items():
-            qdata = self._working_quadrants[q_id]
-
-            color_btn = QPushButton()
-            color_btn.setStyleSheet(f"background-color: {qdata['color']}; border-radius: 15px;")
-            color_btn.setFixedSize(30, 30)
-            color_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            color_btn.clicked.connect(lambda _checked, qid=q_id: self._choose_color(qid))
-            self._color_buttons[q_id] = color_btn
-
-            opacity_slider = QSlider(Qt.Orientation.Horizontal)
-            opacity_slider.setRange(1, 100)
-            opacity_slider.setValue(int(qdata["opacity"] * 100))
-            opacity_slider.valueChanged.connect(
-                lambda val, qid=q_id: self._set_opacity(qid, val)
-            )
-            self._opacity_sliders[q_id] = opacity_slider
-
-            cr = self._working_color_ranges[q_id]
-            hue_s = QSlider(Qt.Orientation.Horizontal)
-            hue_s.setObjectName(f"settings_{q_id}_hue_range_slider")
-            hue_s.setRange(0, 180)
-            hue_s.setValue(cr["hue_range"])
-            hue_s.valueChanged.connect(
-                lambda v, qid=q_id: self._set_color_range(qid, "hue_range", v)
-            )
-
-            sat_s = QSlider(Qt.Orientation.Horizontal)
-            sat_s.setObjectName(f"settings_{q_id}_saturation_range_slider")
-            sat_s.setRange(0, 255)
-            sat_s.setValue(cr["saturation_range"])
-            sat_s.valueChanged.connect(
-                lambda v, qid=q_id: self._set_color_range(qid, "saturation_range", v)
-            )
-
-            val_s = QSlider(Qt.Orientation.Horizontal)
-            val_s.setObjectName(f"settings_{q_id}_value_range_slider")
-            val_s.setRange(0, 255)
-            val_s.setValue(cr["value_range"])
-            val_s.valueChanged.connect(
-                lambda v, qid=q_id: self._set_color_range(qid, "value_range", v)
-            )
-
-            self._color_range_sliders[q_id] = {
-                "hue_range": hue_s,
-                "saturation_range": sat_s,
-                "value_range": val_s,
-            }
-
-            layout.addRow(f"{q_name} 颜色:", color_btn)
-            layout.addRow(f"{q_name} 透明度:", opacity_slider)
-            layout.addRow(f"{q_name} 色相范围:", hue_s)
-            layout.addRow(f"{q_name} 饱和度范围:", sat_s)
-            layout.addRow(f"{q_name} 明度范围:", val_s)
+            card = self._build_quadrant_color_card(q_id, q_name)
+            row, col = positions[q_id]
+            layout.addWidget(card, row, col)
 
         return widget
+
+    def _build_quadrant_color_card(self, q_id: str, q_name: str) -> QWidget:
+        card = QWidget()
+        card.setObjectName(f"settings_{q_id}_color_card")
+        card.setProperty("settingsColorCard", True)
+
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(16, 16, 16, 16)
+        card_layout.setSpacing(12)
+
+        title = QLabel(q_name)
+        title.setObjectName(f"settings_{q_id}_color_card_title")
+        title.setProperty("settingsColorCardTitle", True)
+        card_layout.addWidget(title)
+
+        controls = QFormLayout()
+        controls.setSpacing(12)
+
+        qdata = self._working_quadrants[q_id]
+        color_btn = QPushButton()
+        color_btn.setObjectName(f"settings_{q_id}_color_button")
+        color_btn.setProperty("settingsColorButton", True)
+        color_btn.setStyleSheet(f"background-color: {qdata['color']}; border-radius: 15px;")
+        color_btn.setFixedSize(30, 30)
+        color_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        color_btn.clicked.connect(lambda _checked, qid=q_id: self._choose_color(qid))
+        self._color_buttons[q_id] = color_btn
+
+        opacity_slider = QSlider(Qt.Orientation.Horizontal)
+        opacity_slider.setObjectName(f"settings_{q_id}_opacity_slider")
+        opacity_slider.setRange(1, 100)
+        opacity_slider.setValue(int(qdata["opacity"] * 100))
+        opacity_slider.valueChanged.connect(lambda val, qid=q_id: self._set_opacity(qid, val))
+        self._opacity_sliders[q_id] = opacity_slider
+
+        cr = self._working_color_ranges[q_id]
+        hue_s = QSlider(Qt.Orientation.Horizontal)
+        hue_s.setObjectName(f"settings_{q_id}_hue_range_slider")
+        hue_s.setRange(0, 180)
+        hue_s.setValue(cr["hue_range"])
+        hue_s.valueChanged.connect(lambda v, qid=q_id: self._set_color_range(qid, "hue_range", v))
+
+        sat_s = QSlider(Qt.Orientation.Horizontal)
+        sat_s.setObjectName(f"settings_{q_id}_saturation_range_slider")
+        sat_s.setRange(0, 255)
+        sat_s.setValue(cr["saturation_range"])
+        sat_s.valueChanged.connect(
+            lambda v, qid=q_id: self._set_color_range(qid, "saturation_range", v)
+        )
+
+        val_s = QSlider(Qt.Orientation.Horizontal)
+        val_s.setObjectName(f"settings_{q_id}_value_range_slider")
+        val_s.setRange(0, 255)
+        val_s.setValue(cr["value_range"])
+        val_s.valueChanged.connect(lambda v, qid=q_id: self._set_color_range(qid, "value_range", v))
+
+        self._color_range_sliders[q_id] = {
+            "hue_range": hue_s,
+            "saturation_range": sat_s,
+            "value_range": val_s,
+        }
+
+        controls.addRow("颜色:", color_btn)
+        controls.addRow("透明度:", opacity_slider)
+        controls.addRow("色相范围:", hue_s)
+        controls.addRow("饱和度范围:", sat_s)
+        controls.addRow("明度范围:", val_s)
+        card_layout.addLayout(controls)
+        card_layout.addStretch(1)
+        return card
 
     # ---- 大小标签页 ----
     def _build_size_tab(self) -> QWidget:

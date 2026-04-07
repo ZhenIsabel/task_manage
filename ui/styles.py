@@ -404,6 +404,19 @@ class StyleManager:
                 font-family: {APP_FONT_FAMILY_QSS};
                 font-size: 13px;
             }}
+            QWidget#settings_panel QWidget[settingsColorCard="true"] {{
+                background-color: #fafafa;
+                border: 1px solid #e3e3e3;
+                border-radius: 14px;
+            }}
+            QWidget#settings_panel QWidget[settingsColorCard="true"] QLabel[settingsColorCardTitle="true"] {{
+                background: transparent;
+                border: none;
+                color: #2f2f2f;
+                font-size: 14px;
+                font-weight: normal;
+                padding: 0;
+            }}
             QWidget#settings_panel QSpinBox {{
                 background-color: #f5f5f5;
                 color: #505050;
