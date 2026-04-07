@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from datetime import datetime
 from unittest.mock import Mock, patch
 
 from core.quadrant_widget import QuadrantWidget
@@ -292,6 +293,37 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
             manager._pending_remote_task_changes['scheduled:sched-1']['entity_type'],
             'scheduled_task',
         )
+
+    def test_sync_scheduled_tasks_from_server_prefers_recent_local_update_without_pending_confirmation(self):
+        manager = self._build_manager(remote_config={})
+        manager.create_scheduled_task({
+            'id': 'sched-1',
+            'title': '本地版本',
+            'frequency': 'daily',
+            'notes': '刚刚改过',
+            'updated_at': '2026-03-30T09:57:00',
+            'created_at': '2026-03-30T08:00:00',
+        })
+        manager.api_base_url = 'http://example.com'
+        frozen_now = datetime.fromisoformat('2026-03-30T10:00:00')
+
+        with patch('database.database_manager.datetime') as datetime_mock, patch.object(manager, '_make_api_request', return_value={
+            'scheduled_tasks': [{
+                'id': 'sched-1',
+                'title': '远端版本',
+                'frequency': 'daily',
+                'notes': '远端变更',
+                'updated_at': '2026-03-30T10:30:00',
+            }]
+        }):
+            datetime_mock.now.return_value = frozen_now
+            datetime_mock.fromisoformat.side_effect = lambda value: datetime.fromisoformat(value.replace('Z', '+00:00'))
+            manager.sync_scheduled_tasks_from_server()
+
+        self.assertEqual(manager.get_scheduled_task('sched-1')['title'], '本地版本')
+        self.assertEqual(manager.get_scheduled_task('sched-1')['sync_status'], 'modified')
+        self.assertEqual(manager.get_scheduled_task('sched-1')['updated_at'], '2026-03-30T10:00:00')
+        self.assertNotIn('scheduled:sched-1', manager._pending_remote_task_changes)
 
     def test_sync_scheduled_tasks_from_server_ignores_updated_at_only_change(self):
         manager = self._build_manager(remote_config={})
@@ -658,6 +690,111 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
             '2026-03-30T09:00:00',
         )
         self.assertNotIn('task:task-1', manager._pending_remote_task_changes)
+
+    def test_recent_local_task_conflict_skips_confirmation_and_still_uploads_with_other_pending_changes(self):
+        manager = self._build_manager(remote_config={})
+        manager.save_task({
+            'id': 'task-1',
+            'text': '本地任务',
+            'notes': '五分钟内改过',
+            'completed': False,
+            'completed_date': '',
+            'deleted': False,
+            'priority': '中',
+            'urgency': '低',
+            'importance': '高',
+            'directory': '',
+            'create_date': '',
+            'position': {'x': 120, 'y': 180},
+            'updated_at': '2026-03-30T09:57:00',
+            'created_at': '2026-03-30T08:00:00',
+        })
+        manager.save_task({
+            'id': 'task-2',
+            'text': '普通冲突任务',
+            'notes': '等待确认',
+            'completed': False,
+            'completed_date': '',
+            'deleted': False,
+            'priority': '中',
+            'urgency': '低',
+            'importance': '中',
+            'directory': '',
+            'create_date': '',
+            'position': {'x': 160, 'y': 220},
+            'updated_at': '2026-03-30T08:00:00',
+            'created_at': '2026-03-30T07:00:00',
+        })
+        manager._save_task_to_cache(manager._cache_task_to_task_data(manager._task_cache['task-2']), 'synced')
+        manager.api_base_url = 'http://example.com'
+        manager.add_task_sync_listener(lambda changes: None)
+        frozen_now = datetime.fromisoformat('2026-03-30T10:00:00')
+
+        def fake_api_request(method, path, payload=None):
+            if method == 'GET' and path == '/api/tasks':
+                return {
+                    'tasks': [
+                        {
+                            'id': 'task-1',
+                            'text': '远端任务',
+                            'notes': '远端改过',
+                            'completed': False,
+                            'completed_date': '',
+                            'deleted': False,
+                            'priority': '中',
+                            'urgency': '低',
+                            'importance': '高',
+                            'directory': '',
+                            'create_date': '',
+                            'position': {'x': 120, 'y': 180},
+                            'updated_at': '2026-03-30T10:30:00',
+                            'created_at': '2026-03-30T08:00:00',
+                        },
+                        {
+                            'id': 'task-2',
+                            'text': '远端冲突任务',
+                            'notes': '远端改过',
+                            'completed': False,
+                            'completed_date': '',
+                            'deleted': False,
+                            'priority': '高',
+                            'urgency': '高',
+                            'importance': '高',
+                            'directory': '',
+                            'create_date': '',
+                            'position': {'x': 160, 'y': 220},
+                            'updated_at': '2026-03-30T10:20:00',
+                            'created_at': '2026-03-30T07:00:00',
+                        },
+                    ],
+                    'count': 2,
+                }
+            if method == 'POST' and path == '/api/tasks':
+                return {'success': True}
+            raise AssertionError(f'unexpected request: {method} {path}')
+
+        with patch('database.database_manager.datetime') as datetime_mock, patch.object(manager, '_make_api_request', side_effect=fake_api_request) as request_mock:
+            datetime_mock.now.return_value = frozen_now
+            datetime_mock.fromisoformat.side_effect = lambda value: datetime.fromisoformat(value.replace('Z', '+00:00'))
+
+            sync_from_result = manager.sync_from_server()
+            sync_to_result = manager.sync_to_server()
+
+        self.assertTrue(sync_from_result)
+        self.assertTrue(sync_to_result)
+        self.assertEqual(manager._task_cache['task-1']['text'], '本地任务')
+        self.assertEqual(manager._task_cache['task-1']['sync_status'], 'synced')
+        self.assertEqual(manager._task_cache['task-1']['updated_at'], '2026-03-30T10:00:00')
+        self.assertNotIn('task:task-1', manager._pending_remote_task_changes)
+        self.assertIn('task:task-2', manager._pending_remote_task_changes)
+        self.assertEqual(request_mock.call_args_list[-1].args[:2], ('POST', '/api/tasks'))
+        uploaded_payload = request_mock.call_args_list[-1].args[2]
+        self.assertEqual(uploaded_payload['id'], 'task-1')
+        self.assertEqual(uploaded_payload['text'], '本地任务')
+        self.assertEqual(uploaded_payload['notes'], '五分钟内改过')
+        self.assertEqual(uploaded_payload['updated_at'], '2026-03-30T10:00:00')
+        self.assertEqual(uploaded_payload['sync_status'], 'modified')
+        self.assertEqual(uploaded_payload['position'], {'x': 120, 'y': 180})
 
     def test_delete_task_keeps_local_tombstone_without_immediate_remote_sync(self):
         manager = self._build_manager(remote_config={})

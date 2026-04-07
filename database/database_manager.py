@@ -2,7 +2,7 @@ import sqlite3
 import json
 import os
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 import logging
 import threading
@@ -24,6 +24,7 @@ if not logger.handlers:
 logger.propagate = False
 
 APP_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+RECENT_LOCAL_SYNC_PRIORITY_WINDOW = timedelta(minutes=5)
 
 
 class DatabaseManager:
@@ -569,13 +570,25 @@ class DatabaseManager:
             return False
         try:
             with self._cache_lock:
-                if self._pending_remote_task_changes:
-                    logger.info("存在待确认的远程修改，暂不上传本地任务")
-                    return False
-                unsynced_tasks = [copy.deepcopy(task) for task in self._task_cache.values() if task.get('sync_status') != 'synced']
+                blocked_task_ids = {
+                    change.get('entity_id')
+                    for change in self._pending_remote_task_changes.values()
+                    if change.get('entity_type', 'task') == 'task'
+                }
+                unsynced_tasks = [
+                    copy.deepcopy(task)
+                    for task in self._task_cache.values()
+                    if task.get('sync_status') != 'synced' and task.get('id') not in blocked_task_ids
+                ]
             if not unsynced_tasks:
+                if blocked_task_ids:
+                    logger.info("存在待确认的远程修改，本轮没有可上传的本地任务")
+                    return False
                 logger.info("没有需要同步的数据")
                 return True
+
+            if blocked_task_ids:
+                logger.info(f"存在 {len(blocked_task_ids)} 个待确认的远程修改，本轮继续上传其余 {len(unsynced_tasks)} 个本地任务")
 
             for task in unsynced_tasks:
                 task_data = dict(task)
@@ -621,12 +634,25 @@ class DatabaseManager:
             server_tasks = result.get('tasks', [])
             pending_changes = {}
             server_task_ids = {task_data['id'] for task_data in server_tasks}
+            reference_time = datetime.now()
             with self._cache_lock:
                 for task_data in server_tasks:
                     local_task = self._task_cache.get(task_data['id'])
-                    if (not local_task) or self._is_remote_task_newer_or_changed(local_task, task_data):
+                    if not local_task:
                         change = self._build_remote_change(local_task, task_data)
                         pending_changes[change['change_key']] = change
+                        continue
+
+                    if not self._is_remote_task_newer_or_changed(local_task, task_data):
+                        continue
+
+                    if self._is_recent_local_update(local_task.get('updated_at'), reference_time):
+                        self._prioritize_recent_local_change_locked('task', local_task, reference_time)
+                        logger.info(f"任务 {task_data['id']} 在最近 5 分钟内有本地修改，跳过远程确认并保留本地版本")
+                        continue
+
+                    change = self._build_remote_change(local_task, task_data)
+                    pending_changes[change['change_key']] = change
 
                 for task_id, local_task in self._task_cache.items():
                     if task_id in server_task_ids:
@@ -634,6 +660,10 @@ class DatabaseManager:
                     if local_task.get('sync_status') != 'synced':
                         continue
                     if local_task.get('deleted'):
+                        continue
+                    if self._is_recent_local_update(local_task.get('updated_at'), reference_time):
+                        self._prioritize_recent_local_change_locked('task', local_task, reference_time)
+                        logger.info(f"任务 {task_id} 在最近 5 分钟内有本地修改，跳过远程删除确认并保留本地版本")
                         continue
                     change = self._build_remote_delete_change(local_task)
                     pending_changes[change['change_key']] = change
@@ -720,6 +750,43 @@ class DatabaseManager:
             'y': task_data.pop('position_y', 100)
         }
         return task_data
+
+    def _parse_sync_timestamp(self, value: Any) -> Optional[datetime]:
+        """解析同步时间戳，统一转换为可比较的 naive datetime。"""
+        text = str(value or '').strip()
+        if not text:
+            return None
+
+        try:
+            parsed = datetime.fromisoformat(text.replace('Z', '+00:00'))
+        except ValueError:
+            return None
+
+        if parsed.tzinfo is not None:
+            return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        return parsed
+
+    def _is_recent_local_update(self, updated_at: Any, reference_time: datetime) -> bool:
+        """判断本地更新时间是否落在最近 5 分钟的本地优先窗口内。"""
+        updated_at_dt = self._parse_sync_timestamp(updated_at)
+        if updated_at_dt is None:
+            return False
+
+        return (reference_time - RECENT_LOCAL_SYNC_PRIORITY_WINDOW) <= updated_at_dt <= (reference_time + RECENT_LOCAL_SYNC_PRIORITY_WINDOW)
+
+    def _prioritize_recent_local_change_locked(self, entity_type: str, local_record: Dict[str, Any], reference_time: datetime) -> None:
+        """最近 5 分钟内的本地修改直接保留，并标记为待上传。"""
+        if entity_type == 'scheduled_task':
+            local_copy = copy.deepcopy(local_record)
+            local_copy['updated_at'] = reference_time.isoformat()
+            self._save_scheduled_task_to_cache(local_copy, sync_status='modified')
+            return
+
+        local_task = self._cache_task_to_task_data(local_record)
+        if local_task is None:
+            return
+        local_task['updated_at'] = reference_time.isoformat()
+        self._save_task_to_cache(local_task, 'modified')
 
     def _build_task_sync_compare_payload(self, task_data: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         """构造用于下行同步比较的任务内容，忽略 updated_at 等同步元数据。"""
@@ -986,7 +1053,7 @@ class DatabaseManager:
             'text': field_values.get('text', ''),
             'notes': field_values.get('notes', ''),
             'due_date': field_values.get('due_date', ''),
-            'priority': field_values.get('priority', ''),
+            'priority': field_values.get('priority', task_data.get('priority', '')),
             'urgency': field_values.get('urgency', task_data.get('urgency', '低')),
             'importance': field_values.get('importance', task_data.get('importance', '低')),
             'directory': field_values.get('directory', ''),
@@ -1462,6 +1529,7 @@ class DatabaseManager:
             server_tasks = result.get('scheduled_tasks', [])
             pending_changes = {}
             inserted_count = 0
+            reference_time = datetime.now()
 
             for task_data in server_tasks:
                 local_task = self.get_scheduled_task(task_data['id'])
@@ -1471,6 +1539,12 @@ class DatabaseManager:
                     continue
 
                 if task_data.get('updated_at', '') > local_task.get('updated_at', '') and self._scheduled_task_sync_content_changed(local_task, task_data):
+                    if self._is_recent_local_update(local_task.get('updated_at'), reference_time):
+                        with self._cache_lock:
+                            self._prioritize_recent_local_change_locked('scheduled_task', local_task, reference_time)
+                        logger.info(f"定时任务 {task_data['id']} 在最近 5 分钟内有本地修改，跳过远程确认并保留本地版本")
+                        continue
+
                     change = self._build_scheduled_remote_change(local_task, task_data)
                     pending_changes[change['change_key']] = change
 
