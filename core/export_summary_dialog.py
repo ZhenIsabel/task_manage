@@ -16,7 +16,7 @@ from PyQt6.QtGui import QMouseEvent
 
 from ui.fluent import create_calendar_picker, get_date_from_picker, get_date_string_from_picker, set_date_on_picker
 from ui.notifications import _show_info_bar, show_error, show_success,show_warning
-from ui.styles import StyleManager, apply_button_role
+from ui.styles import BUTTON_THEME_TOKENS, StyleManager, apply_button_role
 from database.database_manager import get_db_manager
 from core.LLMService import get_llm_service
 
@@ -475,10 +475,10 @@ class ExportSummaryDialog(QDialog):
             self.summary_data = data
             self.export_button.setEnabled(True)
             self.status_label.setText(f"✓ {message}，共 {len(data)} 个任务")
-            self.status_label.setStyleSheet("font-size: 12px; color: #4ECDC4;")
+            self.status_label.setStyleSheet(f'font-size: 12px; color: {BUTTON_THEME_TOKENS["accent_fill_rest"]};')
         else:
             self.status_label.setText(f"✗ {message}")
-            self.status_label.setStyleSheet("font-size: 12px; color: #ff4757;")
+            self.status_label.setStyleSheet(f'font-size: 12px; color: {BUTTON_THEME_TOKENS["danger_fill_rest"]};')
     
     def _export_to_excel(self):
         """导出到Excel"""

@@ -213,5 +213,21 @@ class PanelFormStyleIntegrationTests(unittest.TestCase):
             self.fail(f'动态样式模板不应在 format() 时抛出 KeyError: {exc}')
 
 
+    def test_interactive_accent_styles_should_not_hardcode_legacy_green(self):
+        styles_py = self._read('ui/styles.py')
+
+        self.assertNotIn('#4ECDC4', styles_py)
+        self.assertNotIn('#45B8B0', styles_py)
+
+    def test_settings_tabs_and_export_summary_status_should_reference_theme_tokens(self):
+        settings_dialog_py = self._read('core/settings_dialog.py')
+        export_summary_py = self._read('core/export_summary_dialog.py')
+
+        self.assertIn('BUTTON_THEME_TOKENS', settings_dialog_py)
+        self.assertIn('BUTTON_THEME_TOKENS[\"accent_fill_rest\"]', settings_dialog_py)
+        self.assertIn('BUTTON_THEME_TOKENS[\"accent_fill_rest\"]', export_summary_py)
+        self.assertIn('BUTTON_THEME_TOKENS[\"danger_fill_rest\"]', export_summary_py)
 if __name__ == '__main__':
     unittest.main()
+
+

@@ -32,8 +32,8 @@ BUTTON_THEME_TOKENS = {
 }
 
 BUTTON_SIZE_TOKENS = {
-    "sm": 30,
-    "md": 34,
+    "sm": 20,
+    "md": 28,
     "lg": 40,
 }
 
@@ -219,7 +219,7 @@ class StyleManager:
             }}}}
             QWidget#task_label_root QCheckBox::indicator:checked {{{{
                 background-color: rgba({{bg_color_red}}, {{bg_color_green}}, {{bg_color_blue}}, 0.85); /* 选中时背景色 */
-                border: 1.5px solid #4ECDC4;    /* 选中时边框色 */
+                border: 1.5px solid {BUTTON_THEME_TOKENS["accent_fill_rest"]};    /* 选中时边框色 */
                 image:  url(./icons/check.png); /* 选中时显示对勾图片 */
             }}}}
         """,
@@ -257,7 +257,7 @@ class StyleManager:
             }}}}
             QWidget#task_label_root QCheckBox::indicator:checked {{{{
                 background-color: rgba({{bg_color_red}}, {{bg_color_green}}, {{bg_color_blue}}, 0.85); /* 选中时背景色 */
-                border: 1.5px solid #4ECDC4;    /* 选中时边框色 */
+                border: 1.5px solid {BUTTON_THEME_TOKENS["accent_fill_rest"]};    /* 选中时边框色 */
                 image:  url(./icons/check.png); /* 选中时显示对勾图片 */
             }}}}
         """,
@@ -365,7 +365,7 @@ class StyleManager:
             border: none;
         }}
         QWidget#dialog_panel QPushButton {{
-            background-color: #4ECDC4;      /* 按钮背景色 */
+            background-color: {BUTTON_THEME_TOKENS["accent_fill_rest"]};      /* 按钮背景色 */
             color: white;                   /* 文字颜色 */
             border: none;                   /* 无边框 */
             border-radius: 8px;             /* 圆角 */
@@ -373,7 +373,7 @@ class StyleManager:
             font-family: {APP_FONT_FAMILY_QSS};          /* 字体 */
             font-weight: normal;              /* 加粗 */
         }}
-        QWidget#dialog_panel QPushButton:hover {{background-color: #45B8B0; }} /* 悬停时按钮色 */
+        QWidget#dialog_panel QPushButton:hover {{background-color: {BUTTON_THEME_TOKENS["accent_fill_hover"]}; }} /* 悬停时按钮色 */
         """,
         # 添加任务对话框样式
         "add_task_dialog": f"""
@@ -391,7 +391,7 @@ class StyleManager:
             border: none;
         }}
         QWidget#dialog_panel QPushButton {{
-            background-color: #4ECDC4;      /* 按钮背景色 */
+            background-color: {BUTTON_THEME_TOKENS["accent_fill_rest"]};      /* 按钮背景色 */
             color: white;                   /* 文字颜色 */
             border: none;                   /* 无边框 */
             border-radius: 8px;             /* 圆角 */
@@ -399,7 +399,7 @@ class StyleManager:
             font-family: {APP_FONT_FAMILY_QSS};          /* 字体 */
             font-weight: normal;              /* 加粗 */
         }}
-        QWidget#dialog_panel QPushButton:hover {{background-color: #45B8B0; }} /* 悬停时按钮色 */
+        QWidget#dialog_panel QPushButton:hover {{background-color: {BUTTON_THEME_TOKENS["accent_fill_hover"]}; }} /* 悬停时按钮色 */
         """ + PANEL_FORM_CONTROLS_STYLE,
         # 通用菜单样式
         "menu": f"""
@@ -418,8 +418,8 @@ class StyleManager:
                 color: #333333;
             }}
             QMenu::item:selected {{
-                background-color: #4ECDC4;
-                color: #fff;
+                background-color: {BUTTON_THEME_TOKENS["accent_fill_rest"]};
+                color: {BUTTON_THEME_TOKENS["accent_text"]};
             }}
             QMenu::separator {{
                 height: 1px;
@@ -482,8 +482,8 @@ class StyleManager:
                 color: #333333;
             }}
             #control_panel QMenu::item:selected {{
-                background-color: #4ECDC4;
-                color: #fff;
+                background-color: {BUTTON_THEME_TOKENS["accent_fill_rest"]};
+                color: {BUTTON_THEME_TOKENS["accent_text"]};
             }}
             #control_panel QMenu::separator {{
                 height: 1px;
@@ -514,7 +514,7 @@ class StyleManager:
             }}
             QWidget#settings_panel QTabBar::tab:selected {{
                 background-color: white;
-                color: #4ECDC4;
+                color: {BUTTON_THEME_TOKENS["accent_fill_rest"]};
                 font-weight: normal;
             }}
             QWidget#settings_panel QLabel {{
@@ -546,7 +546,7 @@ class StyleManager:
                 background: qradialgradient(spread:reflect, cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5, stop:0.6 rgba(255, 255, 255, 255), stop:0.7 rgba(255, 255, 255, 100));
             }}
             QWidget#settings_panel QPushButton {{
-                background-color: #4ECDC4;
+                background-color: {BUTTON_THEME_TOKENS["accent_fill_rest"]};
                 color: white;
                 border: none;
                 border-radius: 8px;
@@ -555,7 +555,7 @@ class StyleManager:
                 font-weight: normal;
             }}
             QWidget#settings_panel QPushButton:hover {{
-                background-color: #45B8B0;
+                background-color: {BUTTON_THEME_TOKENS["accent_fill_hover"]};
             }}
             QWidget#settings_panel QCheckBox {{
                 color: #505050;
@@ -591,7 +591,7 @@ class StyleManager:
                 margin: 0 2px;
             }}}}
             QPushButton:hover {{{{
-                border: 2px solid #4ECDC4;
+                border: 2px solid {BUTTON_THEME_TOKENS["accent_fill_rest"]};
             }}}}
         """,
         # 颜色色块（设置页）
