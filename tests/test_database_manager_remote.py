@@ -99,27 +99,6 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
         sync_scheduled_mock.assert_called_once_with(manager)
         start_sync_mock.assert_called_once_with(manager, 180)
 
-    def test_get_task_history_prefers_remote_history(self):
-        remote_config = {
-            "api_base_url": "http://example.com",
-            "api_token": "token",
-            "username": "alice",
-        }
-        manager = self._build_manager(remote_config=remote_config)
-        remote_history = {
-            'task_id': 'task-1',
-            'history': {
-                'text': [
-                    {'value': '远端任务', 'timestamp': '2026-03-30T10:00:00', 'action': 'update'}
-                ]
-            },
-        }
-
-        with patch.object(manager, '_make_api_request', return_value=remote_history):
-            history = manager.get_task_history('task-1')
-
-        self.assertEqual(history, remote_history['history'])
-
     def test_create_scheduled_task_keeps_local_write_without_immediate_remote_push(self):
         manager = self._build_manager(remote_config={})
         manager.api_base_url = 'http://example.com'

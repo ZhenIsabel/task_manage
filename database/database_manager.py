@@ -25,6 +25,16 @@ logger.propagate = False
 
 APP_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 RECENT_LOCAL_SYNC_PRIORITY_WINDOW = timedelta(minutes=5)
+DEFAULT_TASK_FIELD_NAMES = [
+    'text',
+    'due_date',
+    'priority',
+    'notes',
+    'urgency',
+    'importance',
+    'directory',
+    'create_date',
+]
 
 
 class DatabaseManager:
@@ -569,6 +579,7 @@ class DatabaseManager:
         if self._remote_auth_paused:
             return False
         try:
+            self.flush_cache_to_db()
             with self._cache_lock:
                 blocked_task_ids = {
                     change.get('entity_id')
@@ -593,7 +604,7 @@ class DatabaseManager:
             for task in unsynced_tasks:
                 task_data = dict(task)
                 task_data['position'] = {'x': task['position_x'], 'y': task['position_y']}
-
+                task_data['history'] = self._load_local_task_history(task['id'])
                 result = self._make_api_request('POST', '/api/tasks', task_data)
                 if result:
                     with self._cache_lock:
@@ -751,6 +762,117 @@ class DatabaseManager:
         }
         return task_data
 
+    def _get_task_field_names(self) -> List[str]:
+        """直接从配置文件读取任务字段，避免数据库层依赖 UI 模块。"""
+        config_path = os.path.join(APP_ROOT, 'config', 'config.json')
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            field_defs = config.get('task_fields', [])
+            field_names = [str(field.get('name', '')).strip() for field in field_defs if str(field.get('name', '')).strip()]
+            if field_names:
+                return field_names
+        except Exception:
+            pass
+        return list(DEFAULT_TASK_FIELD_NAMES)
+
+    def _load_local_task_history(self, task_id: str) -> Dict[str, List[Dict[str, Any]]]:
+        """从本地数据库读取任务历史。"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT field_name, field_value, action, timestamp
+            FROM task_history
+            WHERE task_id = ?
+            ORDER BY timestamp ASC
+        ''', (task_id,))
+        history_records = cursor.fetchall()
+
+        field_history: Dict[str, List[Dict[str, Any]]] = {}
+        for record in history_records:
+            field_name = record['field_name']
+            field_history.setdefault(field_name, []).append({
+                'value': record['field_value'],
+                'timestamp': record['timestamp'],
+                'action': record['action'],
+            })
+        return field_history
+
+    def _fetch_remote_task_history(self, task_id: str) -> Dict[str, List[Dict[str, Any]]]:
+        """从远端读取任务历史；失败时返回空结果。"""
+        if not self.api_base_url:
+            return {}
+        remote_result = self._make_api_request('GET', f'/api/tasks/{task_id}/history')
+        if remote_result and isinstance(remote_result.get('history'), dict):
+            return remote_result.get('history', {})
+        return {}
+
+    def _normalize_history_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            'value': str(record.get('value', '') or ''),
+            'timestamp': str(record.get('timestamp', '') or ''),
+            'action': str(record.get('action', 'update') or 'update'),
+        }
+
+    def _history_record_key(self, field_name: str, record: Dict[str, Any]) -> tuple:
+        normalized = self._normalize_history_record(record)
+        return (
+            str(field_name or ''),
+            normalized['timestamp'],
+            normalized['action'],
+            normalized['value'],
+        )
+
+    def _merge_history_dicts(self, *history_sets: Optional[Dict[str, List[Dict[str, Any]]]]) -> Dict[str, List[Dict[str, Any]]]:
+        """合并多份历史并按字段、时间去重排序。"""
+        merged: Dict[str, List[Dict[str, Any]]] = {}
+        seen = set()
+        for history in history_sets:
+            if not history:
+                continue
+            for field_name, records in history.items():
+                bucket = merged.setdefault(field_name, [])
+                for record in records or []:
+                    normalized = self._normalize_history_record(record)
+                    key = self._history_record_key(field_name, normalized)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    bucket.append(normalized)
+        for records in merged.values():
+            records.sort(key=lambda item: item.get('timestamp', ''))
+        return merged
+
+    def _append_missing_history_to_cache(self, task_id: str, merged_history: Dict[str, List[Dict[str, Any]]], base_history: Optional[Dict[str, List[Dict[str, Any]]]] = None) -> None:
+        """把 merged 中本地缺失的历史追加到待写缓存。"""
+        existing_keys = set()
+        for field_name, records in (base_history or {}).items():
+            for record in records or []:
+                existing_keys.add(self._history_record_key(field_name, record))
+
+        for field_name, records in merged_history.items():
+            for record in records or []:
+                key = self._history_record_key(field_name, record)
+                if key in existing_keys:
+                    continue
+                normalized = self._normalize_history_record(record)
+                self._task_history_cache.append(
+                    (task_id, field_name, normalized['value'], normalized['action'], normalized['timestamp'])
+                )
+                existing_keys.add(key)
+
+    def _merge_remote_history_into_local_locked(self, change: Dict[str, Any]) -> None:
+        """在确认冲突时，把远端历史追加到本地缓存。"""
+        if change.get('entity_type') != 'task':
+            return
+        task_id = change.get('entity_id')
+        if not task_id:
+            return
+        local_history = self._load_local_task_history(task_id)
+        remote_history = self._fetch_remote_task_history(task_id)
+        merged_history = self._merge_history_dicts(local_history, remote_history)
+        self._append_missing_history_to_cache(task_id, merged_history, local_history)
+
     def _parse_sync_timestamp(self, value: Any) -> Optional[datetime]:
         """解析同步时间戳，统一转换为可比较的 naive datetime。"""
         text = str(value or '').strip()
@@ -898,7 +1020,7 @@ class DatabaseManager:
         summaries.sort(key=lambda item: item.get('title', ''))
         return summaries
 
-    def _apply_remote_change_locked(self, change: Dict[str, Any]) -> None:
+    def _apply_remote_change_locked(self, change: Dict[str, Any], mark_for_remote_push: bool = False) -> None:
         """接受远程修改并写入本地缓存/数据库。"""
         if change.get('entity_type') == 'scheduled_task':
             remote_record = change.get('remote_record')
@@ -906,9 +1028,13 @@ class DatabaseManager:
                 self._save_scheduled_task_to_cache(remote_record, sync_status='synced')
             return
 
-        self._save_task_to_cache(change['remote_record'], 'synced')
+        self._merge_remote_history_into_local_locked(change)
+        self._save_task_to_cache(
+            change['remote_record'],
+            'modified' if mark_for_remote_push and self.api_base_url else 'synced',
+        )
 
-    def _reject_remote_change_locked(self, change: Dict[str, Any]) -> None:
+    def _reject_remote_change_locked(self, change: Dict[str, Any], mark_for_remote_push: bool = False) -> None:
         """拒绝远程修改，保留本地版本并标记为待上传。"""
         if change.get('entity_type') == 'scheduled_task':
             local_record = change.get('local_record')
@@ -927,8 +1053,9 @@ class DatabaseManager:
         else:
             local_task = copy.deepcopy(local_task)
 
+        self._merge_remote_history_into_local_locked(change)
         local_task['updated_at'] = datetime.now().isoformat()
-        self._save_task_to_cache(local_task, 'modified')
+        self._save_task_to_cache(local_task, 'modified' if mark_for_remote_push or self.api_base_url else 'synced')
 
     def resolve_pending_remote_task_changes(self, accepted_ids: List[str], rejected_ids: List[str]) -> bool:
         """处理待确认的远程修改。"""
@@ -939,10 +1066,13 @@ class DatabaseManager:
             with self._cache_lock:
                 pending_ids = set(self._pending_remote_task_changes.keys())
                 for change_key in pending_ids & accepted_set:
-                    self._apply_remote_change_locked(self._pending_remote_task_changes[change_key])
+                    self._apply_remote_change_locked(
+                        self._pending_remote_task_changes[change_key],
+                        mark_for_remote_push=True,
+                    )
                 for change_key in pending_ids & rejected_set:
                     change = self._pending_remote_task_changes[change_key]
-                    self._reject_remote_change_locked(change)
+                    self._reject_remote_change_locked(change, mark_for_remote_push=True)
                     rejected_changes.append(copy.deepcopy(change))
                 for change_key in pending_ids & (accepted_set | rejected_set):
                     self._pending_remote_task_changes.pop(change_key, None)
@@ -1032,9 +1162,7 @@ class DatabaseManager:
         completed_date = task_data.get('completed_date', '')
         deleted = task_data.get('deleted', False)
         
-        from config.config_manager import load_config
-        config = load_config()
-        field_names = [f['name'] for f in config.get('task_fields', [])]
+        field_names = self._get_task_field_names()
         field_values = {}
         for field_name in field_names:
             if field_name in task_data:
@@ -1102,9 +1230,7 @@ class DatabaseManager:
 
     def _save_task_history_to_cache(self, task_id: str, task_data: Dict[str, Any]):
         """保存任务字段历史记录到内存缓存"""
-        from config.config_manager import load_config
-        config = load_config()
-        field_names = [f['name'] for f in config.get('task_fields', [])]
+        field_names = self._get_task_field_names()
         current_timestamp = datetime.now().isoformat()
         
         logger.debug(f"开始保存任务 {task_id} 的历史记录")
@@ -1182,37 +1308,10 @@ class DatabaseManager:
             return []
 
     def get_task_history(self, task_id: str) -> Dict[str, List[Dict[str, Any]]]:
-        """优先从远程接口获取任务历史，失败时回退到本地数据库。"""
+        """只从本地数据库获取任务历史。"""
         try:
-            if self.api_base_url:
-                remote_result = self._make_api_request('GET', f'/api/tasks/{task_id}/history')
-                if remote_result and isinstance(remote_result.get('history'), dict):
-                    return remote_result.get('history', {})
-
             self.flush_cache_to_db()
-
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT field_name, field_value, action, timestamp
-                FROM task_history 
-                WHERE task_id = ?
-                ORDER BY timestamp ASC
-            ''', (task_id,))
-            history_records = cursor.fetchall()
-
-            field_history = {}
-            for record in history_records:
-                field_name = record['field_name']
-                if field_name not in field_history:
-                    field_history[field_name] = []
-                field_history[field_name].append({
-                    'value': record['field_value'],
-                    'timestamp': record['timestamp'],
-                    'action': record['action']
-                })
-
-            return field_history
+            return self._load_local_task_history(task_id)
         except Exception as e:
             logger.error(f"获取任务历史记录失败: {str(e)}")
             return {}

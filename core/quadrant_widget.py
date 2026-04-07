@@ -1432,9 +1432,13 @@ class QuadrantWidget(QWidget):
             return False
 
         self.db_manager.flush_cache_to_db()
-        if rejected_ids and getattr(self.db_manager, 'api_base_url', ''):
+        task_change_ids = [
+            change_id for change_id in (accepted_ids + rejected_ids)
+            if str(change_id or '').startswith('task:')
+        ]
+        if task_change_ids and getattr(self.db_manager, 'api_base_url', ''):
             sync_ok = self.db_manager.sync_to_server()
-            logger.info(f'远程修改确认后回写本地版本结果: {sync_ok}')
+            logger.info(f'远程修改确认后回写最终任务结果: {sync_ok}')
             self.db_manager.flush_cache_to_db()
 
         self.load_tasks()
