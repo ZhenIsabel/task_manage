@@ -28,12 +28,14 @@ class AdaptiveTextTableWidget(TableWidget):
         fixed_width_columns=None,
         multiline_columns=None,
         parent=None,
+        max_height=600
     ):
         super().__init__(parent)
         self._headers = list(headers)
         self._rows = list(rows)
         self._fixed_width_columns = dict(fixed_width_columns or {})
         self._multiline_columns = set(multiline_columns or set())
+        self.max_height=max_height
 
         self.setBorderVisible(True)
         self.setBorderRadius(8)
@@ -66,6 +68,7 @@ class AdaptiveTextTableWidget(TableWidget):
         self.clearContents()
         self.setRowCount(len(self._rows))
 
+        total_height = self.horizontalHeader().height()
         for row_index, row_values in enumerate(self._rows):
             for column_index, value in enumerate(row_values):
                 item_text = "" if value is None else str(value)
@@ -77,6 +80,9 @@ class AdaptiveTextTableWidget(TableWidget):
                         compute_multiline_item_size_hint(self.fontMetrics(), item_text, width)
                     )
                 self.setItem(row_index, column_index, item)
-
+            total_height+=self.rowHeight(row_index) # 高度计算
+        
         self.resizeRowsToContents()
+        self.setFixedHeight(min(total_height, self.max_height))
+
         self.setSortingEnabled(sorting_enabled)
