@@ -5,30 +5,62 @@ from font_families import APP_FONT_FAMILY_QSS, APP_FONT_STACK_QSS
 
 # ===== 基础样式模板 =====
 PANEL_FORM_CONTROLS_STYLE = f"""
-QWidget#dialog_panel QLineEdit, QWidget#dialog_panel QTextEdit,
-QWidget#settings_panel QLineEdit, QWidget#settings_panel QTextEdit {{
-    background-color: #f5f5f5;
+QWidget#dialog_panel QLineEdit, QWidget#dialog_panel QTextEdit {{
+    background-color: #ffffff;
     color: #333333;
-    border: 1px solid #dddddd;
-    border-radius: 8px;
-    padding: 12px;
+    border: 1px solid #e3e3e3;
+    border-radius: 5px;
+    padding: 4px 12px 5px 12px;
     font-family: {APP_FONT_FAMILY_QSS};
     font-size: 13px;
     selection-background-color: #dddddd;
     selection-color: white;
 }}
+QWidget#dialog_panel QLineEdit {{
+    min-height: 20px;
+}}
+QWidget#dialog_panel QTextEdit {{
+    padding: 6px 12px 9px 12px;
+}}
 QWidget#dialog_panel QLineEdit:read-only, QWidget#dialog_panel QTextEdit:read-only,
+QWidget#dialog_panel QDateEdit:read-only, QWidget#dialog_panel QTimeEdit:read-only, QWidget#dialog_panel QSpinBox:read-only {{
+    background-color: #ffffff;
+    color: #666666;
+}}
+QWidget#dialog_panel QDateEdit, QWidget#dialog_panel QTimeEdit, QWidget#dialog_panel QSpinBox {{
+    background-color: #ffffff;
+    color: #333333;
+    border: 1px solid #e3e3e3;
+    border-radius: 5px;
+    padding: 2px 12px 3px 12px;
+    font-family: {APP_FONT_FAMILY_QSS};
+    font-size: 13px;
+    min-height: 20px;
+    selection-background-color: #dddddd;
+    selection-color: white;
+    outline: none;
+}}
+QWidget#settings_panel QLineEdit, QWidget#settings_panel QTextEdit {{
+    background-color: #f5f5f5;
+    color: #333333;
+    border: 1px solid #dddddd;
+    border-radius: 5px;
+    padding: 8px;
+    font-family: {APP_FONT_FAMILY_QSS};
+    font-size: 13px;
+    selection-background-color: #dddddd;
+    selection-color: white;
+}}
 QWidget#settings_panel QLineEdit:read-only, QWidget#settings_panel QTextEdit:read-only {{
     background-color: #f5f5f5;
     color: #666666;
 }}
-QWidget#dialog_panel QDateEdit, QWidget#dialog_panel QTimeEdit, QWidget#dialog_panel QSpinBox,
 QWidget#settings_panel QDateEdit, QWidget#settings_panel QTimeEdit, QWidget#settings_panel QSpinBox {{
     background-color: #f5f5f5;
     color: #333333;
     border: 1px solid #dddddd;
-    border-radius: 8px;
-    padding: 8px 12px;
+    border-radius: 5px;
+    padding: 6px 12px;
     font-family: {APP_FONT_FAMILY_QSS};
     font-size: 13px;
     min-height: 28px;

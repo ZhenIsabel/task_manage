@@ -53,7 +53,7 @@ class PanelFormStyleIntegrationTests(unittest.TestCase):
 
     def test_settings_panel_stylesheet_should_format_without_key_error(self):
         styles_py = self._read('ui/styles.py')
-        marker = '"settings_panel": """'
+        marker = '"settings_panel": f"""'
         start = styles_py.index(marker) + len(marker)
         end = styles_py.index('"panel_form_controls": PANEL_FORM_CONTROLS_STYLE,', start)
         settings_panel_template = styles_py[start:end]
@@ -74,6 +74,35 @@ class PanelFormStyleIntegrationTests(unittest.TestCase):
     def test_dialog_shell_styles_should_scope_controls_under_named_panel(self):
         styles_py = self._read('ui/styles.py')
         self.assertIn('QWidget#dialog_panel', styles_py)
+
+    def test_dialog_panel_form_controls_should_use_compact_white_inputs(self):
+        styles_py = self._read('ui/styles.py')
+
+        self.assertIn(
+            'QWidget#dialog_panel QLineEdit',
+            styles_py,
+            'dialog_panel 应为自定义输入框定义单独样式',
+        )
+        self.assertIn(
+            'QWidget#dialog_panel QTextEdit',
+            styles_py,
+            'dialog_panel 应为自定义输入框定义单独样式',
+        )
+        self.assertIn(
+            'background-color: #ffffff;',
+            styles_py,
+            '新增/编辑任务弹窗的自定义输入框应改为纯白底',
+        )
+        self.assertIn(
+            'min-height: 20px;',
+            styles_py,
+            '新增/编辑任务弹窗的单行输入框应收窄到更紧凑的高度',
+        )
+        self.assertIn(
+            'padding: 4px 12px 5px 12px;',
+            styles_py,
+            '新增/编辑任务弹窗的输入框内边距应改为更紧凑的尺寸',
+        )
 
     def test_settings_styles_should_scope_controls_under_named_panel(self):
         styles_py = self._read('ui/styles.py')
