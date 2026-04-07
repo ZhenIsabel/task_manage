@@ -1,10 +1,10 @@
 from datetime import datetime
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, 
-                            QLabel, QLineEdit, QInputDialog,
-                            QMenu, QFrame, QScrollArea, QSizePolicy, QDialog, QColorDialog, QMessageBox,
-                            QLayout,QPushButton)
-from PyQt6.QtCore import Qt, pyqtSignal, QDate, QPoint, QEvent, QUrl
-from PyQt6.QtGui import QColor, QCursor, QAction, QDesktopServices
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QCheckBox,
+                            QLabel, QInputDialog,
+                            QFrame, QSizePolicy, QDialog,
+                            QLayout,QPushButton, QGraphicsDropShadowEffect)
+from PyQt6.QtCore import Qt, pyqtSignal,  QEvent, QUrl
+from PyQt6.QtGui import QColor, QCursor,  QDesktopServices
 try:
     import sip  # 用于判断 PyQt 对象是否已被销毁
 except Exception:
@@ -13,8 +13,11 @@ import os
 from datetime import datetime
 
 from .add_task_dialog import AddTaskDialog
+from ui.scrollbar import FluentScrollArea
+from ui.notifications import show_error, resolve_notification_host,show_success,show_warning
 from ui.styles import StyleManager
-from ui.ui import MyColorDialog, WarningPopup, apply_drop_shadow
+from ui.degree_badges import create_degree_display_widget, build_degree_badge_stylesheet, get_status_badge_meta
+from ui.ui import MyColorDialog
 from config.config_manager import load_config
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
@@ -50,6 +53,11 @@ class TaskLabel(QWidget):
 
         return cls._editable_fields_cache
     
+    @staticmethod
+    def _format_detail_notes_html(notes):
+        if notes is None:
+            return ""
+        return str(notes).replace("\n", "<br>")
     def __init__(self, task_id, color,completed=False, parent=None, field_definitions=None, **fields):
         try:
             super().__init__(parent)
@@ -57,6 +65,7 @@ class TaskLabel(QWidget):
             logger.error(f"任务标签初始化失败 (task_id: {task_id}): {str(e)}", exc_info=True)
             raise
         self.task_id = task_id
+        self.setObjectName("task_label_root")
         self.color = QColor(color)
 
         # ---- 自动把 EDITABLE_FIELDS 里声明的 key 赋成属性 ----
@@ -119,6 +128,7 @@ class TaskLabel(QWidget):
         #     layout.addWidget(self.due_date_label)
         
         self.setLayout(layout)
+        self._ensure_subtle_shadow()
         
         # 初始化时检查到期状态
         self.check_overdue_status()
@@ -130,6 +140,17 @@ class TaskLabel(QWidget):
         self.layout().setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
         # 设置鼠标追踪
         self.setMouseTracking(True)
+
+    def _ensure_subtle_shadow(self):
+        """给任务标签增加一层很淡的悬浮感，不改变原有布局。"""
+        effect = self.graphicsEffect()
+        if not isinstance(effect, QGraphicsDropShadowEffect):
+            effect = QGraphicsDropShadowEffect(self)
+            self.setGraphicsEffect(effect)
+
+        effect.setBlurRadius(8)
+        effect.setOffset(0, 2)
+        effect.setColor(QColor(0, 0, 0, 58))
     
     def update_appearance(self):
         """更新标签外观"""
@@ -164,9 +185,7 @@ class TaskLabel(QWidget):
             indicator_size=indicator_size
         )
         self.setStyleSheet(stylesheet)
-        
-        # 添加阴影效果
-        apply_drop_shadow(self, blur_radius=8, color=QColor(0, 0, 0, 60), offset_x=2, offset_y=3)
+        self._ensure_subtle_shadow()
     
     def on_status_changed(self, state):
         """复选框状态改变时的处理"""
@@ -310,7 +329,7 @@ class TaskLabel(QWidget):
         # 检查必填
         for f in task_fields:
             if f.get("required") and not task_data.get(f["name"]):
-                QMessageBox.warning(self, "提示", f"{f['label']} 为必填项")
+                show_warning(self,"提示",f"{f['label']} 为必填项")
                 return
 
         # 更新任务数据
@@ -397,122 +416,157 @@ class TaskLabel(QWidget):
     def create_detail_popup(self):
         """创建详情弹出窗口"""
         style_manager = StyleManager()
-        # 创建一个无边框窗口作为弹出窗口
         parent_widget = self.parent()
-        # 保护性判断：确保父级存在
         self.detail_popup = QFrame(parent_widget if parent_widget else self)
+        self.detail_popup.setObjectName("task_detail_popup")
         self.detail_popup.setWindowFlags(Qt.WindowType.FramelessWindowHint)
-        # 不再使用透明背景，避免弹窗外侧出现可透底的透明区域
         self.detail_popup.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.detail_popup.setStyleSheet(style_manager.get_stylesheet("detail_popup").format())
-        
-        # 设置阴影效果
-        apply_drop_shadow(self.detail_popup, blur_radius=10, color=QColor(0, 0, 0, 60), offset_x=2, offset_y=2)
-        
-        # 创建布局
-        layout = QVBoxLayout(self.detail_popup)
-        layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(8)
-        
-        # 标题 - 任务内容
-        # 创建标题行布局
-        title_layout = QHBoxLayout()
-        title_layout.setSpacing(8)
+        self.detail_popup.setStyleSheet(style_manager.get_stylesheet("detail_popup"))
 
-        # 确保使用正确的文本内容（字符串而非元组）
+        layout = QVBoxLayout(self.detail_popup)
+        layout.setContentsMargins(8, 8, 8, 4)
+        layout.setSpacing(6)
+
         title_text = self.text
         if isinstance(self.text, tuple):
             title_text = self.text[0]
-        title_label = QLabel(title_text)
+
+        header_section = QWidget(self.detail_popup)
+        header_section.setObjectName("detail_header_section")
+        header_layout = QHBoxLayout(header_section)
+        header_layout.setContentsMargins(10, 8, 10, 8)
+        header_layout.setSpacing(8)
+
+        title_label = QLabel(title_text, header_section)
+        title_label.setObjectName("detail_title_text")
         title_label.setWordWrap(True)
         title_label.setStyleSheet(style_manager.get_stylesheet("detail_title_label"))
-        title_layout.addWidget(title_label)
-        
-        # 更改颜色按钮
-        color_button = QPushButton()
+        header_layout.addWidget(title_label, 1)
+
+        color_button = QPushButton(header_section)
+        color_button.setObjectName("detail_color_button")
         color_button.setFixedSize(24, 24)
-        color_button.setStyleSheet(StyleManager().get_stylesheet("color_button").format(button_color=self.color.name()))
+        color_button.setStyleSheet(style_manager.get_stylesheet("color_button").format(button_color=self.color.name()))
         color_button.clicked.connect(self.change_color)
-        title_layout.addWidget(color_button)
-        layout.addLayout(title_layout)
+        header_layout.addWidget(color_button, 0, Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(header_section)
 
-        # 按钮布局
-        button_layout = QHBoxLayout()
-        button_layout.setSpacing(8)
+        button_row = QWidget(self.detail_popup)
+        button_row.setObjectName("detail_button_row")
+        button_layout = QHBoxLayout(button_row)
+        button_layout.setContentsMargins(0, 0, 0, 0)
+        button_layout.setSpacing(6)
 
-        # 打开目录按钮
-        open_dir_button = QPushButton("目录")
-        open_dir_button.clicked.connect(self.open_directory)
-        open_dir_button.setStyleSheet(style_manager.get_stylesheet("task_label_button").format())
-        button_layout.addWidget(open_dir_button)
+        for label, handler in [
+            ("目录", self.open_directory),
+            ("编辑", self.edit_task),
+            ("历史记录", self.show_history),
+            ("删除", self.handle_delete),
+        ]:
+            button = QPushButton(label, button_row)
+            button.setStyleSheet(style_manager.get_stylesheet("detail_popup_button"))
+            button.clicked.connect(handler)
+            button_layout.addWidget(button)
+        layout.addWidget(button_row)
 
-        # 编辑按钮
-        edit_button = QPushButton("编辑")
-        edit_button.clicked.connect(self.edit_task)
-        edit_button.setStyleSheet(style_manager.get_stylesheet("task_label_button").format())
-        button_layout.addWidget(edit_button)
-
-        # 查看历史记录按钮
-        history_button = QPushButton("历史记录")
-        history_button.clicked.connect(self.show_history)
-        history_button.setStyleSheet(style_manager.get_stylesheet("task_label_button").format())
-        button_layout.addWidget(history_button)
-
-        # 删除按钮
-        delete_button = QPushButton("删除")
-        delete_button.clicked.connect(self.handle_delete)
-        delete_button.setStyleSheet(style_manager.get_stylesheet("task_label_button").format())
-        button_layout.addWidget(delete_button)
-
-        # 把按钮布局加到主 layout
-        layout.addLayout(button_layout)
-
-        # 添加所有可用的任务信息
         if self.due_date:
-            due_date_label = QLabel(f"<b>到期日期:</b> {self.due_date}")
-            layout.addWidget(due_date_label)
-        
-        # 显示紧急程度和重要程度
+            due_section = QWidget(self.detail_popup)
+            due_section.setObjectName("detail_section_card")
+            due_layout = QHBoxLayout(due_section)
+            due_layout.setContentsMargins(10, 8, 10, 8)
+            due_layout.setSpacing(2)
+
+            due_label = QLabel("ddl", due_section)
+            due_label.setObjectName("detail_field_label")
+            due_value = QLabel(str(self.due_date), due_section)
+            due_value.setObjectName("detail_field_value")
+            due_layout.addWidget(due_label)
+            due_layout.addStretch()
+            due_layout.addWidget(due_value)
+            layout.addWidget(due_section)
+
+        meta_section = QWidget(self.detail_popup)
+        meta_section.setObjectName("detail_meta_section")
+        meta_layout = QVBoxLayout(meta_section)
+        meta_layout.setContentsMargins(10, 8, 10, 8)
+        meta_layout.setSpacing(6)
+
+        meta_title = QLabel("任务状态", meta_section)
+        meta_title.setObjectName("detail_field_label")
+        meta_layout.addWidget(meta_title)
+
+        meta_row = QWidget(meta_section)
+        meta_row.setObjectName("detail_meta_row")
+        meta_row_layout = QHBoxLayout(meta_row)
+        meta_row_layout.setContentsMargins(0, 0, 0, 0)
+        meta_row_layout.setSpacing(6)
+
         if hasattr(self, 'urgency') and self.urgency:
-            urgency_label = QLabel(f"<b>紧急程度:</b> {self.urgency}")
-            layout.addWidget(urgency_label)
-        
+            urgency_widget = create_degree_display_widget('urgency', self.urgency, parent=meta_row)
+            urgency_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            meta_row_layout.addWidget(urgency_widget, 1)
+
         if hasattr(self, 'importance') and self.importance:
-            importance_label = QLabel(f"<b>重要程度:</b> {self.importance}")
-            layout.addWidget(importance_label)
-        
+            importance_widget = create_degree_display_widget('importance', self.importance, parent=meta_row)
+            importance_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            meta_row_layout.addWidget(importance_widget, 1)
+
+        self.status_label = QLabel(meta_row)
+        self.status_label.setObjectName("detail_status_badge")
+        self.status_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.update_status_label()
+        meta_row_layout.addWidget(self.status_label, 1)
+
+        meta_layout.addWidget(meta_row)
+        layout.addWidget(meta_section)
+
         if self.notes:
-            notes_html = self.notes.replace('\n', '<br>')
-            notes_label = QLabel(f"<b>备注:</b><br>{notes_html}")
+            notes_section = QWidget(self.detail_popup)
+            notes_section.setObjectName("detail_notes_section")
+            notes_layout = QVBoxLayout(notes_section)
+            notes_layout.setContentsMargins(10, 8, 10, 8)
+            notes_layout.setSpacing(4)
+
+            notes_title = QLabel("备注", notes_section)
+            notes_title.setObjectName("detail_field_label")
+            notes_layout.addWidget(notes_title)
+
+            notes_html = self._format_detail_notes_html(self.notes)
+            notes_label = QLabel(notes_section)
+            notes_label.setObjectName("detail_notes_content")
+            notes_label.setText(f"<span>{notes_html}</span>")
             notes_label.setTextFormat(Qt.TextFormat.RichText)
             notes_label.setWordWrap(True)
-            notes_label.setStyleSheet("padding: 5px; color: black;")
-            
-            # 使用滚动区域显示长文本
-            scroll_area = QScrollArea()
+            notes_label.setStyleSheet("padding: 0; color: #1f1f1f; background: transparent; border: none;")
+
+            scroll_area = FluentScrollArea(notes_section)
+            scroll_area.setObjectName("detail_notes_scroll")
             scroll_area.setWidget(notes_label)
             scroll_area.setWidgetResizable(True)
-            scroll_area.setMaximumHeight(100)
+            scroll_area.setMaximumHeight(96)
             scroll_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-            layout.addWidget(scroll_area)
-        
-        # 完成状态
-        self.status_label = QLabel()
-        self.update_status_label()  # 单独用一个方法来设置文字
-        layout.addWidget(self.status_label)
-        
-        # 创建日期
-        date_label = QLabel(f"<b>创建于:</b> {self.create_date}")
-        layout.addWidget(date_label)
-        
+            notes_layout.addWidget(scroll_area)
+            layout.addWidget(notes_section)
+
+        created_section = QWidget(self.detail_popup)
+        created_section.setObjectName("detail_created_section")
+        created_layout = QHBoxLayout(created_section)
+        created_layout.setContentsMargins(10, 0, 10, 0)
+        created_layout.setSpacing(2)
+
+        created_label = QLabel("创建时间", created_section)
+        created_label.setObjectName("detail_small_label")
+        created_value = QLabel(str(self.create_date), created_section)
+        created_value.setObjectName("detail_small_value")
+        created_layout.addWidget(created_label)
+        created_layout.addWidget(created_value)
+        layout.addWidget(created_section)
+
         self.detail_popup.setFixedWidth(250)
-        self.detail_popup.adjustSize()  # 确保窗口大小适合内容
-        
-        # 确保初始状态为隐藏
+        self.detail_popup.adjustSize()
         self.detail_popup.hide()
-        # 安装事件过滤器，以便在详情窗口关闭时隐藏它
         self.detail_popup.installEventFilter(self)
-        # 在父窗口（通常是QuadrantWidget）上也装上过滤器
         self.parent().installEventFilter(self)
 
     def eventFilter(self, obj, event):
@@ -575,12 +629,15 @@ class TaskLabel(QWidget):
 
     def handle_delete(self):
         """处理删除任务"""
-        from ui.ui import DeleteConfirmDialog
+        from qfluentwidgets import MessageBox
+        host = resolve_notification_host(self) or self
+        dialog = MessageBox(
+            parent=host,
+            title="删除",
+            content="确定要删除这个任务吗？\n删除后无法恢复。",
+        ).exec()
         
-        dialog = DeleteConfirmDialog(self, '确定要删除这个任务吗？\n删除后无法恢复。')
-        dialog.exec()
-        
-        if dialog.get_result():
+        if dialog==True:
             # 使用数据库管理器进行逻辑删除
             try:
                 from database.database_manager import get_db_manager
@@ -602,18 +659,19 @@ class TaskLabel(QWidget):
                         pass
                     self.deleteRequested.emit(self)  # 再发出删除自己的信号
                 else:
-                    QMessageBox.warning(self, "删除失败", "删除任务失败，请重试")
+                    show_error(self, "删除失败", "删除任务失败，请重试")
             except Exception as e:
                 logger.error(f"删除任务失败: {str(e)}")
-                QMessageBox.warning(self, "删除失败", f"删除任务失败: {str(e)}")
+                show_error(self, "删除失败", f"删除任务失败: {str(e)}")
 
     def update_status_label(self):
         """刷新状态文字"""
         if not hasattr(self, 'status_label') or self.status_label is None:
             return
-        status_text = "已完成" if self.checkbox.isChecked() else "未完成"
-        status_color = "#4ECDC4" if self.checkbox.isChecked() else "#FF6B6B"
-        self.status_label.setText(f"<b>状态:</b> <font color='{status_color}'>{status_text}</font>")
+        meta = get_status_badge_meta(self.checkbox.isChecked())
+        self.status_label.setText(meta["display_text"])
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_label.setStyleSheet(build_degree_badge_stylesheet(meta))
 
     def show_history(self):
         """显示历史记录"""
@@ -639,10 +697,11 @@ class TaskLabel(QWidget):
                     if self.detail_popup:
                         self.detail_popup.hide()
                 else:
-                    popup = WarningPopup(self, "目录不存在！")
+                    show_warning(self,title="目录",content=f"尝试打开不存在的目录：{directory}")
                     logger.warning(f"尝试打开不存在的目录：{directory}")
-                    popup.exec()
             else:
-                popup = WarningPopup(self, "未配置目录路径！")
+                show_warning(self,title="目录",content="未配置目录路径")
                 logger.warning("尝试打开空目录路径")
-                popup.exec()
+                
+
+

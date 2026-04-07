@@ -1,13 +1,14 @@
 from datetime import datetime
-from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTableWidget, 
-                            QTableWidgetItem, QPushButton, QCheckBox, QHeaderView,
-                            QLabel, QMessageBox, QAbstractItemView)
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor
+from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout,QMessageBox,
+                            QPushButton, QCheckBox, QHeaderView,
+                            QLabel)
+from PyQt6.QtCore import Qt
+from ui.adaptive_table import AdaptiveTextTableWidget
+from ui.notifications import show_error, show_success
 from ui.styles import StyleManager
-from ui.ui import apply_drop_shadow
 from database.database_manager import get_db_manager
 import logging
+
 
 logger = logging.getLogger(__name__)
 
@@ -44,14 +45,14 @@ class CompleteTableDialog(QDialog):
         # 创建白色圆角面板
         from PyQt6.QtWidgets import QWidget
         self.panel = QWidget()
-        self.panel.setObjectName("panel")
+        self.panel.setObjectName("dialog_panel")
         panel_layout = QVBoxLayout(self.panel)
         panel_layout.setContentsMargins(20, 20, 20, 20)
         panel_layout.setSpacing(15)
         
         # 应用样式
         style_manager = StyleManager()
-        self.panel.setStyleSheet(style_manager.get_stylesheet("add_task_dialog").format())
+        self.panel.setStyleSheet(style_manager.get_stylesheet("add_task_dialog"))
         
         
         # 标题
@@ -66,28 +67,7 @@ class CompleteTableDialog(QDialog):
         panel_layout.addWidget(title_label)
         
         # 创建表格
-        self.table = QTableWidget()
-        self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["选择", "任务内容", "完成日期", "优先级", "备注"])
-        
-        # 设置表格属性
-        self.table.setAlternatingRowColors(True)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.verticalHeader().setVisible(False)
-        self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        # 允许滚动
-        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        # 设置列宽
-        self.table.setColumnWidth(0, 40)  # 选择列
-        
-        # 设置表格样式
-        self.table.setStyleSheet(style_manager.get_stylesheet("history_table").format())
-        
+        self.table = self._create_table([])
         panel_layout.addWidget(self.table)
         
         # 按钮区域
@@ -180,8 +160,19 @@ class CompleteTableDialog(QDialog):
             # 按完成日期倒序排列
             completed_tasks.sort(key=lambda t: t.get('completed_date', ''), reverse=True)
             
-            # 设置表格行数
-            self.table.setRowCount(len(completed_tasks))
+            rows = [
+                [
+                    "",
+                    task.get("text", ""),
+                    task.get("completed_date", ""),
+                    task.get("notes", ""),
+                ]
+                for task in completed_tasks
+            ]
+            if not completed_tasks:
+                rows = [["", "暂无已完成任务", "", ""]]
+
+            self.table.set_rows(rows)
             
             # 填充表格数据
             for row, task in enumerate(completed_tasks):
@@ -190,44 +181,27 @@ class CompleteTableDialog(QDialog):
                 checkbox.stateChanged.connect(self.on_selection_changed)
                 checkbox.setProperty('task_id', task['id'])
                 self.table.setCellWidget(row, 0, checkbox)
-                
-                # 任务内容
-                text_item = QTableWidgetItem(task.get('text', ''))
-                text_item.setFlags(text_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-                self.table.setItem(row, 1, text_item)
-                
-                # 完成日期
-                completed_date = task.get('completed_date', '')
-                date_item = QTableWidgetItem(completed_date)
-                date_item.setFlags(date_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-                self.table.setItem(row, 2, date_item)
-                
-                # 优先级
-                priority = task.get('priority', '')
-                priority_item = QTableWidgetItem(priority)
-                priority_item.setFlags(priority_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-                self.table.setItem(row, 3, priority_item)
-                
-                # 备注
-                notes = task.get('notes', '')
-                notes_item = QTableWidgetItem(notes)
-                notes_item.setFlags(notes_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-                self.table.setItem(row, 4, notes_item)
             
             logger.info(f"加载了 {len(completed_tasks)} 个已完成任务")
             
             # 如果没有已完成任务，显示提示
             if not completed_tasks:
-                self.table.setRowCount(1)
-                no_data_item = QTableWidgetItem("暂无已完成任务")
-                no_data_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                no_data_item.setFlags(no_data_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-                self.table.setItem(0, 1, no_data_item)
-                self.table.setSpan(0, 1, 1, 4)  # 合并单元格
+                self.table.item(0, 1).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.table.setSpan(0, 1, 1, 3)  # 合并单元格
                 
         except Exception as e:
             logger.error(f"加载已完成任务失败: {str(e)}")
-            QMessageBox.critical(self, "错误", f"加载已完成任务失败: {str(e)}")
+            show_error(self, "错误", f"加载已完成任务失败: {str(e)}")
+
+    def _create_table(self, rows):
+        table = AdaptiveTextTableWidget(
+            headers=["", "任务内容", "完成日期",  "备注"],
+            rows=rows,
+            fixed_width_columns={0: 30, 3: 300},
+            multiline_columns={3},
+        )
+        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        return table
     
     def on_selection_changed(self):
         """选择状态改变时的回调"""
@@ -273,13 +247,12 @@ class CompleteTableDialog(QDialog):
         
         # 确认对话框
         reply = QMessageBox.question(
-            self, 
-            "确认还原", 
+            self,
+            "确认",
             f"确定要将 {len(self.selected_tasks)} 个任务还原为未完成状态吗？",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
+            QMessageBox.StandardButton.No,
         )
-        
         if reply != QMessageBox.StandardButton.Yes:
             return
         
@@ -306,11 +279,7 @@ class CompleteTableDialog(QDialog):
                 # 强制写入数据库
                 self.db_manager.flush_cache_to_db()
                 
-                QMessageBox.information(
-                    self, 
-                    "还原成功", 
-                    f"成功还原 {restored_count} 个任务为未完成状态"
-                )
+                show_success(self, "还原成功", f"成功还原 {restored_count} 个任务为未完成状态")
                 
                 # 刷新表格
                 self._load_completed_tasks()
@@ -323,11 +292,11 @@ class CompleteTableDialog(QDialog):
                     self.parent_widget.load_tasks()
                     
             else:
-                QMessageBox.warning(self, "还原失败", "没有找到要还原的任务")
+                show_error(self, "还原失败", "没有找到要还原的任务")
                 
         except Exception as e:
             logger.error(f"还原任务失败: {str(e)}")
-            QMessageBox.critical(self, "还原失败", f"还原任务时发生错误: {str(e)}")
+            show_error(self, "还原失败", f"还原任务时发生错误: {str(e)}")
     
     def mousePressEvent(self, event):
         """鼠标按下事件，用于拖动窗口"""

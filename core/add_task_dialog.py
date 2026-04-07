@@ -1,12 +1,13 @@
 from PyQt6.QtCore import Qt,QDate
 from PyQt6.QtWidgets import (QDialog, QWidget, QVBoxLayout,
                              QLabel, QLineEdit,
-                             QDateEdit, QPushButton, QHBoxLayout, QComboBox, QTextEdit,QFileDialog)
-from PyQt6.QtGui import QColor, QMouseEvent
+                             QPushButton, QHBoxLayout, QComboBox, QTextEdit,QFileDialog)
+from PyQt6.QtGui import QMouseEvent
 
-
+from ui.fluent import ComboBox, create_calendar_picker, get_date_string_from_picker, is_date_picker
+from ui.notifications import show_warning
 from ui.styles import StyleManager
-from ui.ui import apply_drop_shadow
+from ui.degree_badges import is_degree_field
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
 
@@ -17,83 +18,43 @@ class AddTaskDialog(QDialog):
         # 不再使用透明背景，避免对话框外侧出现可透底的透明区域
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
+        task_fields = task_fields or []
+        self._task_fields = task_fields
+
         # ------- 外层透明壳，什么都不画 ------- #
 
         # ❸ 真正的白色圆角面板
         panel = QWidget(self)
-        panel.setObjectName("panel")
+        panel.setObjectName("dialog_panel")
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(30, 30, 30, 30)
         panel_layout.setSpacing(5)
 
         # 样式改为用 styles.py 的 StyleManager 管理
         style_manager = StyleManager()
-        # 获取 add_task_dialog 的样式表（你需要在 styles.py 里添加对应的 key 和内容）
-        add_task_dialog_stylesheet = style_manager.get_stylesheet("add_task_dialog").format()
-        panel.setStyleSheet(add_task_dialog_stylesheet)
-
-        # # 阴影
-        apply_drop_shadow(panel, blur_radius=8, color=QColor(0, 0, 0, 60), offset_x=0, offset_y=0)
+        # 目标面板采用“外壳 + 共享表单控件”组合，避免重复叠加规则
+        add_task_dialog_stylesheet = style_manager.get_stylesheet("dialog_panel_shell")
+        panel_form_controls_stylesheet = style_manager.get_stylesheet("panel_form_controls")
+        panel.setStyleSheet(add_task_dialog_stylesheet + panel_form_controls_stylesheet)
 
         # ------- 下面放你的字段、按钮 ------- #
         self.inputs = {}
-        for f in task_fields:
-            lab = QLabel(f"{f['label']}{' *' if f.get('required') else ''}")
-            panel_layout.addWidget(lab)
+        index = 0
+        while index < len(task_fields):
+            field = task_fields[index]
+            next_field = task_fields[index + 1] if index + 1 < len(task_fields) else None
 
-            # 创建控件时设置默认值
-            default_value = f.get('default', '')
-            # 根据字段类型创建不同的控件
-            if f['type'] == 'date':
-                w = QDateEdit()
-                w.setStyleSheet(style_manager.get_stylesheet("calender"))
-                w.setCalendarPopup(True)
-                w.setDisplayFormat("yyyy-MM-dd")
-                # 如果有默认值则设置日期，否则保持原逻辑
-                if default_value:
-                    w.setDate(QDate.fromString(default_value, "yyyy-MM-dd"))
-                else:
-                    w.setDate(QDate.currentDate().addDays(0))
-            elif f['type'] == 'select':
-                # 创建下拉选择框
-                w = QComboBox()
-                # 添加选项
-                for option in f.get('options', []):
-                    w.addItem(option)
-                # 设置默认值
-                if default_value and default_value in f.get('options', []):
-                    w.setCurrentText(default_value)
-            elif f['type'] == 'multiline':
-                # 创建多行文本输入框
-                w = QTextEdit()
-                w.setPlaceholderText("请输入备注...")
-                w.setMinimumHeight(100)  # 设置最小高度
-                if default_value:
-                    w.setText(str(default_value))
-            elif f['type'] == 'file':
-                dir_layout = QHBoxLayout()
-                path_edit = QLineEdit()
-                path_edit.setPlaceholderText("请选择文件夹路径...")
-                path_edit.setReadOnly(True)
-                if default_value:
-                    path_edit.setText(str(default_value))
-                btn = QPushButton("选择")
-                # 使用lambda绑定当前path_edit实例
-                btn.clicked.connect(lambda _, we=path_edit: self.choose_dir(we))
-                dir_layout.addWidget(path_edit)
-                dir_layout.addWidget(btn)
-                panel_layout.addLayout(dir_layout)
-                self.inputs[f['name']] = path_edit  # 存储正确的控件引用
+            if self._should_group_degree_fields(field, next_field):
+                self._add_degree_field_row(panel, panel_layout, field, next_field)
+                index += 2
                 continue
-            else:
-                w = QLineEdit(str(default_value))  # 设置文本默认值
-                
-            panel_layout.addWidget(w)
-            self.inputs[f['name']] = w
+
+            self._add_single_field(panel, panel_layout, field)
+            index += 1
 
         # 按钮
         btn_row = QHBoxLayout()
-        ok = QPushButton("确定"); ok.clicked.connect(self.accept)
+        ok = QPushButton("确定"); ok.clicked.connect(self._try_accept)
         cancel = QPushButton("取消"); cancel.clicked.connect(self.reject)
         btn_row.addWidget(ok); btn_row.addWidget(cancel)
         panel_layout.addLayout(btn_row)
@@ -111,6 +72,80 @@ class AddTaskDialog(QDialog):
         panel.move(shadow_margin, shadow_margin)
         # ❺ 可选：实现拖动窗口（因为没了系统标题栏）
         self._drag_pos = None
+
+    def _should_group_degree_fields(self, current_field, next_field):
+        return (
+            current_field
+            and next_field
+            and current_field.get('name') == 'urgency'
+            and next_field.get('name') == 'importance'
+            and is_degree_field(current_field.get('name'))
+            and is_degree_field(next_field.get('name'))
+        )
+
+    def _create_field_input(self, parent, field):
+        default_value = field.get('default', '')
+        if field['type'] == 'date':
+            initial_date = QDate.fromString(default_value, "yyyy-MM-dd") if default_value else QDate.currentDate()
+            return create_calendar_picker(parent, initial_date)
+        if field['type'] == 'select':
+            widget = ComboBox()
+            for option in field.get('options', []):
+                widget.addItem(option)
+            if default_value and default_value in field.get('options', []):
+                widget.setCurrentText(default_value)
+            return widget
+        if field['type'] == 'multiline':
+            widget = QTextEdit()
+            widget.setPlaceholderText("请输入备注...")
+            widget.setMinimumHeight(100)
+            if default_value:
+                widget.setText(str(default_value))
+            return widget
+        if field['type'] == 'file':
+            return None
+        return QLineEdit(str(default_value))
+
+    def _add_single_field(self, panel, parent_layout, field):
+        lab = QLabel(f"{field['label']}{' *' if field.get('required') else ''}")
+        parent_layout.addWidget(lab)
+
+        if field['type'] == 'file':
+            dir_layout = QHBoxLayout()
+            path_edit = QLineEdit()
+            path_edit.setPlaceholderText("请选择文件夹路径...")
+            path_edit.setReadOnly(True)
+            default_value = field.get('default', '')
+            if default_value:
+                path_edit.setText(str(default_value))
+            btn = QPushButton("选择")
+            btn.clicked.connect(lambda _, we=path_edit: self.choose_dir(we))
+            dir_layout.addWidget(path_edit)
+            dir_layout.addWidget(btn)
+            parent_layout.addLayout(dir_layout)
+            self.inputs[field['name']] = path_edit
+            return
+
+        widget = self._create_field_input(panel, field)
+        parent_layout.addWidget(widget)
+        self.inputs[field['name']] = widget
+
+    def _add_degree_field_row(self, panel, parent_layout, first_field, second_field):
+        row = QHBoxLayout()
+        row.setSpacing(12)
+
+        for field in (first_field, second_field):
+            column_widget = QWidget(panel)
+            column_layout = QVBoxLayout(column_widget)
+            column_layout.setContentsMargins(0, 0, 0, 0)
+            column_layout.setSpacing(5)
+            column_layout.addWidget(QLabel(f"{field['label']}{' *' if field.get('required') else ''}"))
+            widget = self._create_field_input(panel, field)
+            column_layout.addWidget(widget)
+            row.addWidget(column_widget, 1)
+            self.inputs[field['name']] = widget
+
+        parent_layout.addLayout(row)
 
     # ---------- 拖动实现 ----------
     def mousePressEvent(self, e: QMouseEvent):
@@ -131,13 +166,21 @@ class AddTaskDialog(QDialog):
             widget.setText(path)
 
 
+    def _try_accept(self):
+        task_data = self.get_data()
+        for f in self._task_fields:
+            if f.get("required") and not task_data.get(f["name"]):
+                show_warning(widget=self,title= "提示",content= f"{f['label']} 为必填项")
+                return
+        self.accept()
+
     def get_data(self):
         """把表单内容打包成 dict 返回"""
         data = {}
         for name, w in self.inputs.items():
-            if isinstance(w, QDateEdit):
-                data[name] = w.date().toString("yyyy-MM-dd")
-            elif isinstance(w, QComboBox):
+            if is_date_picker(w):
+                data[name] = get_date_string_from_picker(w)
+            elif isinstance(w, (QComboBox, ComboBox)):
                 data[name] = w.currentText()
             elif isinstance(w, QTextEdit):
                 data[name] = w.toPlainText()

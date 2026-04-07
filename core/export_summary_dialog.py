@@ -9,13 +9,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from PyQt6.QtCore import Qt, QDate, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QDateEdit, QPushButton, QProgressBar,
-    QMessageBox, QFileDialog, QTextEdit
+    QLabel, QPushButton, QProgressBar,
+    QFileDialog
 )
-from PyQt6.QtGui import QColor, QMouseEvent
+from PyQt6.QtGui import QMouseEvent
 
+from ui.fluent import create_calendar_picker, get_date_from_picker, get_date_string_from_picker, set_date_on_picker
+from ui.notifications import _show_info_bar, show_error, show_success,show_warning
 from ui.styles import StyleManager
-from ui.ui import apply_drop_shadow
 from database.database_manager import get_db_manager
 from core.LLMService import get_llm_service
 
@@ -320,14 +321,14 @@ class ExportSummaryDialog(QDialog):
         
         # 创建主面板
         panel = QWidget(self)
-        panel.setObjectName("panel")
+        panel.setObjectName("dialog_panel")
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(20,20,20,20)
         panel_layout.setSpacing(15)
         panel.setMaximumWidth(600)
         
         # 样式表
-        panel.setStyleSheet(style_manager.get_stylesheet("add_task_dialog").format())
+        panel.setStyleSheet(style_manager.get_stylesheet("add_task_dialog"))
         
         # 说明
         desc_label = QLabel("选择时间区间，系统将导出该期间内所有更新过的任务概要。")
@@ -340,17 +341,11 @@ class ExportSummaryDialog(QDialog):
         
         # 开始日期
         start_label = QLabel("开始日期:")
-        self.start_date_edit = QDateEdit()
-        self.start_date_edit.setCalendarPopup(True)
-        self.start_date_edit.setDisplayFormat("yyyy-MM-dd")
-        self.start_date_edit.setDate(QDate.currentDate().addDays(-30))  # 默认30天前
+        self.start_date_edit = create_calendar_picker(panel, QDate.currentDate().addDays(-30))  # 默认30天前
         
         # 结束日期
         end_label = QLabel("结束日期:")
-        self.end_date_edit = QDateEdit()
-        self.end_date_edit.setCalendarPopup(True)
-        self.end_date_edit.setDisplayFormat("yyyy-MM-dd")
-        self.end_date_edit.setDate(QDate.currentDate())
+        self.end_date_edit = create_calendar_picker(panel, QDate.currentDate())
         
         date_layout.addWidget(start_label)
         date_layout.addWidget(self.start_date_edit)
@@ -416,9 +411,6 @@ class ExportSummaryDialog(QDialog):
         # 居中显示
         self.adjustSize()
         self.center_on_parent()
-        # 添加阴影
-        apply_drop_shadow(panel, blur_radius=10, color=QColor(0, 0, 0, 60), offset_x=0, offset_y=0)
-        
     def center_on_parent(self):
         """居中显示窗口"""
         if self.parent():
@@ -438,17 +430,17 @@ class ExportSummaryDialog(QDialog):
     
     def _set_date_range(self, days: int):
         """设置日期范围"""
-        self.end_date_edit.setDate(QDate.currentDate())
-        self.start_date_edit.setDate(QDate.currentDate().addDays(-days))
+        set_date_on_picker(self.end_date_edit, QDate.currentDate())
+        set_date_on_picker(self.start_date_edit, QDate.currentDate().addDays(-days))
     
     def _generate_summary(self):
         """生成概要"""
-        start_date = self.start_date_edit.date().toString("yyyy-MM-dd")
-        end_date = self.end_date_edit.date().toString("yyyy-MM-dd")
+        start_date = get_date_string_from_picker(self.start_date_edit)
+        end_date = get_date_string_from_picker(self.end_date_edit)
         
         # 验证日期
         if start_date > end_date:
-            QMessageBox.warning(self, "日期错误", "开始日期不能晚于结束日期")
+            show_error(parent=self, title="日期错误", content="开始日期不能晚于结束日期")
             return
         
         # 禁用按钮
@@ -485,26 +477,26 @@ class ExportSummaryDialog(QDialog):
     def _export_to_excel(self):
         """导出到Excel"""
         if not self.summary_data:
-            QMessageBox.warning(self, "提示", "没有可导出的数据")
+            _show_info_bar(parent=self, title="提示", content="没有可导出的数据")
             return
         
         try:
             import pandas as pd
         except ImportError:
-            QMessageBox.critical(self, "导出失败", "未安装pandas库，无法导出为Excel。\n\n请先安装: pip install pandas")
+            show_error(self, "导出失败", "未安装pandas库，无法导出为Excel。\n\n请先安装: pip install pandas")
             return
         
         try:
             import openpyxl
         except ImportError:
-            QMessageBox.critical(self, "导出失败", "未安装openpyxl库，无法导出为Excel。\n\n请先安装: pip install openpyxl")
+            show_error(self, "导出失败", "未安装openpyxl库，无法导出为Excel。\n\n请先安装: pip install openpyxl")
             return
         
         # 选择保存位置
         desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
         default_filename = os.path.join(
             desktop_path,
-            f"任务概要_{self.start_date_edit.date().toString('yyyyMMdd')}-{self.end_date_edit.date().toString('yyyyMMdd')}.xlsx"
+            f"任务概要_{get_date_from_picker(self.start_date_edit).toString('yyyyMMdd')}-{get_date_from_picker(self.end_date_edit).toString('yyyyMMdd')}.xlsx"
         )
         
         filename, _ = QFileDialog.getSaveFileName(
@@ -562,14 +554,14 @@ class ExportSummaryDialog(QDialog):
                     )
                     worksheet.column_dimensions[chr(65 + i)].width = min(max_length + 2, 50)
             
-            QMessageBox.information(self, "导出成功", f"任务概要已导出到:\n{filename}")
+            show_success(self, "导出成功", f"任务概要已导出到:\n{filename}")
             logger.info(f"成功导出 {len(df)} 个任务概要到: {filename}")
             
             # 导出成功后关闭对话框
             self.accept()
             
         except Exception as e:
-            QMessageBox.critical(self, "导出失败", f"导出任务概要时发生错误:\n{str(e)}")
+            show_error(self, "导出失败", f"导出任务概要时发生错误:\n{str(e)}")
             logger.error(f"导出任务概要失败: {str(e)}", exc_info=True)
     
     # 拖动实现

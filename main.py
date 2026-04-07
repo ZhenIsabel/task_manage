@@ -1,15 +1,17 @@
 import sys
-from PyQt6.QtWidgets import QApplication, QMessageBox
+from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import QTimer
 import os
 from datetime import datetime, time
 
 from config.config_manager import load_config
 from core.quadrant_widget import QuadrantWidget
+from ui.scrollbar import install_global_fluent_scrollbars
 from ui.ui import UIManager
 from gantt.app import gantt_app
 from core.utils import init_logging
 from core.scheduler import TaskScheduler
+from ui.notifications import show_error
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
 
@@ -30,6 +32,7 @@ class TaskManagerApp:
             logger.info("程序启动中...")
             self.app = QApplication(sys.argv)
             logger.info("QApplication初始化完成")
+            install_global_fluent_scrollbars(self.app)
 
             # 加载配置
             self.config = load_config()
@@ -185,7 +188,7 @@ class TaskManagerApp:
     def run(self):
         """运行应用"""
         if not self.initialize():
-            QMessageBox.critical(None, "初始化失败", "应用初始化失败，请检查日志")
+            show_error(None, "初始化失败", "应用初始化失败，请检查日志")
             return 1
         
         try:
@@ -198,7 +201,7 @@ class TaskManagerApp:
             
         except Exception as e:
             logger.error(f"程序运行错误: {str(e)}")
-            QMessageBox.critical(None, "运行错误", f"程序运行出错：{str(e)}")
+            show_error(None, "运行错误", f"程序运行出错：{str(e)}")
             return 1
         finally:
             # 清理资源

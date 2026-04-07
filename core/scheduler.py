@@ -4,19 +4,19 @@
 """
 
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
+from typing import Optional
 from calendar import monthrange
 
-from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
-                            QTableWidget, QTableWidgetItem, QPushButton, 
-                            QHeaderView, QAbstractItemView, QWidget,
-                            QAbstractScrollArea,QCheckBox,QMessageBox,
-                            QDateEdit,QComboBox,QTextEdit,QLineEdit)
+from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QMessageBox,
+                            QPushButton, QWidget,QAbstractScrollArea,QCheckBox,
+                            QComboBox,QTextEdit,QLineEdit)
 from PyQt6.QtCore import Qt, QDate
-from PyQt6.QtGui import QColor, QFont
 
+from ui.adaptive_table import AdaptiveTextTableWidget
+from ui.fluent import ComboBox, create_calendar_picker, get_date_string_from_picker, is_date_picker
+from ui.notifications import show_error, show_success,show_warning,resolve_notification_host
 from ui.styles import StyleManager
-from ui.ui import apply_drop_shadow
+from ui.degree_badges import create_degree_table_cell, is_degree_field
 from database.database_manager import get_db_manager
 from config.config_manager import load_config
 import logging
@@ -337,14 +337,14 @@ class ScheduledTaskDialog(QDialog):
         
         # 创建主面板
         panel = QWidget(self)
-        panel.setObjectName("panel")
+        panel.setObjectName("dialog_panel")
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(20,20,20,20)
         panel_layout.setSpacing(15)
         panel.setMaximumWidth(600)
         
         # 样式表
-        panel.setStyleSheet(style_manager.get_stylesheet("add_task_dialog").format())
+        panel.setStyleSheet(style_manager.get_stylesheet("add_task_dialog"))
         
         # 加载
         self.load_scheduled_tasks(panel_layout)
@@ -398,8 +398,6 @@ class ScheduledTaskDialog(QDialog):
         # 居中显示
         self.adjustSize()
         self.center_on_parent()
-        # 添加阴影
-        apply_drop_shadow(panel, blur_radius=10, color=QColor(0, 0, 0, 60), offset_x=0, offset_y=0)
         
     def load_scheduled_tasks(self,layout):
         """加载定时任务"""
@@ -418,51 +416,42 @@ class ScheduledTaskDialog(QDialog):
     def create_table(self, layout, scheduled_tasks):
         """创建表格"""
         logger.info(f"加载定时任务表条数{len(scheduled_tasks)}")
-        self.table = QTableWidget()
-        self.table.setRowCount(len(scheduled_tasks))
-        self.table.setColumnCount(7)
-        self.table.setHorizontalHeaderLabels(["选择", "任务内容", "频率", "下次运行","紧急程度", "重要程度", "备注"])
+        rows = [
+            [
+                "",
+                scheduled_task["title"],
+                scheduled_task["frequency"],
+                scheduled_task["next_run_at"],
+                "",
+                "",
+                scheduled_task.get("notes", ""),
+            ]
+            for scheduled_task in scheduled_tasks
+        ]
+        self.table = AdaptiveTextTableWidget(
+            headers=["选择", "任务内容", "频率", "下次运行", "紧急程度", "重要程度", "备注"],
+            rows=rows,
+            fixed_width_columns={6: 300},
+            multiline_columns={6},
+        )
         header = self.table.verticalHeader()
-        header.setMinimumSectionSize(35) 
+        header.setMinimumSectionSize(35)
+        self.table.setSortingEnabled(False)
         for row, scheduled_task in enumerate(scheduled_tasks):
             # 复选框
             checkbox = QCheckBox()
             checkbox.stateChanged.connect(self.on_selection_changed)
             checkbox.setProperty('id', scheduled_task['id'])
             self.table.setCellWidget(row, 0, checkbox)
-            self.table.setItem(row, 1, QTableWidgetItem(scheduled_task['title']))
-            self.table.setItem(row, 2, QTableWidgetItem(scheduled_task['frequency']))
-            self.table.setItem(row, 3, QTableWidgetItem(scheduled_task['next_run_at']))
-            self.table.setItem(row, 4, QTableWidgetItem(scheduled_task.get('urgency', '低')))
-            self.table.setItem(row, 5, QTableWidgetItem(scheduled_task.get('importance', '低')))
-            self.table.setItem(row, 6, QTableWidgetItem(scheduled_task['notes']))
-        layout.addWidget(self.table)
-        # 按内容自动调整列宽
-        header = self.table.horizontalHeader()
-        for i in range(self.table.columnCount()):
-            header.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
-
-        # 不拉伸最后一列
-        header.setStretchLastSection(False)
-        # 启用自动换行
-        self.table.setWordWrap(True)
-        # 按内容调整行高
+            self.table.setCellWidget(row, 4, create_degree_table_cell('urgency', scheduled_task.get('urgency', '低'), self.table))
+            self.table.setCellWidget(row, 5, create_degree_table_cell('importance', scheduled_task.get('importance', '低'), self.table))
         self.table.resizeRowsToContents()
+        self.table.setSortingEnabled(True)
         
-        # 关闭省略策略：
-        self.table.setTextElideMode(Qt.TextElideMode.ElideNone)
-        self.table.horizontalHeader().setTextElideMode(Qt.TextElideMode.ElideNone)
         # 允许滚动
-        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.table.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
-        # 按行选择
-        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
 
         self.table.setMaximumHeight(400)
-        # 应用美化样式
-        style_manager = StyleManager()
-        self.table.setStyleSheet(style_manager.get_stylesheet("history_table").format())
         layout.addWidget(self.table)
 
     def center_on_parent(self):
@@ -488,13 +477,12 @@ class ScheduledTaskDialog(QDialog):
         
         # 确认对话框
         reply = QMessageBox.question(
-            self, 
-            "确认删除", 
-            f"确定要将 {len(self.selected_tasks)} 个定时任务删除吗？",
+            self,
+            "确认",
+            "确定要删除吗？",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
+            QMessageBox.StandardButton.No,
         )
-        
         if reply != QMessageBox.StandardButton.Yes:
             return
         try:
@@ -505,18 +493,14 @@ class ScheduledTaskDialog(QDialog):
                     deleted_count+=1
             
             # 显示成功消息
-            QMessageBox.information(
-                self, 
-                "删除成功", 
-                f"成功删除 {deleted_count} 个定时任务"
-            )
+            show_success(self, "删除成功", f"成功删除 {deleted_count} 个定时任务")
             
             # 刷新任务列表 - 关闭对话框以触发父窗口刷新
             self.close()
 
         except Exception as e:
             logger.error(f"删除任务失败: {str(e)}")
-            QMessageBox.critical(self, "删除失败", f"删除任务时发生错误: {str(e)}")
+            show_error(self, "删除失败", f"删除任务时发生错误: {str(e)}")
         
         
     
@@ -536,7 +520,7 @@ class ScheduledTaskDialog(QDialog):
         # 检查必填
         for f in task_fields:
             if f.get("required") and not task_data.get(f["name"]):
-                QMessageBox.warning(self, "提示", f"{f['label']} 为必填项")
+                show_warning(self,"提示",f"{f['label']} 为必填项")
                 return
         # 创建任务
         try:
@@ -552,13 +536,13 @@ class ScheduledTaskDialog(QDialog):
                 start_time=task_data.get('start_time')
             )
             if result_id:
-                QMessageBox.information(self, "成功", f"定时任务创建成功")
+                show_success(self, "成功", "定时任务创建成功")
                 # 刷新任务列表
                 self.close()
             else:
-                QMessageBox.warning(self, "失败", "定时任务创建失败，请查看日志")
+                show_error(self, "失败", "定时任务创建失败，请查看日志")
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"创建定时任务时发生错误: {str(e)}")
+            show_error(self, "错误", f"创建定时任务时发生错误: {str(e)}")
             logger.error(f"创建定时任务异常: {str(e)}", exc_info=True)
 
 
@@ -610,55 +594,29 @@ class AddScheduleDialog(QDialog):
         
         # 创建主面板
         panel = QWidget(self)
-        panel.setObjectName("panel")
+        panel.setObjectName("dialog_panel")
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(30, 30, 30, 30)
         panel_layout.setSpacing(5)
         
         # 样式表
-        panel.setStyleSheet(style_manager.get_stylesheet("add_task_dialog").format())
-        # 阴影
-        apply_drop_shadow(panel, blur_radius=8, color=QColor(0, 0, 0, 60), offset_x=0, offset_y=0)
+        panel.setStyleSheet(style_manager.get_stylesheet("add_task_dialog"))
 
         # 输入字段
         self.inputs = {}
-        
-        for f in self.task_fields:
-            lab = QLabel(f"{f['label']}{' *' if f.get('required') else ''}")
-            panel_layout.addWidget(lab)
-            # 创建控件时设置默认值
-            default_value = f.get('default', '')
-            # 根据字段类型创建不同的控件
-            if f['type'] == 'date':
-                w = QDateEdit()
-                w.setStyleSheet(style_manager.get_stylesheet("calender"))
-                w.setCalendarPopup(True)
-                w.setDisplayFormat("yyyy-MM-dd")
-                # 如果有默认值则设置日期，否则保持原逻辑
-                if default_value:
-                    w.setDate(QDate.fromString(default_value, "yyyy-MM-dd"))
-                else:
-                    w.setDate(QDate.currentDate().addDays(0))
-            elif f['type'] == 'select':
-                # 创建下拉选择框
-                w = QComboBox()
-                # 添加选项
-                for option in f.get('options', []):
-                    w.addItem(option)
-                # 设置默认值
-                if default_value and default_value in f.get('options', []):
-                    w.setCurrentText(default_value)
-            elif f['type'] == 'multiline':
-                # 创建多行文本输入框
-                w = QTextEdit()
-                w.setPlaceholderText("请输入备注...")
-                w.setMinimumHeight(100)  # 设置最小高度
-                if default_value:
-                    w.setText(str(default_value))
-            else:
-                w = QLineEdit(str(default_value))  # 设置文本默认值
-            panel_layout.addWidget(w)
-            self.inputs[f['name']] = w
+
+        index = 0
+        while index < len(self.task_fields):
+            field = self.task_fields[index]
+            next_field = self.task_fields[index + 1] if index + 1 < len(self.task_fields) else None
+
+            if self._should_group_degree_fields(field, next_field):
+                self._add_degree_field_row(panel, panel_layout, field, next_field)
+                index += 2
+                continue
+
+            self._add_single_field(panel, panel_layout, field)
+            index += 1
 
         # 按钮布局
         button_layout = QHBoxLayout()
@@ -694,13 +652,67 @@ class AddScheduleDialog(QDialog):
         # 把面板放回壳左上角
         panel.move(shadow_margin, shadow_margin)
 
+    def _should_group_degree_fields(self, current_field, next_field):
+        return (
+            current_field
+            and next_field
+            and current_field.get('name') == 'urgency'
+            and next_field.get('name') == 'importance'
+            and is_degree_field(current_field.get('name'))
+            and is_degree_field(next_field.get('name'))
+        )
+
+    def _create_field_input(self, parent, field):
+        default_value = field.get('default', '')
+        if field['type'] == 'date':
+            initial_date = QDate.fromString(default_value, "yyyy-MM-dd") if default_value else QDate.currentDate()
+            return create_calendar_picker(parent, initial_date)
+        if field['type'] == 'select':
+            widget = ComboBox()
+            for option in field.get('options', []):
+                widget.addItem(option)
+            if default_value and default_value in field.get('options', []):
+                widget.setCurrentText(default_value)
+            return widget
+        if field['type'] == 'multiline':
+            widget = QTextEdit()
+            widget.setPlaceholderText("请输入备注...")
+            widget.setMinimumHeight(100)
+            if default_value:
+                widget.setText(str(default_value))
+            return widget
+        return QLineEdit(str(default_value))
+
+    def _add_single_field(self, panel, parent_layout, field):
+        parent_layout.addWidget(QLabel(f"{field['label']}{' *' if field.get('required') else ''}"))
+        widget = self._create_field_input(panel, field)
+        parent_layout.addWidget(widget)
+        self.inputs[field['name']] = widget
+
+    def _add_degree_field_row(self, panel, parent_layout, first_field, second_field):
+        row = QHBoxLayout()
+        row.setSpacing(12)
+
+        for field in (first_field, second_field):
+            column_widget = QWidget(panel)
+            column_layout = QVBoxLayout(column_widget)
+            column_layout.setContentsMargins(0, 0, 0, 0)
+            column_layout.setSpacing(5)
+            column_layout.addWidget(QLabel(f"{field['label']}{' *' if field.get('required') else ''}"))
+            widget = self._create_field_input(panel, field)
+            column_layout.addWidget(widget)
+            row.addWidget(column_widget, 1)
+            self.inputs[field['name']] = widget
+
+        parent_layout.addLayout(row)
+
     def get_data(self):
         """把表单内容打包成 dict 返回"""
         data = {}
         for name, w in self.inputs.items():
-            if isinstance(w, QDateEdit):
-                data[name] = w.date().toString("yyyy-MM-dd")
-            elif isinstance(w, QComboBox):
+            if is_date_picker(w):
+                data[name] = get_date_string_from_picker(w)
+            elif isinstance(w, (QComboBox, ComboBox)):
                 data[name] = w.currentText()
             elif isinstance(w, QTextEdit):
                 data[name] = w.toPlainText()

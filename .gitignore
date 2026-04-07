@@ -99,3 +99,4 @@ config/remote_config.json
 
 #cursor
 .cursor/
+.worktrees/

@@ -1,30 +1,30 @@
 import json
 import os
 import webbrowser
+from copy import deepcopy
 import socket
 import time
 import threading
 from datetime import datetime
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QPushButton, QColorDialog, QSlider,  QMessageBox, QDialog,
-                            QTabWidget, QFormLayout, QSpinBox,  QMenu, QTimeEdit, QLabel, QCheckBox, QScrollArea, QLineEdit)
-from PyQt6.QtCore import Qt, QPoint,  QRect, QTimer,QUrl, QTime, pyqtSignal
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QPushButton, QColorDialog, QDialog,
+                             QMenu, QLabel, QCheckBox)
+from PyQt6.QtCore import Qt, QPoint,  QRect, QTimer,QUrl, pyqtSignal
 from PyQt6.QtWidgets import QApplication,QFileDialog
-from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont,  QPainterPath, QLinearGradient, QAction
-try:
-    from PyQt6.QtWebEngineWidgets import QWebEngineView
-    HAS_WEBENGINE = True
-except Exception:
-    HAS_WEBENGINE = False
+from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont,  QPainterPath,  QAction
+
+from font_families import APP_FONT_FAMILY
 
 
 from .task_label import TaskLabel
 from config.config_manager import save_config, save_tasks
 from config.remote_config import RemoteConfigManager
 from .add_task_dialog import AddTaskDialog
+from .settings_dialog import SettingsDialog
+from ui.scrollbar import FluentScrollArea
 from ui.styles import StyleManager
+from ui.notifications import show_error, show_success,show_warning
 from database.database_manager import get_db_manager
-from ui.ui import apply_drop_shadow
-from gantt.app import gantt_app
+
 
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
@@ -159,8 +159,6 @@ class QuadrantWidget(QWidget):
         self.control_layout.addWidget(self.settings_button)
         self.control_layout.addWidget(self.exit_button)
         
-        # 添加控制面板阴影效果
-        apply_drop_shadow(self.control_widget, blur_radius=10, color=QColor(0, 0, 0, 50), offset_x=0, offset_y=0)
         # 设置控制面板为悬浮式
         self.control_widget.setParent(self)
         # 自动计算初始尺寸
@@ -364,7 +362,7 @@ class QuadrantWidget(QWidget):
         painter.drawLine(v_line_x, margin, v_line_x, height - margin)
         
         # 绘制标签 - 使用更好的字体和阴影效果
-        font_family = self.config.get('ui', {}).get('font_family', '微软雅黑')
+        font_family = self.config.get('ui', {}).get('font_family', APP_FONT_FAMILY)
         font = QFont(font_family)
         font.setBold(True)
         font.setPointSize(10)
@@ -549,6 +547,7 @@ class QuadrantWidget(QWidget):
         """在指定位置创建新任务"""
         # 从配置中获取任务字段定义
         task_fields = self.config.get('task_fields', [])
+        task_fields = [field for field in task_fields if field.get("name") != "completed_date"]
         
         dialog = AddTaskDialog(self, task_fields)
         if dialog.exec() != QDialog.DialogCode.Accepted:
@@ -556,13 +555,7 @@ class QuadrantWidget(QWidget):
 
         # 从对话框中获取字段值
         task_data = dialog.get_data()   # ← 只要这一行就拿到全部字段值
-        
-        # 检查必填
-        for f in task_fields:
-            if f.get("required") and not task_data.get(f["name"]):
-                QMessageBox.warning(self, "提示", f"{f['label']} 为必填项")
-                return
-                
+
         # 使用传入的位置确定在哪个象限
         local_pos = position
         
@@ -776,276 +769,110 @@ class QuadrantWidget(QWidget):
         if hasattr(self.db_manager, '_reset_remote_auth_state'):
             self.db_manager._reset_remote_auth_state()
 
-    def show_settings(self, initial_tab: str = ''):
-        """显示设置对话框 - 采用add_task_dialog样式"""
-        # ❶ 直接把 QDialog 设为「无边框」窗口
-        dialog = QDialog(self, flags=Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
-        # 不再使用透明背景，避免弹窗外侧出现可透底的透明区域
-        dialog.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        border_radius = self.config.get('ui', {}).get('border_radius', 15)
-        dialog.setStyleSheet(f"QDialog {{ background-color: white; border-radius: {border_radius}px; }}")
-        
-        # ------- 外层透明壳，什么都不画 ------- #
-        
-        # ❸ 真正的白色圆角面板
-        panel = QWidget(dialog)
-        panel.setObjectName("panel")
-        panel_layout = QVBoxLayout(panel)
-        panel_layout.setContentsMargins(30, 30, 30, 30)
-        panel_layout.setSpacing(20)
-        
-        # 样式改为用 styles.py 的 StyleManager 管理
-        style_manager = StyleManager()
-        # 使用 add_task_dialog 的样式表
-        add_task_dialog_stylesheet = style_manager.get_stylesheet("add_task_dialog").format()
-        panel.setStyleSheet(add_task_dialog_stylesheet)
-        
-        # 阴影
-        apply_drop_shadow(panel, blur_radius=8, color=QColor(0, 0, 0, 60), offset_x=0, offset_y=0)
-        
-        # 创建标签页
-        tab_widget = QTabWidget()
-        # 为标签页添加样式
-        tab_widget.setStyleSheet("""
-            QTabWidget::pane {
-                border: 1px solid #dddddd;
-                background-color: white;
-                border-radius: 8px;
-            }
-            QTabBar::tab {
-                background-color: #f5f5f5;
-                color: #333;
-                border: 1px solid #dddddd;
-                border-bottom: none;
-                padding: 10px 20px;
-                margin-right: 2px;
-                border-top-left-radius: 8px;
-                border-top-right-radius: 8px;
-                font-family: '微软雅黑';
-                font-size: 13px;
-            }
-            QTabBar::tab:selected {
-                background-color: white;
-                color: #4ECDC4;
-                font-weight: bold;
-            }
-        """)
-        
-        # 创建颜色设置页
-        color_widget = QWidget()
-        color_layout = QFormLayout(color_widget)
-        color_layout.setSpacing(15)
-        color_layout.setContentsMargins(20, 20, 20, 20)
-        
-        # 为每个象限创建颜色选择器和透明度滑块
-        quadrant_names = {
-            'q1': "重要且紧急（右上）",
-            'q2': "重要不紧急（左上）",
-            'q3': "不重要但紧急（右下）",
-            'q4': "不重要不紧急（左下）"
-        }
-        
-        color_buttons = {}
-        opacity_sliders = {}
-        hue_range_spins = {}
-        saturation_range_spins = {}
-        value_range_spins = {}
-        
-        for q_id, q_name in quadrant_names.items():
-            # 颜色选择按钮
-            color_btn = QPushButton()
-            color = QColor(self.config['quadrants'][q_id]['color'])
-            color_btn.setStyleSheet(f"background-color: {color.name()}; border-radius: 15px;")
-            color_btn.setFixedSize(30, 30)
-            color_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            color_btn.clicked.connect(lambda checked, qid=q_id: self.change_quadrant_color(qid))
-            color_buttons[q_id] = color_btn
-            
-            # 透明度滑块
-            opacity_slider = QSlider(Qt.Orientation.Horizontal)
-            opacity_slider.setRange(1, 100)
-            opacity_slider.setValue(int(self.config['quadrants'][q_id]['opacity'] * 100))
-            opacity_slider.valueChanged.connect(lambda value, qid=q_id: self.change_quadrant_opacity(qid, value / 100))
-            opacity_sliders[q_id] = opacity_slider
-            
-            # 色相范围设置
-            hue_range_spin = QSlider(Qt.Orientation.Horizontal)
-            hue_range_spin.setRange(0, 180)
-            hue_range_spin.setValue(self.config.get('color_ranges', {}).get(q_id, {}).get('hue_range', 30))
-            hue_range_spin.valueChanged.connect(lambda value, qid=q_id: self.change_color_range(qid, 'hue_range', value))
-            hue_range_spins[q_id] = hue_range_spin
-            
-            # 饱和度范围设置
-            saturation_range_spin = QSlider(Qt.Orientation.Horizontal)
-            saturation_range_spin.setRange(0, 255)
-            saturation_range_spin.setValue(self.config.get('color_ranges', {}).get(q_id, {}).get('saturation_range', 20))
-            saturation_range_spin.valueChanged.connect(lambda value, qid=q_id: self.change_color_range(qid, 'saturation_range', value))
-            saturation_range_spins[q_id] = saturation_range_spin
-            
-            # 明度范围设置
-            value_range_spin = QSlider(Qt.Orientation.Horizontal)
-            value_range_spin.setRange(0, 255)
-            value_range_spin.setValue(self.config.get('color_ranges', {}).get(q_id, {}).get('value_range', 20))
-            value_range_spin.valueChanged.connect(lambda value, qid=q_id: self.change_color_range(qid, 'value_range', value))
-            value_range_spins[q_id] = value_range_spin
-            
-            # 添加到布局
-            color_layout.addRow(f"{q_name} 颜色:", color_btn)
-            color_layout.addRow(f"{q_name} 透明度:", opacity_slider)
-            color_layout.addRow(f"{q_name} 色相范围:", hue_range_spin)
-            color_layout.addRow(f"{q_name} 饱和度范围:", saturation_range_spin)
-            color_layout.addRow(f"{q_name} 明度范围:", value_range_spin)
-        
-        # 创建大小设置页
-        size_widget = QWidget()
-        size_layout = QFormLayout(size_widget)
-        size_layout.setSpacing(15)
-        size_layout.setContentsMargins(20, 20, 20, 20)
-        
-        # 宽度设置
-        width_spin = QSpinBox()
-        width_spin.setRange(300, 2000)
-        width_spin.setValue(self.config['size']['width'])
-        width_spin.valueChanged.connect(lambda value: self.change_size('width', value))
-        
-        # 高度设置
-        height_spin = QSpinBox()
-        height_spin.setRange(300, 2000)
-        height_spin.setValue(self.config['size']['height'])
-        height_spin.valueChanged.connect(lambda value: self.change_size('height', value))
-        
-        # UI设置
-        ui_widget = QWidget()
-        ui_layout = QFormLayout(ui_widget)
-        ui_layout.setSpacing(15)
-        ui_layout.setContentsMargins(20, 20, 20, 20)
-
-        # 远程设置
-        remote_widget = QWidget()
-        remote_layout = QFormLayout(remote_widget)
-        remote_layout.setSpacing(15)
-        remote_layout.setContentsMargins(20, 20, 20, 20)
-
-        remote_config_manager = RemoteConfigManager()
-        remote_config = remote_config_manager.get_server_config()
-
-        remote_enabled_checkbox = QCheckBox("启用远程同步")
-        remote_enabled_checkbox.setChecked(remote_config.get('enabled', bool(remote_config.get('api_base_url', ''))))
-
-        remote_url_edit = QLineEdit(remote_config.get('api_base_url', ''))
-        remote_url_edit.setPlaceholderText("http://example.com")
-
-        remote_username_edit = QLineEdit(remote_config.get('username', ''))
-        remote_username_edit.setPlaceholderText("用户名")
-
-        remote_token_edit = QLineEdit(remote_config.get('api_token', ''))
-        remote_token_edit.setPlaceholderText("API Token")
-
-        remote_hint_label = QLabel("关闭远程同步后，下次启动将不会检测远程服务器。")
-        remote_hint_label.setStyleSheet("color: #666; font-size: 11px;")
-        remote_hint_label.setWordWrap(True)
-        
-        # 圆角设置
-        border_radius_spin = QSpinBox()
-        border_radius_spin.setRange(0, 50)
-        border_radius_spin.setValue(self.config.get('ui', {}).get('border_radius', 15))
-        border_radius_spin.valueChanged.connect(lambda value: self.update_ui_config('border_radius', value))
-        
-        # 自动刷新设置
-        auto_refresh_checkbox = QCheckBox("启用自动刷新")
-        auto_refresh_config = self.config.get('auto_refresh', {})
-        auto_refresh_checkbox.setChecked(auto_refresh_config.get('enabled', True))
-        auto_refresh_checkbox.stateChanged.connect(lambda state: self.update_auto_refresh_config('enabled', state == Qt.CheckState.Checked.value))
-        
-        # 刷新时间设置
-        refresh_time_edit = QTimeEdit()
-        refresh_time_edit.setDisplayFormat("HH:mm:ss")
-        refresh_time_str = auto_refresh_config.get('refresh_time', '00:02:00')
+    def _resolve_size_wh(self, size_dict):
+        """从 size 字典解析宽高；缺省时尝试当前窗口尺寸（未完整构造的测试对象则回退默认）。"""
+        d = size_dict or {}
+        out_w, out_h = d.get('width'), d.get('height')
         try:
-            hour, minute, second = map(int, refresh_time_str.split(':'))
-            refresh_time_edit.setTime(QTime(hour, minute, second))
-        except:
-            refresh_time_edit.setTime(QTime(0, 2, 0))
-        refresh_time_edit.timeChanged.connect(lambda time: self.update_auto_refresh_config('refresh_time', time.toString("HH:mm:ss")))
-        
-        # 添加说明标签
-        refresh_label = QLabel("每天在设定时间自动刷新页面并检查定时任务")
-        refresh_label.setStyleSheet("color: #666; font-size: 11px;")
-        refresh_label.setWordWrap(True)
-        
-        # 添加到布局
-        size_layout.addRow("宽度:", width_spin)
-        size_layout.addRow("高度:", height_spin)
-        ui_layout.addRow("圆角半径:", border_radius_spin)
-        ui_layout.addRow("", QLabel(""))  # 添加空行分隔
-        ui_layout.addRow(auto_refresh_checkbox)
-        ui_layout.addRow("刷新时间:", refresh_time_edit)
-        ui_layout.addRow("", refresh_label)
+            fw, fh = self.width(), self.height()
+        except RuntimeError:
+            fw, fh = 1000, 800
+        w = int(out_w if out_w is not None else fw)
+        h = int(out_h if out_h is not None else fh)
+        return w, h
 
-        remote_layout.addRow(remote_enabled_checkbox)
-        remote_layout.addRow("服务器地址:", remote_url_edit)
-        remote_layout.addRow("用户名:", remote_username_edit)
-        remote_layout.addRow("访问令牌:", remote_token_edit)
-        remote_layout.addRow("", remote_hint_label)
-        
-        # 添加标签页
-        tab_widget.addTab(color_widget, "颜色设置")
-        tab_widget.addTab(size_widget, "大小设置")
-        tab_widget.addTab(ui_widget, "界面设置")
-        tab_widget.addTab(remote_widget, "远程设置")
+    def apply_visual_settings(self, size=None, ui=None, color_ranges=None, quadrants=None):
+        """将视觉属性写入内存中的 config，并刷新窗口（不写入磁盘）。"""
+        if quadrants:
+            for q_id in ("q1", "q2", "q3", "q4"):
+                if q_id in quadrants:
+                    self.config.setdefault('quadrants', {}).setdefault(q_id, {}).update(quadrants[q_id])
+        if size:
+            self.config.setdefault('size', {}).update(size)
+        if ui:
+            self.config.setdefault('ui', {}).update(ui)
+        if color_ranges is not None:
+            self.config['color_ranges'] = deepcopy(color_ranges)
+        if size and self.config.get('size'):
+            w, h = self._resolve_size_wh(self.config['size'])
+            self.resize(w, h)
+        self.control_widget.adjustSize()
+        self.center_control_panel()
+        self._position_dirty = True
+        self.update()
 
-        if initial_tab == 'remote':
-            tab_widget.setCurrentWidget(remote_widget)
-        
-        # 将标签页添加到面板布局
-        panel_layout.addWidget(tab_widget)
-        
-        # 添加确定按钮
-        button_layout = QHBoxLayout()
-        ok_button = QPushButton("确定")
+    def apply_settings_preview(self, preview_payload):
+        """设置对话框实时预览：更新象限颜色/透明度、尺寸、圆角、颜色范围，不 save_config。"""
+        payload = preview_payload or {}
+        self.apply_visual_settings(
+            size=payload.get('size'),
+            ui=payload.get('ui'),
+            color_ranges=payload.get('color_ranges'),
+            quadrants=payload.get('quadrants'),
+        )
 
-        def save_settings_and_accept():
-            remote_config_payload = {
-                'enabled': remote_enabled_checkbox.isChecked(),
-                'api_base_url': remote_url_edit.text().strip(),
-                'api_token': remote_token_edit.text().strip(),
-                'username': remote_username_edit.text().strip(),
-            }
-            if not remote_config_manager.save_config(remote_config_payload):
-                QMessageBox.warning(self, "保存失败", "远程配置保存失败，请稍后重试。")
-                return
+    def restore_settings_snapshot(self, snapshot):
+        """取消或提交失败时恢复打开对话框前的 config 与窗口尺寸。"""
+        self.config = deepcopy(snapshot)
+        sz = self.config.get('size') or {}
+        w, h = self._resolve_size_wh(sz)
+        self.resize(w, h)
+        self.control_widget.adjustSize()
+        self.center_control_panel()
+        self._position_dirty = True
+        self.update()
 
-            self._apply_remote_config_to_db_manager(remote_config_payload)
-            dialog.accept()
+    def apply_settings_commit(self, result):
+        """接受设置：持久化远程配置、同步 db_manager、写入本地 config 文件。"""
+        result = result or {}
+        remote = dict(result.get('remote_config') or {})
+        remote_config_manager = RemoteConfigManager()
+        if not remote_config_manager.save_config(remote):
+            show_error(parent=self, title="保存失败", content="远程配置保存失败，请稍后重试。")
+            return False
+        self._apply_remote_config_to_db_manager(remote)
+        cfg = result.get('config') or {}
+        self.apply_visual_settings(
+            size=cfg.get('size'),
+            ui=cfg.get('ui'),
+            color_ranges=cfg.get('color_ranges'),
+            quadrants=cfg.get('quadrants'),
+        )
+        auto_refresh = cfg.get('auto_refresh')
+        if auto_refresh:
+            self.config['auto_refresh'] = auto_refresh
+        if not self.save_config():
+            return False
+        return True
 
-        ok_button.clicked.connect(save_settings_and_accept)
-        button_layout.addStretch()
-        button_layout.addWidget(ok_button)
-        panel_layout.addLayout(button_layout)
-        
-        # ❹ 自动根据内容调大小，再把"壳"和"面板"都居中放
-        # 外圈透明壳/留白去掉：把“壳”尺寸与真实面板对齐
-        shadow_margin = 0
-        # 让 panel 先自适应内容
-        panel.setMinimumWidth(600)
-        panel_layout.activate()
-        panel.adjustSize()
-        # 让壳与面板对齐
-        dialog.resize(panel.width() + shadow_margin * 2, panel.height() + shadow_margin * 2)
-        # 把面板放回壳左上角
-        panel.move(shadow_margin, shadow_margin)
-        
-        # ❺ 实现拖动窗口（因为没了系统标题栏）
-        dialog._drag_pos = None
-        
-        # 设置对话框在父窗口中居中显示
+    def show_settings(self, initial_tab: str = ''):
+        """显示设置对话框；预览可回滚，确定后提交。"""
+        snapshot = deepcopy(self.config)
+        remote_config_manager = RemoteConfigManager()
+        initial_remote = remote_config_manager.get_server_config()
+        initial = {
+            "config": {
+                "quadrants": deepcopy(self.config.get("quadrants") or {}),
+                "size": dict(self.config.get("size") or {}),
+                "ui": dict(self.config.get("ui") or {}),
+                "color_ranges": deepcopy(self.config.get("color_ranges") or {}),
+                "auto_refresh": dict(self.config.get("auto_refresh") or {}),
+            },
+            "remote_config": dict(initial_remote),
+            "initial_tab": initial_tab,
+        }
+        dialog = SettingsDialog(self, initial=initial)
+        dialog.previewChanged.connect(self.apply_settings_preview)
         dialog.move(
             self.x() + (self.width() - dialog.width()) // 2,
             self.y() + (self.height() - dialog.height()) // 2
         )
-        
-        # 显示对话框
-        dialog.exec()
+        code = dialog.exec()
+        if code == QDialog.DialogCode.Accepted:
+            if not self.apply_settings_commit(dialog.get_result()):
+                self.restore_settings_snapshot(snapshot)
+        else:
+            self.restore_settings_snapshot(snapshot)
 
     def export_unfinished_tasks(self):
         """导出未完成的任务到文本文件"""
@@ -1087,7 +914,7 @@ class QuadrantWidget(QWidget):
         # 如果没有未完成的任务
         if not unfinished_tasks:
             logger.info("导出任务失败：没有未完成的任务可导出")
-            QMessageBox.information(self, "导出任务", "没有未完成的任务可导出")
+            show_warning(self,"导出任务","没有未完成的任务可导出")
             return
             
         # 写入文件
@@ -1095,8 +922,9 @@ class QuadrantWidget(QWidget):
             with open(filename, 'w', encoding='utf-8') as f:
                 f.write("\n\n".join(unfinished_tasks))
             logger.info(f"成功导出 {len(unfinished_tasks)} 个未完成任务到: {filename}")
+            show_success(self,"导出成功",f"成功导出 {len(unfinished_tasks)} 个未完成任务到: {filename}")
         except Exception as e:
-            QMessageBox.critical(self, "导出失败", f"导出任务时发生错误:\n{str(e)}")
+            show_error(self, "导出失败", f"导出任务时发生错误:\n{str(e)}")
             error_msg = f"导出任务时发生错误: {str(e)}"
             logger.error(error_msg)
 
@@ -1105,14 +933,14 @@ class QuadrantWidget(QWidget):
         try:
             import pandas as pd
         except ImportError:
-            QMessageBox.critical(self, "导出失败", "未安装pandas库，无法导出为Excel。请先安装pandas。")
+            show_error(self, "导出失败", "未安装pandas库，无法导出为Excel。请先安装pandas。")
             logger.error("导出失败：未安装pandas库")
             return
         
         try:
             import openpyxl
         except ImportError:
-            QMessageBox.critical(self, "导出失败", "未安装openpyxl库，无法导出为Excel。请先安装openpyxl。\n\n安装命令：pip install openpyxl")
+            show_error(self, "导出失败", "未安装openpyxl库，无法导出为Excel。请先安装openpyxl。\n\n安装命令：pip install openpyxl")
             logger.error("导出失败：未安装openpyxl库")
             return
 
@@ -1134,12 +962,12 @@ class QuadrantWidget(QWidget):
             all_tasks_data=db_manager.load_tasks(all_tasks=True)
         except Exception as e:
             logger.error(f"读取任务文件失败: {str(e)}")
-            QMessageBox.critical(self, "导出失败", f"读取任务文件失败: {str(e)}")
+            show_error(self, "导出失败", f"读取任务文件失败: {str(e)}")
             return
 
         if not all_tasks_data:
             logger.info("导出任务失败：没有任务可导出")
-            QMessageBox.information(self, "导出任务", "没有任务可导出")
+            show_warning(self, "导出任务", "没有任务可导出")
             return
 
         # 获取字段配置
@@ -1168,7 +996,7 @@ class QuadrantWidget(QWidget):
 
         if not rows:
             logger.info("导出任务失败：没有有效任务可导出")
-            QMessageBox.information(self, "导出任务", "没有有效任务可导出")
+            show_warning(self, "导出任务", "没有有效任务可导出")
             return
 
         # 定义列的顺序
@@ -1188,9 +1016,9 @@ class QuadrantWidget(QWidget):
             # 导出到Excel
             df.to_excel(filename, index=False)
             logger.info(f"成功导出 {len(df)} 个任务到: {filename}")
-            QMessageBox.information(self, "导出成功", f"成功导出 {len(df)} 个任务到:\n{filename}")
+            show_success(self, "导出成功", f"成功导出 {len(df)} 个任务到:\n{filename}")
         except Exception as e:
-            QMessageBox.critical(self, "导出失败", f"导出任务时发生错误:\n{str(e)}")
+            show_error(self, "导出失败", f"导出任务时发生错误:\n{str(e)}")
             logger.error(f"导出任务时发生错误: {str(e)}")
 
     def _is_port_open(self, host='127.0.0.1', port=5000) -> bool:
@@ -1212,6 +1040,7 @@ class QuadrantWidget(QWidget):
         如果 127.0.0.1:5000 没在跑，则启动 gantt/app.py 里的 Flask。
         同时设置 DB_PATH，指向项目内的 database/tasks.db
         """
+        from gantt.app import gantt_app
         # 计算项目根目录（quadrant_widget.py 在 core/，根目录是其上一级）
         root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
         # 指定数据库路径（你的 app.py 里默认就是 ./database/tasks.db）
@@ -1242,6 +1071,11 @@ class QuadrantWidget(QWidget):
         - 优先使用 QWebEngineView 内嵌；如果未安装，则回退到系统浏览器打开。
         - index.html 路径可按需修改 / 做成配置项。
         """
+        try:
+            from PyQt6.QtWebEngineWidgets import QWebEngineView
+            HAS_WEBENGINE = True
+        except Exception:
+            HAS_WEBENGINE = False
         # 启动gantt服务
         url = "http://127.0.0.1:5000/"
         self._start_gantt_server_if_needed()
@@ -1265,14 +1099,14 @@ class QuadrantWidget(QWidget):
 
         # 白色圆角面板
         panel = QWidget(dlg)
-        panel.setObjectName("panel")
+        panel.setObjectName("dialog_panel")
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(10, 10, 10, 10)
         panel_layout.setSpacing(10)
         
         # 使用统一样式
         style_manager = StyleManager()
-        add_task_dialog_stylesheet = style_manager.get_stylesheet("add_task_dialog").format()
+        add_task_dialog_stylesheet = style_manager.get_stylesheet("add_task_dialog")
         panel.setStyleSheet(add_task_dialog_stylesheet)
         
         # 内部内容
@@ -1303,7 +1137,6 @@ class QuadrantWidget(QWidget):
     def show_complete_dialog(self):
         """显示已完成任务对话框"""
         from .complete_table import CompleteTableDialog
-        
         dialog = CompleteTableDialog(self)
         dialog.exec()
 
@@ -1376,8 +1209,8 @@ class QuadrantWidget(QWidget):
         # 更新位置信息
         self.config['position']['x'] = self.x()
         self.config['position']['y'] = self.y()
-        
-        save_config(self.config, self)
+
+        return save_config(self.config, self)
     
     def _handle_remote_sync(self, change_summaries):
         """后台同步发现远程修改后，投递一次主线程确认。"""
@@ -1392,7 +1225,7 @@ class QuadrantWidget(QWidget):
             return
 
         if (not getattr(self.db_manager, 'username', '').strip()) or (not getattr(self.db_manager, 'api_token', '').strip()):
-            QMessageBox.warning(self, "远程配置不完整", "远程同步已暂停。请在设置面板的“远程设置”页补全远程服务器、用户名和访问令牌。")
+            show_warning(self, "远程配置", "远程同步已暂停。请在设置面板的“远程设置”页补全远程服务器、用户名和访问令牌。")
             self.show_settings('remote')
             return
 
@@ -1590,12 +1423,12 @@ class QuadrantWidget(QWidget):
     def _apply_remote_change_selection(self, selection_rows):
         accepted_ids, rejected_ids, missing_ids = self._collect_remote_change_choices(selection_rows)
         if missing_ids:
-            QMessageBox.warning(self, '选择不完整', '还有未勾选的冲突，请为每条记录选择接受本地或接受远程。')
+            show_warning(self, '选择不完整', '还有未勾选的冲突，请为每条记录选择接受本地或接受远程。')
             return False
 
         success = self.db_manager.resolve_pending_remote_task_changes(accepted_ids, rejected_ids)
         if not success:
-            QMessageBox.warning(self, '同步失败', '处理远程修改失败，请稍后重试。')
+            show_error(self, "同步失败", "处理远程修改失败，请稍后重试。")
             return False
 
         self.db_manager.flush_cache_to_db()
@@ -1623,7 +1456,7 @@ class QuadrantWidget(QWidget):
         message.setWordWrap(True)
         layout.addWidget(message)
 
-        scroll_area = QScrollArea(dialog)
+        scroll_area = FluentScrollArea(dialog)
         scroll_area.setWidgetResizable(True)
         table_container = QWidget()
         table_layout = QGridLayout(table_container)
@@ -1780,7 +1613,7 @@ class QuadrantWidget(QWidget):
             logger.info(f"成功加载了 {len(self.tasks)} 个任务")
         except Exception as e:
             logger.error(f"加载任务失败: {str(e)}")
-            QMessageBox.warning(self, "加载失败", f"加载任务失败: {str(e)}")
+            show_error(self, "加载失败", f"加载任务失败: {str(e)}")
         finally:
             self._sync_refresh_pending = False
             self.setUpdatesEnabled(True)

@@ -1,11 +1,12 @@
 import json
 from datetime import datetime
-from PyQt6.QtWidgets import QMessageBox
 import logging
+from font_families import APP_FONT_FAMILY
 logger = logging.getLogger(__name__)
 
 # 导入数据库管理器
 from database.database_manager import get_db_manager
+from ui.notifications import show_error
 
 # 配置和数据文件（统一定位到项目根目录）
 import os
@@ -33,7 +34,7 @@ DEFAULT_CONFIG = {
     'ui': {
         'border_radius': 15,
         'shadow_effect': True,
-        'font_family': '微软雅黑',
+        'font_family': APP_FONT_FAMILY,
         'animation_enabled': True,
         'desktop_mode': True,  # 桌面融合模式
         'control_panel_opacity': 0.0  # 控制面板初始透明度
@@ -74,7 +75,7 @@ def save_config(config, parent=None):
     except Exception as e:
         logger.error(f"保存配置失败: {str(e)}")
         if parent:
-            QMessageBox.warning(parent, "保存失败", f"保存配置失败: {str(e)}")
+            show_error(parent, "保存失败", f"保存配置失败: {str(e)}")
         return False
 
 
@@ -126,7 +127,7 @@ def save_tasks(tasks, parent=None):
     except Exception as e:
         logger.error(f"保存任务失败: {str(e)}")
         if parent:
-            QMessageBox.warning(parent, "保存失败", f"保存任务失败: {str(e)}")
+            show_error(parent, "保存失败", f"保存任务失败: {str(e)}")
         return False
 
 
