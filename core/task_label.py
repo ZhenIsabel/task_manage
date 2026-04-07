@@ -491,10 +491,6 @@ class TaskLabel(QWidget):
         meta_layout.setContentsMargins(10, 8, 10, 8)
         meta_layout.setSpacing(6)
 
-        meta_title = QLabel("任务状态", meta_section)
-        meta_title.setObjectName("detail_field_label")
-        meta_layout.addWidget(meta_title)
-
         meta_row = QWidget(meta_section)
         meta_row.setObjectName("detail_meta_row")
         meta_row_layout = QHBoxLayout(meta_row)

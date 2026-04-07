@@ -4,6 +4,7 @@
 
 # 核心GUI框架
 PyQt6>=6.4.0
+PyQt6-Fluent-Widgets[full]
 
 # HTTP请求库（用于数据同步）
 requests>=2.31.0
