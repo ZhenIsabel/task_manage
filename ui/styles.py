@@ -557,11 +557,6 @@ class StyleManager:
             QWidget#settings_panel QPushButton:hover {{
                 background-color: {BUTTON_THEME_TOKENS["accent_fill_hover"]};
             }}
-            QWidget#settings_panel QCheckBox {{
-                color: #505050;
-                font-family: {APP_FONT_FAMILY_QSS};
-                padding: 5px;
-            }}
         """ + PANEL_FORM_CONTROLS_STYLE,
         "panel_form_controls": PANEL_FORM_CONTROLS_STYLE,
         

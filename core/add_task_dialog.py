@@ -2,7 +2,7 @@ from PyQt6.QtCore import Qt,QDate
 from PyQt6.QtWidgets import (QDialog, QWidget, QVBoxLayout,
                              QLabel, QLineEdit, QDateEdit, QTimeEdit, QSpinBox,
                              QPushButton, QHBoxLayout, QComboBox, QTextEdit, QFileDialog,
-                             QGraphicsDropShadowEffect)
+                             QGraphicsDropShadowEffect, QSizePolicy)
 from PyQt6.QtGui import QMouseEvent, QColor
 
 from ui.fluent import ComboBox, create_calendar_picker, get_date_string_from_picker, is_date_picker
@@ -17,6 +17,30 @@ _COMPACT_MULTILINE_MIN_HEIGHT = 68
 _INPUT_SHADOW_BLUR_RADIUS = 0.7
 _INPUT_SHADOW_ALPHA = 40
 _INPUT_SHADOW_OFFSET_Y = 0.5
+
+
+class _DirectoryPathDisplay(QLabel):
+    def __init__(self, placeholder_text="", parent=None):
+        super().__init__(parent)
+        self._value = ""
+        self._placeholder_text = placeholder_text
+        self.setWordWrap(True)
+        self.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self._sync_display()
+
+    def setText(self, text):
+        self._value = str(text) if text else ""
+        self._sync_display()
+
+    def text(self):
+        return self._value
+
+    def _sync_display(self):
+        super().setText(self._value or self._placeholder_text)
+        self.setProperty("empty", "true" if not self._value else "false")
+        self.style().unpolish(self)
+        self.style().polish(self)
 
 class AddTaskDialog(QDialog):
     def __init__(self, parent=None, task_fields=None):
@@ -121,14 +145,11 @@ class AddTaskDialog(QDialog):
 
         if field['type'] == 'file':
             dir_layout = QHBoxLayout()
-            path_edit = QLineEdit()
-            path_edit.setPlaceholderText("请选择文件夹路径...")
-            path_edit.setReadOnly(True)
+            path_edit = _DirectoryPathDisplay("请选择文件夹路径...")
             default_value = field.get('default', '')
             if default_value:
                 path_edit.setText(str(default_value))
-            self._apply_non_fluent_input_chrome(path_edit)
-            btn = QPushButton("选择")
+            btn = QPushButton("路径")
             apply_button_role(btn, "secondary")
             btn.clicked.connect(lambda _, we=path_edit: self.choose_dir(we))
             dir_layout.addWidget(path_edit)
