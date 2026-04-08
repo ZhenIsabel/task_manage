@@ -23,7 +23,7 @@ from PyQt6.QtWidgets import (
 )
 
 from font_families import APP_FONT_FAMILY_QSS
-from ui.styles import StyleManager
+from ui.styles import BUTTON_THEME_TOKENS, StyleManager, apply_button_role
 
 
 def _coerce_int_in_range(raw, default, lo, hi):
@@ -157,7 +157,7 @@ class SettingsDialog(QDialog):
             "border-bottom: none; padding: 10px 20px; margin-right: 2px; "
             "border-top-left-radius: 8px; border-top-right-radius: 8px; "
             f"font-family: {APP_FONT_FAMILY_QSS}; font-size: 13px; }}"
-            "QTabBar::tab:selected { background-color: white; color: #4ECDC4; font-weight: bold; }"
+            f'QTabBar::tab:selected {{ background-color: white; color: {BUTTON_THEME_TOKENS["accent_fill_rest"]}; font-weight: bold; }}'
         )
 
         color_tab = self._build_color_tab()
@@ -179,8 +179,10 @@ class SettingsDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_row.addStretch()
         ok_btn = QPushButton("确定")
+        apply_button_role(ok_btn, "primary")
         ok_btn.clicked.connect(self.accept)
         cancel_btn = QPushButton("取消")
+        apply_button_role(cancel_btn, "ghost")
         cancel_btn.clicked.connect(self.reject)
         btn_row.addWidget(ok_btn)
         btn_row.addWidget(cancel_btn)

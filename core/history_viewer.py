@@ -6,7 +6,7 @@ from datetime import datetime
 
 from ui.adaptive_table import AdaptiveTextTableWidget
 from ui.notifications import show_error, show_success
-from ui.styles import StyleManager
+from ui.styles import StyleManager, apply_button_role
 from database.database_manager import get_db_manager
 import logging
 
@@ -67,16 +67,14 @@ class HistoryViewer(QDialog):
         
         # 导出按钮
         export_button = QPushButton("导出")
-        export_button.setStyleSheet(style_manager.get_stylesheet("task_label_button"))
-        export_button.setFixedHeight(35)
+        apply_button_role(export_button, "secondary")
         export_button.clicked.connect(self.export_history)
         button_layout.addWidget(export_button)
         
         # 关闭按钮
         close_button = QPushButton("关闭")
         close_button.clicked.connect(self.close)
-        close_button.setStyleSheet(style_manager.get_stylesheet("task_label_button"))
-        close_button.setFixedHeight(35)
+        apply_button_role(close_button, "ghost")
         button_layout.addWidget(close_button)
         
         panel_layout.addLayout(button_layout)

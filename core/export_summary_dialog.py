@@ -16,7 +16,7 @@ from PyQt6.QtGui import QMouseEvent
 
 from ui.fluent import create_calendar_picker, get_date_from_picker, get_date_string_from_picker, set_date_on_picker
 from ui.notifications import _show_info_bar, show_error, show_success,show_warning
-from ui.styles import StyleManager
+from ui.styles import BUTTON_THEME_TOKENS, StyleManager, apply_button_role
 from database.database_manager import get_db_manager
 from core.LLMService import get_llm_service
 
@@ -361,14 +361,17 @@ class ExportSummaryDialog(QDialog):
         quick_layout.addWidget(quick_label)
         
         btn_7days = QPushButton("近7天")
+        apply_button_role(btn_7days, "secondary", size="sm")
         btn_7days.clicked.connect(lambda: self._set_date_range(7))
         quick_layout.addWidget(btn_7days)
         
         btn_30days = QPushButton("近30天")
+        apply_button_role(btn_30days, "secondary", size="sm")
         btn_30days.clicked.connect(lambda: self._set_date_range(30))
         quick_layout.addWidget(btn_30days)
         
         btn_90days = QPushButton("近90天")
+        apply_button_role(btn_90days, "secondary", size="sm")
         btn_90days.clicked.connect(lambda: self._set_date_range(90))
         quick_layout.addWidget(btn_90days)
         
@@ -392,15 +395,18 @@ class ExportSummaryDialog(QDialog):
         button_layout.addStretch()
         
         self.generate_button = QPushButton("生成概要")
+        apply_button_role(self.generate_button, "primary")
         self.generate_button.clicked.connect(self._generate_summary)
         button_layout.addWidget(self.generate_button)
         
         self.export_button = QPushButton("导出Excel")
+        apply_button_role(self.export_button, "secondary")
         self.export_button.clicked.connect(self._export_to_excel)
         self.export_button.setEnabled(False)
         button_layout.addWidget(self.export_button)
         
         cancel_button = QPushButton("关闭")
+        apply_button_role(cancel_button, "ghost")
         cancel_button.clicked.connect(self.reject)
         button_layout.addWidget(cancel_button)
         
@@ -469,10 +475,10 @@ class ExportSummaryDialog(QDialog):
             self.summary_data = data
             self.export_button.setEnabled(True)
             self.status_label.setText(f"✓ {message}，共 {len(data)} 个任务")
-            self.status_label.setStyleSheet("font-size: 12px; color: #4ECDC4;")
+            self.status_label.setStyleSheet(f'font-size: 12px; color: {BUTTON_THEME_TOKENS["accent_fill_rest"]};')
         else:
             self.status_label.setText(f"✗ {message}")
-            self.status_label.setStyleSheet("font-size: 12px; color: #ff4757;")
+            self.status_label.setStyleSheet(f'font-size: 12px; color: {BUTTON_THEME_TOKENS["danger_fill_rest"]};')
     
     def _export_to_excel(self):
         """导出到Excel"""
