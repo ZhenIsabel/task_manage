@@ -5,7 +5,6 @@ from copy import deepcopy
 from PyQt6.QtCore import Qt, QTime, pyqtSignal
 from PyQt6.QtGui import QColor, QMouseEvent
 from PyQt6.QtWidgets import (
-    QCheckBox,
     QColorDialog,
     QDialog,
     QFormLayout,
@@ -22,7 +21,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from qfluentwidgets import DoubleSpinBox,SpinBox,TimeEdit
+
 from font_families import APP_FONT_FAMILY_QSS
+from ui.fluent import SwitchButton
 from ui.styles import BUTTON_THEME_TOKENS, StyleManager, apply_button_role
 
 
@@ -161,17 +163,13 @@ class SettingsDialog(QDialog):
         )
 
         color_tab = self._build_color_tab()
-        size_tab = self._build_size_tab()
         ui_tab = self._build_ui_tab()
-        remote_tab = self._build_remote_tab()
 
-        tab_widget.addTab(color_tab, "颜色设置")
-        tab_widget.addTab(size_tab, "大小设置")
-        tab_widget.addTab(ui_tab, "界面设置")
-        tab_widget.addTab(remote_tab, "远程设置")
+        tab_widget.addTab(color_tab, "UI")
+        tab_widget.addTab(ui_tab, "其他")
 
         if initial_tab == "remote":
-            tab_widget.setCurrentWidget(remote_tab)
+            tab_widget.setCurrentWidget(ui_tab)
 
         self._tab_widget = tab_widget
         panel_layout.addWidget(tab_widget)
@@ -211,21 +209,50 @@ class SettingsDialog(QDialog):
             row, col = positions[q_id]
             layout.addWidget(card, row, col)
 
+        layout.addWidget(self._build_display_card(), 2, 0, 1, 2)
         return widget
 
+    def _build_display_card(self) -> QWidget:
+        card = self._build_settings_card("显示设置", "settings_display_card")
+
+        controls = QGridLayout()
+        controls.setHorizontalSpacing(14)
+        controls.setVerticalSpacing(12)
+
+        self._width_spin = SpinBox(self)
+        self._width_spin.setObjectName("settings_width_spin")
+        self._width_spin.setRange(300, 2000)
+        self._width_spin.setValue(
+            _coerce_int_in_range(self._working_size.get("width"), 1000, 300, 2000)
+        )
+        self._width_spin.valueChanged.connect(lambda v: self._set_size("width", v))
+
+        self._height_spin = SpinBox(self)
+        self._height_spin.setObjectName("settings_height_spin")
+        self._height_spin.setRange(300, 2000)
+        self._height_spin.setValue(
+            _coerce_int_in_range(self._working_size.get("height"), 800, 300, 2000)
+        )
+        self._height_spin.valueChanged.connect(lambda v: self._set_size("height", v))
+
+        self._border_radius_spin = DoubleSpinBox()
+        self._border_radius_spin.setObjectName("settings_border_radius_spin")
+        self._border_radius_spin.setRange(0, 50)
+        self._border_radius_spin.setValue(
+            _coerce_int_in_range(self._working_ui.get("border_radius"), 15, 0, 50)
+        )
+        self._border_radius_spin.valueChanged.connect(self._set_border_radius)
+
+        controls.addWidget(self._build_labeled_control("宽度", self._width_spin), 0, 0)
+        controls.addWidget(self._build_labeled_control("高度", self._height_spin), 0, 1)
+        controls.addWidget(self._build_labeled_control("圆角半径", self._border_radius_spin), 1, 0)
+
+        card.layout().addLayout(controls)
+        return card
+
     def _build_quadrant_color_card(self, q_id: str, q_name: str) -> QWidget:
-        card = QWidget()
-        card.setObjectName(f"settings_{q_id}_color_card")
-        card.setProperty("settingsColorCard", True)
-
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(16, 16, 16, 16)
-        card_layout.setSpacing(12)
-
-        title = QLabel(q_name)
-        title.setObjectName(f"settings_{q_id}_color_card_title")
-        title.setProperty("settingsColorCardTitle", True)
-        card_layout.addWidget(title)
+        card = self._build_settings_card(q_name, f"settings_{q_id}_color_card")
+        card_layout = card.layout()
 
         controls = QFormLayout()
         controls.setSpacing(12)
@@ -283,53 +310,22 @@ class SettingsDialog(QDialog):
         card_layout.addStretch(1)
         return card
 
-    # ---- 大小标签页 ----
-    def _build_size_tab(self) -> QWidget:
-        widget = QWidget()
-        layout = QFormLayout(widget)
-        layout.setSpacing(15)
-        layout.setContentsMargins(20, 20, 20, 20)
-
-        self._width_spin = QSpinBox()
-        self._width_spin.setObjectName("settings_width_spin")
-        self._width_spin.setRange(300, 2000)
-        self._width_spin.setValue(
-            _coerce_int_in_range(self._working_size.get("width"), 1000, 300, 2000)
-        )
-        self._width_spin.valueChanged.connect(lambda v: self._set_size("width", v))
-
-        self._height_spin = QSpinBox()
-        self._height_spin.setObjectName("settings_height_spin")
-        self._height_spin.setRange(300, 2000)
-        self._height_spin.setValue(
-            _coerce_int_in_range(self._working_size.get("height"), 800, 300, 2000)
-        )
-        self._height_spin.valueChanged.connect(lambda v: self._set_size("height", v))
-
-        layout.addRow("宽度:", self._width_spin)
-        layout.addRow("高度:", self._height_spin)
-        return widget
-
-    # ---- 界面标签页 ----
+    # ---- 其他标签页 ----
     def _build_ui_tab(self) -> QWidget:
         widget = QWidget()
-        layout = QFormLayout(widget)
-        layout.setSpacing(15)
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(16)
         layout.setContentsMargins(20, 20, 20, 20)
 
-        self._border_radius_spin = QSpinBox()
-        self._border_radius_spin.setObjectName("settings_border_radius_spin")
-        self._border_radius_spin.setRange(0, 50)
-        self._border_radius_spin.setValue(
-            _coerce_int_in_range(self._working_ui.get("border_radius"), 15, 0, 50)
-        )
-        self._border_radius_spin.valueChanged.connect(self._set_border_radius)
-
         ar = self._working_auto_refresh
-        self._auto_refresh_checkbox = QCheckBox("启用自动刷新")
+        self._auto_refresh_checkbox = SwitchButton("自动刷新")
+        self._auto_refresh_checkbox.setObjectName("settings_auto_refresh_switch")
+        self._auto_refresh_checkbox.setOffText("自动刷新")
+        self._auto_refresh_checkbox.setOnText("自动刷新")
         self._auto_refresh_checkbox.setChecked(ar.get("enabled", True))
 
-        self._refresh_time_edit = QTimeEdit()
+        self._refresh_time_edit = TimeEdit()
+        self._refresh_time_edit.setObjectName("settings_refresh_time_edit")
         self._refresh_time_edit.setDisplayFormat("HH:mm:ss")
         rts = ar.get("refresh_time", "00:02:00")
         try:
@@ -342,23 +338,31 @@ class SettingsDialog(QDialog):
         hint.setStyleSheet("color: #666; font-size: 11px;")
         hint.setWordWrap(True)
 
-        layout.addRow("圆角半径:", self._border_radius_spin)
-        layout.addRow("", QLabel(""))
-        layout.addRow(self._auto_refresh_checkbox)
-        layout.addRow("刷新时间:", self._refresh_time_edit)
-        layout.addRow("", hint)
+        auto_refresh_card = self._build_settings_card("自动刷新", "settings_auto_refresh_card")
+        auto_refresh_grid = QGridLayout()
+        auto_refresh_grid.setHorizontalSpacing(14)
+        auto_refresh_grid.setVerticalSpacing(12)
+        auto_refresh_grid.addWidget(self._auto_refresh_checkbox, 0, 0)
+        auto_refresh_grid.addWidget(
+            self._build_labeled_control("刷新时间", self._refresh_time_edit, "settings_refresh_time_field"),
+            0,
+            1,
+        )
+        auto_refresh_card.layout().addLayout(auto_refresh_grid)
+        auto_refresh_card.layout().addWidget(hint)
+
+        layout.addWidget(auto_refresh_card)
+        layout.addWidget(self._build_remote_card())
+        layout.addStretch(1)
         return widget
 
-    # ---- 远程标签页 ----
-    def _build_remote_tab(self) -> QWidget:
-        widget = QWidget()
-        layout = QFormLayout(widget)
-        layout.setSpacing(15)
-        layout.setContentsMargins(20, 20, 20, 20)
-
+    def _build_remote_card(self) -> QWidget:
+        card = self._build_settings_card("远程同步", "settings_remote_card")
         r = self._working_remote
-        self._remote_enabled = QCheckBox("启用远程同步")
-        self._remote_enabled.setObjectName("settings_remote_enabled_checkbox")
+        self._remote_enabled = SwitchButton("启用远程同步")
+        self._remote_enabled.setObjectName("settings_remote_enabled_switch")
+        self._remote_enabled.setOffText("启用远程同步")
+        self._remote_enabled.setOnText("启用远程同步")
         self._remote_enabled.setChecked(bool(r.get("enabled", False)))
 
         self._remote_url = QLineEdit(str(r.get("api_base_url", "")))
@@ -377,12 +381,45 @@ class SettingsDialog(QDialog):
         hint.setStyleSheet("color: #666; font-size: 11px;")
         hint.setWordWrap(True)
 
-        layout.addRow(self._remote_enabled)
-        layout.addRow("服务器地址:", self._remote_url)
-        layout.addRow("用户名:", self._remote_username)
-        layout.addRow("访问令牌:", self._remote_token)
-        layout.addRow("", hint)
-        return widget
+        form = QFormLayout()
+        form.setSpacing(12)
+        form.addRow(self._remote_enabled)
+        form.addRow("服务器地址:", self._remote_url)
+        form.addRow("用户名:", self._remote_username)
+        form.addRow("访问令牌:", self._remote_token)
+
+        card.layout().addLayout(form)
+        card.layout().addWidget(hint)
+        return card
+
+    def _build_settings_card(self, title_text: str, object_name: str) -> QWidget:
+        card = QWidget()
+        card.setObjectName(object_name)
+        card.setProperty("settingsColorCard", True)
+
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(16, 16, 16, 16)
+        card_layout.setSpacing(12)
+
+        title = QLabel(title_text)
+        title.setObjectName(f"{object_name}_title")
+        title.setProperty("settingsColorCardTitle", True)
+        card_layout.addWidget(title)
+        return card
+
+    def _build_labeled_control(
+        self, label_text: str, control: QWidget, object_name: str | None = None
+    ) -> QWidget:
+        container = QWidget()
+        if object_name:
+            container.setObjectName(object_name)
+
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+        layout.addWidget(QLabel(label_text))
+        layout.addWidget(control)
+        return container
 
     # ----------------------------------------------- Drag (frameless window)
     def mousePressEvent(self, e: QMouseEvent):

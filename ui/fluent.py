@@ -12,6 +12,7 @@ from PyQt6.QtCore import QDate, QEasingCurve, QPoint,Qt
 from PyQt6.QtGui import QAction, QColor
 from PyQt6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QDateEdit,
     QDialog,
@@ -40,6 +41,7 @@ try:
         PrimaryPushButton,
         PushButton,
         RoundMenu,
+        SwitchButton,
         TableWidget,
         TextEdit,
         Theme,
@@ -85,6 +87,31 @@ except ImportError:
 
         def __init__(self, parent: Optional[QWidget] = None, format=0, isMonthTight=True):
             super().__init__(parent)
+
+    class SwitchButton(QCheckBox):
+        """Fallback switch button that preserves the checked API we use."""
+
+        checkedChanged = QCheckBox.toggled
+
+        def __init__(self, text: str = "", parent: Optional[QWidget] = None, indicatorPos=None):
+            super().__init__(text, parent)
+            self._on_text = text
+            self._off_text = text
+            self.toggled.connect(lambda checked: self.setText(self._on_text if checked else self._off_text))
+
+        def setOnText(self, text: str) -> None:
+            self._on_text = text
+            if self.isChecked():
+                self.setText(text)
+
+        def setOffText(self, text: str) -> None:
+            self._off_text = text
+            if not self.isChecked():
+                self.setText(text)
+
+        def setChecked(self, checked: bool) -> None:
+            super().setChecked(checked)
+            self.setText(self._on_text if checked else self._off_text)
 
 
 if FLUENT_AVAILABLE:

@@ -32,8 +32,8 @@ BUTTON_THEME_TOKENS = {
 }
 
 BUTTON_SIZE_TOKENS = {
-    "sm": 20,
-    "md": 28,
+    "sm": 28,
+    "md": 30,
     "lg": 40,
 }
 

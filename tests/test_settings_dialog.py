@@ -3,11 +3,12 @@ import unittest
 
 from PyQt6.QtCore import QEvent, QPoint, QPointF, Qt
 from PyQt6.QtGui import QMouseEvent
-from PyQt6.QtWidgets import QApplication, QCheckBox, QLineEdit, QSlider, QSpinBox
+from PyQt6.QtWidgets import QApplication, QLineEdit, QSlider, QSpinBox, QTabWidget, QWidget
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from core.settings_dialog import SettingsDialog
+from ui.fluent import SwitchButton
 from ui.ui import MyColorDialog
 
 
@@ -119,6 +120,59 @@ class SettingsDialogTests(unittest.TestCase):
         for key in ("enabled", "api_base_url", "api_token", "username"):
             self.assertIn(key, remote)
 
+    def test_settings_tabs_should_merge_into_ui_and_other_sections(self):
+        """设置页签应收敛为 UI 与其他，尺寸与远程设置不再单独占页签。"""
+        dlg = SettingsDialog(None, initial=_sample_initial())
+
+        tab_widget = dlg.findChild(QTabWidget)
+        self.assertIsNotNone(tab_widget)
+        self.assertEqual(tab_widget.count(), 2)
+        self.assertEqual(tab_widget.tabText(0), "UI")
+        self.assertEqual(tab_widget.tabText(1), "其他")
+
+    def test_ui_tab_should_group_size_and_border_radius_inside_display_card(self):
+        """UI 页签内应使用单独卡片承载宽高和圆角，宽高保持同一行。"""
+        initial = _sample_initial()
+        dlg = SettingsDialog(None, initial=initial)
+        dlg.show()
+        self.app.processEvents()
+
+        display_card = dlg.findChild(QWidget, "settings_display_card")
+        self.assertIsNotNone(display_card)
+        self.assertIs(dlg.findChild(QSpinBox, "settings_width_spin").parentWidget().parentWidget(), display_card)
+        self.assertIs(dlg.findChild(QSpinBox, "settings_height_spin").parentWidget().parentWidget(), display_card)
+        self.assertIs(
+            dlg.findChild(QSpinBox, "settings_border_radius_spin").parentWidget().parentWidget(),
+            display_card,
+        )
+
+        width_spin = dlg.findChild(QSpinBox, "settings_width_spin")
+        height_spin = dlg.findChild(QSpinBox, "settings_height_spin")
+        self.app.processEvents()
+        width_pos = width_spin.parentWidget().mapTo(dlg, QPoint(0, 0))
+        height_pos = height_spin.parentWidget().mapTo(dlg, QPoint(0, 0))
+        self.assertEqual(width_pos.y(), height_pos.y())
+        self.assertNotEqual(width_pos.x(), height_pos.x())
+
+    def test_other_tab_should_use_switch_buttons_for_auto_refresh_and_remote_sync(self):
+        """其他页签中的自动刷新和远程同步入口都应改成 Fluent SwitchButton。"""
+        dlg = SettingsDialog(None, initial=_sample_initial())
+        dlg.show()
+        self.app.processEvents()
+
+        auto_refresh_switch = dlg.findChild(SwitchButton, "settings_auto_refresh_switch")
+        remote_switch = dlg.findChild(SwitchButton, "settings_remote_enabled_switch")
+
+        self.assertIsNotNone(auto_refresh_switch)
+        self.assertIsNotNone(remote_switch)
+
+        refresh_time = dlg.findChild(QWidget, "settings_refresh_time_field")
+        self.assertIsNotNone(refresh_time)
+        auto_refresh_pos = auto_refresh_switch.mapTo(dlg, QPoint(0, 0))
+        refresh_time_pos = refresh_time.mapTo(dlg, QPoint(0, 0))
+        self.assertEqual(auto_refresh_pos.y(), refresh_time_pos.y())
+        self.assertNotEqual(auto_refresh_pos.x(), refresh_time_pos.x())
+
     def test_remote_config_four_fields_read_and_write(self):
         """remote_config 四字段可从 initial 读出，并随控件写回 get_result。"""
         initial = _sample_initial()
@@ -130,7 +184,7 @@ class SettingsDialogTests(unittest.TestCase):
         self.assertEqual(r0["api_token"], "secret-token")
         self.assertEqual(r0["username"], "alice")
 
-        dlg.findChild(QCheckBox, "settings_remote_enabled_checkbox").setChecked(False)
+        dlg.findChild(SwitchButton, "settings_remote_enabled_switch").setChecked(False)
         dlg.findChild(QLineEdit, "settings_remote_api_base_url_edit").setText("https://api.test")
         dlg.findChild(QLineEdit, "settings_remote_api_token_edit").setText("new-tok")
         dlg.findChild(QLineEdit, "settings_remote_username_edit").setText("bob")
