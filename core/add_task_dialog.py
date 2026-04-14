@@ -1,15 +1,46 @@
 from PyQt6.QtCore import Qt,QDate
 from PyQt6.QtWidgets import (QDialog, QWidget, QVBoxLayout,
-                             QLabel, QLineEdit,
-                             QPushButton, QHBoxLayout, QComboBox, QTextEdit,QFileDialog)
-from PyQt6.QtGui import QMouseEvent
+                             QLabel, QLineEdit, QDateEdit, QTimeEdit, QSpinBox,
+                             QPushButton, QHBoxLayout, QComboBox, QTextEdit, QFileDialog,
+                             QGraphicsDropShadowEffect, QSizePolicy)
+from PyQt6.QtGui import QMouseEvent, QColor
 
 from ui.fluent import ComboBox, create_calendar_picker, get_date_string_from_picker, is_date_picker
 from ui.notifications import show_warning
-from ui.styles import StyleManager
+from ui.styles import StyleManager, apply_button_role
 from ui.degree_badges import is_degree_field
 import logging
 logger = logging.getLogger(__name__)  # 自动获取模块名
+
+_COMPACT_INPUT_HEIGHT = 28
+_COMPACT_MULTILINE_MIN_HEIGHT = 68
+_INPUT_SHADOW_BLUR_RADIUS = 0.7
+_INPUT_SHADOW_ALPHA = 40
+_INPUT_SHADOW_OFFSET_Y = 0.5
+
+
+class _DirectoryPathDisplay(QLabel):
+    def __init__(self, placeholder_text="", parent=None):
+        super().__init__(parent)
+        self._value = ""
+        self._placeholder_text = placeholder_text
+        self.setWordWrap(True)
+        self.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self._sync_display()
+
+    def setText(self, text):
+        self._value = str(text) if text else ""
+        self._sync_display()
+
+    def text(self):
+        return self._value
+
+    def _sync_display(self):
+        super().setText(self._value or self._placeholder_text)
+        self.setProperty("empty", "true" if not self._value else "false")
+        self.style().unpolish(self)
+        self.style().polish(self)
 
 class AddTaskDialog(QDialog):
     def __init__(self, parent=None, task_fields=None):
@@ -55,7 +86,9 @@ class AddTaskDialog(QDialog):
         # 按钮
         btn_row = QHBoxLayout()
         ok = QPushButton("确定"); ok.clicked.connect(self._try_accept)
+        apply_button_role(ok, "primary")
         cancel = QPushButton("取消"); cancel.clicked.connect(self.reject)
+        apply_button_role(cancel, "ghost")
         btn_row.addWidget(ok); btn_row.addWidget(cancel)
         panel_layout.addLayout(btn_row)
 
@@ -87,7 +120,7 @@ class AddTaskDialog(QDialog):
         default_value = field.get('default', '')
         if field['type'] == 'date':
             initial_date = QDate.fromString(default_value, "yyyy-MM-dd") if default_value else QDate.currentDate()
-            return create_calendar_picker(parent, initial_date)
+            return self._apply_non_fluent_input_chrome(create_calendar_picker(parent, initial_date))
         if field['type'] == 'select':
             widget = ComboBox()
             for option in field.get('options', []):
@@ -98,13 +131,13 @@ class AddTaskDialog(QDialog):
         if field['type'] == 'multiline':
             widget = QTextEdit()
             widget.setPlaceholderText("请输入备注...")
-            widget.setMinimumHeight(100)
+            widget.setMinimumHeight(_COMPACT_MULTILINE_MIN_HEIGHT)
             if default_value:
                 widget.setText(str(default_value))
-            return widget
+            return self._apply_non_fluent_input_chrome(widget)
         if field['type'] == 'file':
             return None
-        return QLineEdit(str(default_value))
+        return self._apply_non_fluent_input_chrome(QLineEdit(str(default_value)))
 
     def _add_single_field(self, panel, parent_layout, field):
         lab = QLabel(f"{field['label']}{' *' if field.get('required') else ''}")
@@ -112,13 +145,12 @@ class AddTaskDialog(QDialog):
 
         if field['type'] == 'file':
             dir_layout = QHBoxLayout()
-            path_edit = QLineEdit()
-            path_edit.setPlaceholderText("请选择文件夹路径...")
-            path_edit.setReadOnly(True)
+            path_edit = _DirectoryPathDisplay("请选择文件夹路径...")
             default_value = field.get('default', '')
             if default_value:
                 path_edit.setText(str(default_value))
-            btn = QPushButton("选择")
+            btn = QPushButton("路径")
+            apply_button_role(btn, "secondary")
             btn.clicked.connect(lambda _, we=path_edit: self.choose_dir(we))
             dir_layout.addWidget(path_edit)
             dir_layout.addWidget(btn)
@@ -164,6 +196,26 @@ class AddTaskDialog(QDialog):
         path = QFileDialog.getExistingDirectory(self, "选择文件夹")
         if path:
             widget.setText(path)
+
+    def _apply_non_fluent_input_chrome(self, widget):
+        if widget.__class__.__module__.startswith("qfluentwidgets"):
+            return widget
+
+        if not isinstance(widget, (QLineEdit, QTextEdit, QDateEdit, QTimeEdit, QSpinBox)):
+            return widget
+
+        shadow = QGraphicsDropShadowEffect(widget)
+        shadow.setBlurRadius(_INPUT_SHADOW_BLUR_RADIUS)
+        shadow.setOffset(0, _INPUT_SHADOW_OFFSET_Y)
+        shadow.setColor(QColor(0, 0, 0, _INPUT_SHADOW_ALPHA))
+        widget.setGraphicsEffect(shadow)
+
+        if isinstance(widget, QTextEdit):
+            widget.setMinimumHeight(_COMPACT_MULTILINE_MIN_HEIGHT)
+        else:
+            widget.setFixedHeight(_COMPACT_INPUT_HEIGHT)
+
+        return widget
 
 
     def _try_accept(self):

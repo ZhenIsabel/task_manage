@@ -15,7 +15,7 @@ from datetime import datetime
 from .add_task_dialog import AddTaskDialog
 from ui.scrollbar import FluentScrollArea
 from ui.notifications import show_error, resolve_notification_host,show_success,show_warning
-from ui.styles import StyleManager
+from ui.styles import StyleManager, apply_button_role
 from ui.degree_badges import create_degree_display_widget, build_degree_badge_stylesheet, get_status_badge_meta
 from ui.ui import MyColorDialog
 from config.config_manager import load_config
@@ -88,6 +88,7 @@ class TaskLabel(QWidget):
         
         # 详情浮窗
         self.detail_popup = None
+        self.status_label = None
         
         # 设置布局
         layout = QVBoxLayout()
@@ -418,6 +419,7 @@ class TaskLabel(QWidget):
         style_manager = StyleManager()
         parent_widget = self.parent()
         self.detail_popup = QFrame(parent_widget if parent_widget else self)
+        self.detail_popup.destroyed.connect(self._on_detail_popup_destroyed)
         self.detail_popup.setObjectName("task_detail_popup")
         self.detail_popup.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.detail_popup.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -460,11 +462,11 @@ class TaskLabel(QWidget):
         for label, handler in [
             ("目录", self.open_directory),
             ("编辑", self.edit_task),
-            ("历史记录", self.show_history),
+            ("历史", self.show_history),
             ("删除", self.handle_delete),
         ]:
             button = QPushButton(label, button_row)
-            button.setStyleSheet(style_manager.get_stylesheet("detail_popup_button"))
+            apply_button_role(button, "danger" if label == "删除" else "secondary", size="sm")
             button.clicked.connect(handler)
             button_layout.addWidget(button)
         layout.addWidget(button_row)
@@ -508,6 +510,7 @@ class TaskLabel(QWidget):
             meta_row_layout.addWidget(importance_widget, 1)
 
         self.status_label = QLabel(meta_row)
+        self.status_label.destroyed.connect(self._on_status_label_destroyed)
         self.status_label.setObjectName("detail_status_badge")
         self.status_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -665,9 +668,25 @@ class TaskLabel(QWidget):
         if not hasattr(self, 'status_label') or self.status_label is None:
             return
         meta = get_status_badge_meta(self.checkbox.isChecked())
-        self.status_label.setText(meta["display_text"])
-        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.status_label.setStyleSheet(build_degree_badge_stylesheet(meta))
+        try:
+            self.status_label.setText(meta["display_text"])
+            self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.status_label.setStyleSheet(build_degree_badge_stylesheet(meta))
+        except RuntimeError as e:
+            if "has been deleted" in str(e):
+                logger.debug(f"任务 {self.task_id} 的状态徽标已被销毁，跳过刷新")
+                self.status_label = None
+                return
+            raise
+
+    def _on_detail_popup_destroyed(self, *_args):
+        """详情浮窗销毁后清理悬挂引用，避免后续访问已删除控件。"""
+        self.detail_popup = None
+        self.status_label = None
+
+    def _on_status_label_destroyed(self, *_args):
+        """状态徽标销毁后同步清理引用。"""
+        self.status_label = None
 
     def show_history(self):
         """显示历史记录"""

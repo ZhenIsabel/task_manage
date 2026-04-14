@@ -9,18 +9,26 @@ from calendar import monthrange
 
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QMessageBox,
                             QPushButton, QWidget,QAbstractScrollArea,QCheckBox,
-                            QComboBox,QTextEdit,QLineEdit)
+                            QComboBox,QTextEdit,QLineEdit,QDateEdit,QTimeEdit,QSpinBox,
+                            QGraphicsDropShadowEffect)
 from PyQt6.QtCore import Qt, QDate
+from PyQt6.QtGui import QColor
 
 from ui.adaptive_table import AdaptiveTextTableWidget
 from ui.fluent import ComboBox, create_calendar_picker, get_date_string_from_picker, is_date_picker
 from ui.notifications import show_error, show_success,show_warning,resolve_notification_host
-from ui.styles import StyleManager
+from ui.styles import StyleManager, apply_button_role
 from ui.degree_badges import create_degree_table_cell, is_degree_field
 from database.database_manager import get_db_manager
 from config.config_manager import load_config
 import logging
 logger = logging.getLogger(__name__)
+
+_COMPACT_INPUT_HEIGHT = 28
+_COMPACT_MULTILINE_MIN_HEIGHT = 68
+_INPUT_SHADOW_BLUR_RADIUS = 1.0
+_INPUT_SHADOW_ALPHA = 50
+_INPUT_SHADOW_OFFSET_Y = 0.5
 
 
 class TaskScheduler:
@@ -356,39 +364,20 @@ class ScheduledTaskDialog(QDialog):
         
         # 添加按钮
         add_button=QPushButton("添加")
+        apply_button_role(add_button, "secondary")
         add_button.clicked.connect(self.add)
-        add_button.setStyleSheet(style_manager.get_stylesheet("task_label_button"))
-        add_button.setFixedHeight(35)
         button_layout.addWidget(add_button)
 
         # 删除按钮
         delete_button=QPushButton("删除")
+        apply_button_role(delete_button, "danger")
         delete_button.clicked.connect(self.delete_task)
-        delete_button.setStyleSheet("""
-            QPushButton {
-                background-color: #FF6B6B;
-                color: white;
-                border: none;
-                padding: 10px 20px;
-                border-radius: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #ff5252;
-            }
-            QPushButton:disabled {
-                background-color: #ccc;
-                color: #666;
-            }
-        """)
-        delete_button.setFixedHeight(35)
         button_layout.addWidget(delete_button)
 
         # 关闭按钮
         close_button = QPushButton("关闭")
+        apply_button_role(close_button, "ghost")
         close_button.clicked.connect(self.close)
-        close_button.setStyleSheet(style_manager.get_stylesheet("task_label_button"))
-        close_button.setFixedHeight(35)
         button_layout.addWidget(close_button)
         
         panel_layout.addLayout(button_layout)
@@ -624,16 +613,14 @@ class AddScheduleDialog(QDialog):
         
         # 添加按钮
         add_button=QPushButton("添加")
+        apply_button_role(add_button, "primary")
         add_button.clicked.connect(self.accept)
-        add_button.setStyleSheet(style_manager.get_stylesheet("task_label_button"))
-        add_button.setFixedHeight(35)
         button_layout.addWidget(add_button)
 
         # 关闭按钮
         close_button = QPushButton("关闭")
+        apply_button_role(close_button, "ghost")
         close_button.clicked.connect(self.reject)
-        close_button.setStyleSheet(style_manager.get_stylesheet("task_label_button"))
-        close_button.setFixedHeight(35)
         button_layout.addWidget(close_button)
         
         panel_layout.addLayout(button_layout)
@@ -666,7 +653,7 @@ class AddScheduleDialog(QDialog):
         default_value = field.get('default', '')
         if field['type'] == 'date':
             initial_date = QDate.fromString(default_value, "yyyy-MM-dd") if default_value else QDate.currentDate()
-            return create_calendar_picker(parent, initial_date)
+            return self._apply_non_fluent_input_chrome(create_calendar_picker(parent, initial_date))
         if field['type'] == 'select':
             widget = ComboBox()
             for option in field.get('options', []):
@@ -677,11 +664,11 @@ class AddScheduleDialog(QDialog):
         if field['type'] == 'multiline':
             widget = QTextEdit()
             widget.setPlaceholderText("请输入备注...")
-            widget.setMinimumHeight(100)
+            widget.setMinimumHeight(_COMPACT_MULTILINE_MIN_HEIGHT)
             if default_value:
                 widget.setText(str(default_value))
-            return widget
-        return QLineEdit(str(default_value))
+            return self._apply_non_fluent_input_chrome(widget)
+        return self._apply_non_fluent_input_chrome(QLineEdit(str(default_value)))
 
     def _add_single_field(self, panel, parent_layout, field):
         parent_layout.addWidget(QLabel(f"{field['label']}{' *' if field.get('required') else ''}"))
@@ -719,6 +706,26 @@ class AddScheduleDialog(QDialog):
             else:
                 data[name] = w.text()
         return data
+
+    def _apply_non_fluent_input_chrome(self, widget):
+        if widget.__class__.__module__.startswith("qfluentwidgets"):
+            return widget
+
+        if not isinstance(widget, (QLineEdit, QTextEdit, QDateEdit, QTimeEdit, QSpinBox)):
+            return widget
+
+        shadow = QGraphicsDropShadowEffect(widget)
+        shadow.setBlurRadius(_INPUT_SHADOW_BLUR_RADIUS)
+        shadow.setOffset(0, _INPUT_SHADOW_OFFSET_Y)
+        shadow.setColor(QColor(0, 0, 0, _INPUT_SHADOW_ALPHA))
+        widget.setGraphicsEffect(shadow)
+
+        if isinstance(widget, QTextEdit):
+            widget.setMinimumHeight(_COMPACT_MULTILINE_MIN_HEIGHT)
+        else:
+            widget.setFixedHeight(_COMPACT_INPUT_HEIGHT)
+
+        return widget
 
 
     def center_on_parent(self):

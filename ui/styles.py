@@ -1,34 +1,181 @@
-# 样式集中管理：不包含任何 UI 控件类
+# 样式集中管理
+
+from PyQt6.QtCore import Qt
 
 from font_families import APP_FONT_FAMILY_QSS, APP_FONT_STACK_QSS
 
 
+BUTTON_THEME_TOKENS = {
+    "accent_fill_rest": "#0F6CBD",
+    "accent_fill_hover": "#115EA3",
+    "accent_fill_pressed": "#0E4775",
+    "accent_text": "#FFFFFF",
+    "accent_stroke": "#0F6CBD",
+    "neutral_fill_rest": "#FBFBFB",
+    "neutral_fill_hover": "#F3F3F3",
+    "neutral_fill_pressed": "#EAEAEA",
+    "neutral_text": "#1B1B1B",
+    "neutral_stroke": "#D1D1D1",
+    "ghost_fill_rest": "transparent",
+    "ghost_fill_hover": "#F3F3F3",
+    "ghost_fill_pressed": "#EAEAEA",
+    "ghost_text": "#424242",
+    "ghost_stroke": "transparent",
+    "danger_fill_rest": "#C42B1C",
+    "danger_fill_hover": "#A42618",
+    "danger_fill_pressed": "#7F1D13",
+    "danger_text": "#FFFFFF",
+    "danger_stroke": "#C42B1C",
+    "disabled_fill": "#F5F5F5",
+    "disabled_text": "#9B9B9B",
+    "disabled_stroke": "#E5E5E5",
+}
+
+BUTTON_SIZE_TOKENS = {
+    "sm": 28,
+    "md": 30,
+    "lg": 40,
+}
+
+BUTTON_PADDING_TOKENS = {
+    "sm": "5px 10px",
+    "md": "7px 16px",
+    "lg": "9px 20px",
+}
+
+_BUTTON_ROLE_PALETTES = {
+    "primary": {
+        "fill_rest": BUTTON_THEME_TOKENS["accent_fill_rest"],
+        "fill_hover": BUTTON_THEME_TOKENS["accent_fill_hover"],
+        "fill_pressed": BUTTON_THEME_TOKENS["accent_fill_pressed"],
+        "text_rest": BUTTON_THEME_TOKENS["accent_text"],
+        "stroke_rest": BUTTON_THEME_TOKENS["accent_stroke"],
+    },
+    "secondary": {
+        "fill_rest": BUTTON_THEME_TOKENS["neutral_fill_rest"],
+        "fill_hover": BUTTON_THEME_TOKENS["neutral_fill_hover"],
+        "fill_pressed": BUTTON_THEME_TOKENS["neutral_fill_pressed"],
+        "text_rest": BUTTON_THEME_TOKENS["neutral_text"],
+        "stroke_rest": BUTTON_THEME_TOKENS["neutral_stroke"],
+    },
+    "ghost": {
+        "fill_rest": BUTTON_THEME_TOKENS["ghost_fill_rest"],
+        "fill_hover": BUTTON_THEME_TOKENS["ghost_fill_hover"],
+        "fill_pressed": BUTTON_THEME_TOKENS["ghost_fill_pressed"],
+        "text_rest": BUTTON_THEME_TOKENS["ghost_text"],
+        "stroke_rest": BUTTON_THEME_TOKENS["ghost_stroke"],
+    },
+    "danger": {
+        "fill_rest": BUTTON_THEME_TOKENS["danger_fill_rest"],
+        "fill_hover": BUTTON_THEME_TOKENS["danger_fill_hover"],
+        "fill_pressed": BUTTON_THEME_TOKENS["danger_fill_pressed"],
+        "text_rest": BUTTON_THEME_TOKENS["danger_text"],
+        "stroke_rest": BUTTON_THEME_TOKENS["danger_stroke"],
+    },
+}
+
+
+def get_button_stylesheet(role="secondary", size="md"):
+    palette = _BUTTON_ROLE_PALETTES.get(role, _BUTTON_ROLE_PALETTES["secondary"])
+    padding = BUTTON_PADDING_TOKENS.get(size, BUTTON_PADDING_TOKENS["md"])
+    return f"""
+        QPushButton {{
+            background-color: {palette["fill_rest"]};
+            color: {palette["text_rest"]};
+            border: 1px solid {palette["stroke_rest"]};
+            border-radius: 8px;
+            padding: {padding};
+            font-family: {APP_FONT_FAMILY_QSS};
+            font-size: 13px;
+            font-weight: normal;
+        }}
+        QPushButton:hover {{
+            background-color: {palette["fill_hover"]};
+            border: 1px solid {palette["stroke_rest"]};
+        }}
+        QPushButton:pressed {{
+            background-color: {palette["fill_pressed"]};
+            border: 1px solid {palette["stroke_rest"]};
+        }}
+        QPushButton:focus {{
+            outline: none;
+        }}
+        QPushButton:disabled {{
+            background-color: {BUTTON_THEME_TOKENS["disabled_fill"]};
+            color: {BUTTON_THEME_TOKENS["disabled_text"]};
+            border: 1px solid {BUTTON_THEME_TOKENS["disabled_stroke"]};
+        }}
+    """
+
+
+def apply_button_role(button, role="secondary", size="md"):
+    button.setProperty("buttonRole", role)
+    button.setCursor(Qt.CursorShape.PointingHandCursor)
+    button.setStyleSheet(get_button_stylesheet(role, size))
+    min_height = BUTTON_SIZE_TOKENS.get(size)
+    if min_height is not None:
+        button.setMinimumHeight(min_height)
+    return button
+
+
 # ===== 基础样式模板 =====
 PANEL_FORM_CONTROLS_STYLE = f"""
-QWidget#dialog_panel QLineEdit, QWidget#dialog_panel QTextEdit,
-QWidget#settings_panel QLineEdit, QWidget#settings_panel QTextEdit {{
-    background-color: #f5f5f5;
+QWidget#dialog_panel QLineEdit, QWidget#dialog_panel QTextEdit {{
+    background-color: #ffffff;
     color: #333333;
-    border: 1px solid #dddddd;
-    border-radius: 8px;
-    padding: 12px;
+    border: 1px solid #e3e3e3;
+    border-radius: 5px;
+    padding: 4px 12px 5px 12px;
     font-family: {APP_FONT_FAMILY_QSS};
     font-size: 13px;
     selection-background-color: #dddddd;
     selection-color: white;
 }}
+QWidget#dialog_panel QLineEdit {{
+    min-height: 20px;
+}}
+QWidget#dialog_panel QTextEdit {{
+    padding: 6px 12px 9px 12px;
+}}
 QWidget#dialog_panel QLineEdit:read-only, QWidget#dialog_panel QTextEdit:read-only,
+QWidget#dialog_panel QDateEdit:read-only, QWidget#dialog_panel QTimeEdit:read-only, QWidget#dialog_panel QSpinBox:read-only {{
+    background-color: #ffffff;
+    color: #666666;
+}}
+QWidget#dialog_panel QDateEdit, QWidget#dialog_panel QTimeEdit, QWidget#dialog_panel QSpinBox {{
+    background-color: #ffffff;
+    color: #333333;
+    border: 1px solid #e3e3e3;
+    border-radius: 5px;
+    padding: 2px 12px 3px 12px;
+    font-family: {APP_FONT_FAMILY_QSS};
+    font-size: 13px;
+    min-height: 20px;
+    selection-background-color: #dddddd;
+    selection-color: white;
+    outline: none;
+}}
+QWidget#settings_panel QLineEdit, QWidget#settings_panel QTextEdit {{
+    background-color: #f5f5f5;
+    color: #333333;
+    border: 1px solid #dddddd;
+    border-radius: 5px;
+    padding: 8px;
+    font-family: {APP_FONT_FAMILY_QSS};
+    font-size: 13px;
+    selection-background-color: #dddddd;
+    selection-color: white;
+}}
 QWidget#settings_panel QLineEdit:read-only, QWidget#settings_panel QTextEdit:read-only {{
     background-color: #f5f5f5;
     color: #666666;
 }}
-QWidget#dialog_panel QDateEdit, QWidget#dialog_panel QTimeEdit, QWidget#dialog_panel QSpinBox,
 QWidget#settings_panel QDateEdit, QWidget#settings_panel QTimeEdit, QWidget#settings_panel QSpinBox {{
     background-color: #f5f5f5;
     color: #333333;
     border: 1px solid #dddddd;
-    border-radius: 8px;
-    padding: 8px 12px;
+    border-radius: 5px;
+    padding: 6px 12px;
     font-family: {APP_FONT_FAMILY_QSS};
     font-size: 13px;
     min-height: 28px;
@@ -72,7 +219,7 @@ class StyleManager:
             }}}}
             QWidget#task_label_root QCheckBox::indicator:checked {{{{
                 background-color: rgba({{bg_color_red}}, {{bg_color_green}}, {{bg_color_blue}}, 0.85); /* 选中时背景色 */
-                border: 1.5px solid #4ECDC4;    /* 选中时边框色 */
+                border: 1.5px solid {BUTTON_THEME_TOKENS["accent_fill_rest"]};    /* 选中时边框色 */
                 image:  url(./icons/check.png); /* 选中时显示对勾图片 */
             }}}}
         """,
@@ -110,7 +257,7 @@ class StyleManager:
             }}}}
             QWidget#task_label_root QCheckBox::indicator:checked {{{{
                 background-color: rgba({{bg_color_red}}, {{bg_color_green}}, {{bg_color_blue}}, 0.85); /* 选中时背景色 */
-                border: 1.5px solid #4ECDC4;    /* 选中时边框色 */
+                border: 1.5px solid {BUTTON_THEME_TOKENS["accent_fill_rest"]};    /* 选中时边框色 */
                 image:  url(./icons/check.png); /* 选中时显示对勾图片 */
             }}}}
         """,
@@ -198,38 +345,9 @@ class StyleManager:
                 line-height: 1.4;
             }}
         """,
-        "detail_popup_button": f"""
-            QPushButton {{
-                background-color: #f9f9fa;
-                border: 1px solid #d9d9de;
-                border-radius: 8px;
-                padding: 5px 8px;
-                font-family: {APP_FONT_FAMILY_QSS};
-                font-size: 12px;
-                color: #202020;
-            }}
-            QPushButton:hover {{
-                background-color: #f0f2f5;
-                border: 1px solid #cbced6;
-            }}
-            QPushButton:pressed {{
-                background-color: #e8ebef;
-            }}
-        """,
+        "detail_popup_button": get_button_stylesheet("secondary"),
         # 任务标签上的按钮样式
-        "task_label_button": f"""  
-            QPushButton {{
-                background-color: #ECECEC;  /* 按钮背景色 */
-                border: 1px solid rgba(100, 100, 100, 0.5); /* 半透明边框 */
-                border-radius: 6px;         /* 圆角 */
-                padding: 4px 8px;           /* 内边距 */
-                font-family: {APP_FONT_FAMILY_QSS};      /* 字体 */
-                font-size: 12px;            /* 字号 */
-                color: #333;                /* 文字颜色 */
-            }}
-            QPushButton:hover {{
-                background-color: #D6D6D6;  /* 悬停时背景色 */
-            }}""",
+        "task_label_button": get_button_stylesheet("secondary"),
 
         # 添加任务对话框样式
         "dialog_panel_shell": f"""
@@ -247,7 +365,7 @@ class StyleManager:
             border: none;
         }}
         QWidget#dialog_panel QPushButton {{
-            background-color: #4ECDC4;      /* 按钮背景色 */
+            background-color: {BUTTON_THEME_TOKENS["accent_fill_rest"]};      /* 按钮背景色 */
             color: white;                   /* 文字颜色 */
             border: none;                   /* 无边框 */
             border-radius: 8px;             /* 圆角 */
@@ -255,7 +373,7 @@ class StyleManager:
             font-family: {APP_FONT_FAMILY_QSS};          /* 字体 */
             font-weight: normal;              /* 加粗 */
         }}
-        QWidget#dialog_panel QPushButton:hover {{background-color: #45B8B0; }} /* 悬停时按钮色 */
+        QWidget#dialog_panel QPushButton:hover {{background-color: {BUTTON_THEME_TOKENS["accent_fill_hover"]}; }} /* 悬停时按钮色 */
         """,
         # 添加任务对话框样式
         "add_task_dialog": f"""
@@ -273,7 +391,7 @@ class StyleManager:
             border: none;
         }}
         QWidget#dialog_panel QPushButton {{
-            background-color: #4ECDC4;      /* 按钮背景色 */
+            background-color: {BUTTON_THEME_TOKENS["accent_fill_rest"]};      /* 按钮背景色 */
             color: white;                   /* 文字颜色 */
             border: none;                   /* 无边框 */
             border-radius: 8px;             /* 圆角 */
@@ -281,7 +399,7 @@ class StyleManager:
             font-family: {APP_FONT_FAMILY_QSS};          /* 字体 */
             font-weight: normal;              /* 加粗 */
         }}
-        QWidget#dialog_panel QPushButton:hover {{background-color: #45B8B0; }} /* 悬停时按钮色 */
+        QWidget#dialog_panel QPushButton:hover {{background-color: {BUTTON_THEME_TOKENS["accent_fill_hover"]}; }} /* 悬停时按钮色 */
         """ + PANEL_FORM_CONTROLS_STYLE,
         # 通用菜单样式
         "menu": f"""
@@ -300,8 +418,8 @@ class StyleManager:
                 color: #333333;
             }}
             QMenu::item:selected {{
-                background-color: #4ECDC4;
-                color: #fff;
+                background-color: {BUTTON_THEME_TOKENS["accent_fill_rest"]};
+                color: {BUTTON_THEME_TOKENS["accent_text"]};
             }}
             QMenu::separator {{
                 height: 1px;
@@ -364,8 +482,8 @@ class StyleManager:
                 color: #333333;
             }}
             #control_panel QMenu::item:selected {{
-                background-color: #4ECDC4;
-                color: #fff;
+                background-color: {BUTTON_THEME_TOKENS["accent_fill_rest"]};
+                color: {BUTTON_THEME_TOKENS["accent_text"]};
             }}
             #control_panel QMenu::separator {{
                 height: 1px;
@@ -396,7 +514,7 @@ class StyleManager:
             }}
             QWidget#settings_panel QTabBar::tab:selected {{
                 background-color: white;
-                color: #4ECDC4;
+                color: {BUTTON_THEME_TOKENS["accent_fill_rest"]};
                 font-weight: normal;
             }}
             QWidget#settings_panel QLabel {{
@@ -441,7 +559,7 @@ class StyleManager:
                 background: qradialgradient(spread:reflect, cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5, stop:0.6 rgba(255, 255, 255, 255), stop:0.7 rgba(255, 255, 255, 100));
             }}
             QWidget#settings_panel QPushButton {{
-                background-color: #4ECDC4;
+                background-color: {BUTTON_THEME_TOKENS["accent_fill_rest"]};
                 color: white;
                 border: none;
                 border-radius: 8px;
@@ -450,12 +568,7 @@ class StyleManager:
                 font-weight: normal;
             }}
             QWidget#settings_panel QPushButton:hover {{
-                background-color: #45B8B0;
-            }}
-            QWidget#settings_panel QCheckBox {{
-                color: #505050;
-                font-family: {APP_FONT_FAMILY_QSS};
-                padding: 5px;
+                background-color: {BUTTON_THEME_TOKENS["accent_fill_hover"]};
             }}
         """ + PANEL_FORM_CONTROLS_STYLE,
         "panel_form_controls": PANEL_FORM_CONTROLS_STYLE,
@@ -486,7 +599,7 @@ class StyleManager:
                 margin: 0 2px;
             }}}}
             QPushButton:hover {{{{
-                border: 2px solid #4ECDC4;
+                border: 2px solid {BUTTON_THEME_TOKENS["accent_fill_rest"]};
             }}}}
         """,
         # 颜色色块（设置页）
