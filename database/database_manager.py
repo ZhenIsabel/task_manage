@@ -56,6 +56,7 @@ class DatabaseManager:
         self.api_base_url = configured_api_base_url if self.remote_enabled else ''
         self.api_token = self.remote_config.get('api_token', '') if self.remote_enabled else ''
         self.username = self.remote_config.get('username', '') if self.remote_enabled else ''
+        self._local_timezone = datetime.now().astimezone().tzinfo or timezone.utc
         self._remote_user_registration_attempted = False
         self._remote_auth_paused = False
         self._sync_interval = sync_interval
@@ -873,28 +874,45 @@ class DatabaseManager:
         merged_history = self._merge_history_dicts(local_history, remote_history)
         self._append_missing_history_to_cache(task_id, merged_history, local_history)
 
+    def _normalize_sync_datetime(self, value: Any) -> Optional[datetime]:
+        """解析同步时间戳，并统一转换为 UTC 基准的 naive datetime。"""
+        parsed = None
+        if all(hasattr(value, attr) for attr in ('year', 'month', 'day', 'tzinfo', 'astimezone')):
+            parsed = value
+        else:
+            text = str(value or '').strip()
+            if not text:
+                return None
+
+            try:
+                parsed = datetime.fromisoformat(text.replace('Z', '+00:00'))
+            except ValueError:
+                return None
+
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=self._local_timezone)
+        return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+
     def _parse_sync_timestamp(self, value: Any) -> Optional[datetime]:
-        """解析同步时间戳，统一转换为可比较的 naive datetime。"""
-        text = str(value or '').strip()
-        if not text:
-            return None
+        """兼容旧调用，返回可比较的同步时间戳。"""
+        return self._normalize_sync_datetime(value)
 
-        try:
-            parsed = datetime.fromisoformat(text.replace('Z', '+00:00'))
-        except ValueError:
-            return None
-
-        if parsed.tzinfo is not None:
-            return parsed.astimezone(timezone.utc).replace(tzinfo=None)
-        return parsed
+    def _is_remote_timestamp_newer(self, remote_updated_at: Any, local_updated_at: Any) -> bool:
+        """按真实时间比较远端记录是否更新，兼容不同时区/格式的时间戳。"""
+        remote_dt = self._normalize_sync_datetime(remote_updated_at)
+        local_dt = self._normalize_sync_datetime(local_updated_at)
+        if remote_dt is not None and local_dt is not None:
+            return remote_dt > local_dt
+        return str(remote_updated_at or '') > str(local_updated_at or '')
 
     def _is_recent_local_update(self, updated_at: Any, reference_time: datetime) -> bool:
         """判断本地更新时间是否落在最近 5 分钟的本地优先窗口内。"""
-        updated_at_dt = self._parse_sync_timestamp(updated_at)
-        if updated_at_dt is None:
+        updated_at_dt = self._normalize_sync_datetime(updated_at)
+        reference_dt = self._normalize_sync_datetime(reference_time)
+        if updated_at_dt is None or reference_dt is None:
             return False
 
-        return (reference_time - RECENT_LOCAL_SYNC_PRIORITY_WINDOW) <= updated_at_dt <= (reference_time + RECENT_LOCAL_SYNC_PRIORITY_WINDOW)
+        return (reference_dt - RECENT_LOCAL_SYNC_PRIORITY_WINDOW) <= updated_at_dt <= (reference_dt + RECENT_LOCAL_SYNC_PRIORITY_WINDOW)
 
     def _prioritize_recent_local_change_locked(self, entity_type: str, local_record: Dict[str, Any], reference_time: datetime) -> None:
         """最近 5 分钟内的本地修改直接保留，并标记为待上传。"""
@@ -947,7 +965,7 @@ class DatabaseManager:
     def _is_remote_task_newer_or_changed(self, local_task: Dict[str, Any], remote_task: Dict[str, Any]) -> bool:
         """判断远程任务是否有需要确认的实际内容变化。"""
         local_task_data = self._cache_task_to_task_data(local_task)
-        if remote_task.get('updated_at', '') > local_task.get('updated_at', ''):
+        if self._is_remote_timestamp_newer(remote_task.get('updated_at', ''), local_task.get('updated_at', '')):
             return self._task_sync_content_changed(local_task_data, remote_task)
 
         return any([
@@ -1637,7 +1655,7 @@ class DatabaseManager:
                     inserted_count += 1
                     continue
 
-                if task_data.get('updated_at', '') > local_task.get('updated_at', '') and self._scheduled_task_sync_content_changed(local_task, task_data):
+                if self._is_remote_timestamp_newer(task_data.get('updated_at', ''), local_task.get('updated_at', '')) and self._scheduled_task_sync_content_changed(local_task, task_data):
                     if self._is_recent_local_update(local_task.get('updated_at'), reference_time):
                         with self._cache_lock:
                             self._prioritize_recent_local_change_locked('scheduled_task', local_task, reference_time)

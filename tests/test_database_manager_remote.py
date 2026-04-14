@@ -335,6 +335,41 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
         self.assertEqual(manager.get_scheduled_task('sched-1')['updated_at'], '2026-03-30T09:00:00')
         self.assertNotIn('scheduled:sched-1', manager._pending_remote_task_changes)
 
+    def test_sync_scheduled_tasks_from_server_treats_timezone_aware_remote_timestamp_as_newer_change(self):
+        manager = self._build_manager(remote_config={})
+        manager.create_scheduled_task({
+            'id': 'sched-1',
+            'title': '本地版本',
+            'frequency': 'daily',
+            'notes': '等待远端更新',
+            'updated_at': '2026-04-14T20:00:00+08:00',
+            'created_at': '2026-04-14T19:00:00+08:00',
+        })
+        manager._save_scheduled_task_to_cache(
+            manager.get_scheduled_task('sched-1', include_deleted=True),
+            sync_status='synced',
+        )
+        manager.api_base_url = 'http://example.com'
+        manager.add_task_sync_listener(lambda changes: None)
+
+        with patch.object(manager, '_make_api_request', return_value={
+            'scheduled_tasks': [{
+                'id': 'sched-1',
+                'title': '远端版本',
+                'frequency': 'daily',
+                'notes': '移动端改过',
+                'updated_at': '2026-04-14T15:00:00Z',
+                'created_at': '2026-04-14T19:00:00+08:00',
+            }]
+        }):
+            result = manager.sync_scheduled_tasks_from_server()
+
+        self.assertTrue(result)
+        self.assertIn('scheduled:sched-1', manager._pending_remote_task_changes)
+        pending_change = manager._pending_remote_task_changes['scheduled:sched-1']
+        self.assertEqual(pending_change['remote_record']['title'], '远端版本')
+        self.assertEqual(pending_change['remote_record']['updated_at'], '2026-04-14T15:00:00Z')
+
     def test_accept_scheduled_remote_change_applies_remote_record(self):
         manager = self._build_manager(remote_config={})
         manager.create_scheduled_task({
@@ -669,6 +704,55 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
             '2026-03-30T09:00:00',
         )
         self.assertNotIn('task:task-1', manager._pending_remote_task_changes)
+
+    def test_sync_from_server_treats_timezone_aware_remote_timestamp_as_newer_change(self):
+        manager = self._build_manager(remote_config={})
+        manager.save_task({
+            'id': 'task-1',
+            'text': '本地版本',
+            'notes': '等待远端更新',
+            'completed': False,
+            'completed_date': '',
+            'deleted': False,
+            'priority': '中',
+            'urgency': '低',
+            'importance': '高',
+            'directory': '',
+            'create_date': '',
+            'position': {'x': 120, 'y': 180},
+            'updated_at': '2026-04-14T20:00:00+08:00',
+            'created_at': '2026-04-14T19:00:00+08:00',
+        })
+        manager._save_task_to_cache(manager._cache_task_to_task_data(manager._task_cache['task-1']), 'synced')
+        manager.api_base_url = 'http://example.com'
+        manager.add_task_sync_listener(lambda changes: None)
+
+        with patch.object(manager, '_make_api_request', return_value={
+            'tasks': [{
+                'id': 'task-1',
+                'text': '远端版本',
+                'notes': '移动端改过',
+                'completed': False,
+                'completed_date': '',
+                'deleted': False,
+                'priority': '高',
+                'urgency': '高',
+                'importance': '高',
+                'directory': '',
+                'create_date': '',
+                'position': {'x': 120, 'y': 180},
+                'updated_at': '2026-04-14T15:00:00Z',
+                'created_at': '2026-04-14T19:00:00+08:00',
+            }],
+            'count': 1,
+        }):
+            result = manager.sync_from_server()
+
+        self.assertTrue(result)
+        self.assertIn('task:task-1', manager._pending_remote_task_changes)
+        pending_change = manager._pending_remote_task_changes['task:task-1']
+        self.assertEqual(pending_change['remote_record']['text'], '远端版本')
+        self.assertEqual(pending_change['remote_record']['updated_at'], '2026-04-14T15:00:00Z')
 
     def test_recent_local_task_conflict_skips_confirmation_and_still_uploads_with_other_pending_changes(self):
         manager = self._build_manager(remote_config={})
