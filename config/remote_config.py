@@ -60,26 +60,29 @@ class RemoteConfigManager:
     def test_connection(self) -> bool:
         """测试服务器连接"""
         from database.database_manager import DatabaseManager
-        
+
         if not self.config.get('api_base_url'):
             print("未配置服务器地址")
             return False
-        
+
+        db_manager = None
         try:
             db_manager = DatabaseManager(remote_config=self.config)
-            
+
             # 测试API连接
             result = db_manager._make_api_request('GET', '/api/health')
             if result:
                 print("✅ 服务器连接成功")
                 return True
-            else:
-                print("❌ 服务器连接失败")
-                return False
-                
+
+            print("❌ 服务器连接失败")
+            return False
         except Exception as e:
             print(f"❌ 连接测试失败: {str(e)}")
             return False
+        finally:
+            if db_manager is not None:
+                db_manager.close_connection()
     
     def clear_config(self) -> bool:
         """清除远程配置"""

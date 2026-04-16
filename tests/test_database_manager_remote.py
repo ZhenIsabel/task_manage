@@ -656,6 +656,25 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
         self.assertEqual(manager.api_token, '')
         self.assertEqual(manager.username, '')
 
+    def test_remote_config_manager_test_connection_closes_database_manager(self):
+        manager = RemoteConfigManager(config_file=os.path.join(WORKSPACE_TMP_ROOT, 'missing-remote-config.json'))
+        manager.config = {
+            'api_base_url': 'http://example.com',
+            'api_token': 'token',
+            'username': 'alice',
+        }
+
+        fake_db_manager = Mock()
+        fake_db_manager._make_api_request.return_value = {'status': 'ok'}
+
+        with patch('database.database_manager.DatabaseManager', return_value=fake_db_manager) as db_cls:
+            result = manager.test_connection()
+
+        self.assertTrue(result)
+        db_cls.assert_called_once_with(remote_config=manager.config)
+        fake_db_manager._make_api_request.assert_called_once_with('GET', '/api/health')
+        fake_db_manager.close_connection.assert_called_once_with()
+
 
     def test_sync_from_server_ignores_updated_at_only_change(self):
         manager = self._build_manager(remote_config={})
