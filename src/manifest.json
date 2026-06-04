@@ -2,8 +2,8 @@
     "name" : "做了么",
     "appid" : "__UNI__F0B58D0",
     "description" : "用来管理这些见鬼待办任务的工具",
-    "versionName" : "0.1.8",
-    "versionCode" : 110,
+    "versionName" : "0.2",
+    "versionCode" : 210,
     "transformPx" : false,
     /* 5+App特有相关 */
     "app-plus" : {
@@ -104,5 +104,5 @@
     },
     "vueVersion" : "3",
     "fallbackLocale" : "zh-Hans",
-    "locale" : "auto"
+    "locale" : "zh-Hans"
 }

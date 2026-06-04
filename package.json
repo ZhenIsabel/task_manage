@@ -2,7 +2,9 @@
   "name": "uni-preset-vue",
   "version": "0.0.0",
   "scripts": {
+    "test": "npm run test:sync && npm run test:archive-search",
     "test:sync": "node scripts/run-sync-tests.mjs",
+    "test:archive-search": "node scripts/run-archive-search-tests.mjs",
     "dev:custom": "uni -p",
     "dev:h5": "uni",
     "dev:h5:ssr": "uni --ssr",

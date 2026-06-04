@@ -8,13 +8,29 @@
           </view>
           <view class="archive-list-title">
             <text class="nav-title">已完成任务</text>
-            <text class="nav-sub">共 {{ list.length }} 条历史记录</text>
+            <text class="nav-sub">共 {{ archivedList.length }} 条历史记录</text>
           </view>
         </view>
 
-        <view v-if="list.length === 0" class="empty-archive">
+        <view class="archive-search">
+          <uni-icons type="search" size="18" color="#9ca3af" />
+          <input
+            v-model="searchQuery"
+            class="archive-search-input"
+            placeholder="搜索已完成任务"
+            placeholder-style="color: #9ca3af"
+            confirm-type="search"
+          />
+        </view>
+
+        <view v-if="archivedList.length === 0" class="empty-archive">
           <uni-icons type="checkmarkempty" size="48" color="#ccc" />
           <text>暂无已完成任务</text>
+        </view>
+
+        <view v-else-if="list.length === 0" class="empty-archive">
+          <uni-icons type="search" size="48" color="#ccc" />
+          <text>未找到匹配任务</text>
         </view>
 
         <template v-else>
@@ -38,9 +54,12 @@ import { ref, computed, onMounted } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import dataManager from '@/services/dataManager.js';
 import { formatDateShort } from '@/utils/date.js';
+import { filterArchivedTasks } from '@/utils/archiveSearch.js';
 
 const tasks = ref([]);
-const list = computed(() => tasks.value.filter((task) => !task.deleted && task.isCompleted));
+const searchQuery = ref('');
+const archivedList = computed(() => filterArchivedTasks(tasks.value));
+const list = computed(() => filterArchivedTasks(tasks.value, searchQuery.value));
 
 function loadTasks() {
   tasks.value = dataManager.loadTasksFromStorage();
@@ -115,6 +134,26 @@ function handleRestore(id) {
 .archive-list-content {
   padding: 30px 40px 60px;
   min-height: 100%;
+}
+
+.archive-search {
+  height: 44px;
+  padding: 0 14px;
+  margin-bottom: 14px;
+  border: 1px solid rgba(209, 213, 219, 0.85);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.88);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.archive-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  font-size: 14px;
+  color: #374151;
 }
 
 .empty-archive {
