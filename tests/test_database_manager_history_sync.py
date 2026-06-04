@@ -48,6 +48,187 @@ class DatabaseManagerHistorySyncTests(unittest.TestCase):
             }
         )
 
+    def _insert_task(
+        self,
+        manager,
+        task_id,
+        text,
+        completed_date,
+        updated_at,
+        created_at,
+        completed=True,
+        deleted=False,
+    ):
+        manager.get_connection().execute(
+            '''
+            INSERT INTO tasks (
+                id, text, completed, completed_date, deleted, updated_at, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (task_id, text, completed, completed_date, deleted, updated_at, created_at),
+        )
+        manager.get_connection().commit()
+
+    def test_completed_tasks_page_orders_by_completed_updated_and_created_dates(self):
+        manager = self._build_manager(remote_config={})
+        self._insert_task(
+            manager,
+            'task-completed-newer',
+            '较新完成时间',
+            '2026-04-04T10:00:00',
+            '2026-04-01T09:00:00',
+            '2026-04-01T08:00:00',
+        )
+        self._insert_task(
+            manager,
+            'task-updated-newer',
+            '相同完成时间但更新更晚',
+            '2026-04-03T10:00:00',
+            '2026-04-03T12:00:00',
+            '2026-04-01T08:00:00',
+        )
+        self._insert_task(
+            manager,
+            'task-created-newer',
+            '相同完成时间更新但创建更晚',
+            '2026-04-03T10:00:00',
+            '2026-04-03T12:00:00',
+            '2026-04-02T08:00:00',
+        )
+        self._insert_task(
+            manager,
+            'task-incomplete',
+            '未完成任务不应出现',
+            '2026-05-01T10:00:00',
+            '2026-05-01T10:00:00',
+            '2026-05-01T10:00:00',
+            completed=False,
+        )
+        self._insert_task(
+            manager,
+            'task-deleted',
+            '已删除任务不应出现',
+            '2026-05-02T10:00:00',
+            '2026-05-02T10:00:00',
+            '2026-05-02T10:00:00',
+            deleted=True,
+        )
+
+        page = manager.load_completed_tasks_page(limit=10, offset=0)
+
+        self.assertEqual(
+            [task['id'] for task in page],
+            ['task-completed-newer', 'task-created-newer', 'task-updated-newer'],
+        )
+
+    def test_completed_tasks_page_applies_limit_offset_and_keyword_count(self):
+        manager = self._build_manager(remote_config={})
+        self._insert_task(
+            manager,
+            'task-1',
+            '季度 报告 归档',
+            '2026-04-04T10:00:00',
+            '2026-04-04T09:00:00',
+            '2026-04-04T08:00:00',
+        )
+        self._insert_task(
+            manager,
+            'task-2',
+            '季度 报告 校对',
+            '2026-04-03T10:00:00',
+            '2026-04-03T09:00:00',
+            '2026-04-03T08:00:00',
+        )
+        self._insert_task(
+            manager,
+            'task-3',
+            '季度 会议 纪要',
+            '2026-04-02T10:00:00',
+            '2026-04-02T09:00:00',
+            '2026-04-02T08:00:00',
+        )
+
+        page = manager.load_completed_tasks_page(
+            limit=1,
+            offset=1,
+            search_query='季度 报告',
+        )
+
+        self.assertEqual([task['id'] for task in page], ['task-2'])
+        self.assertEqual(manager.count_completed_tasks('季度 报告'), 2)
+
+    def test_completed_task_ids_use_same_completed_keyword_filter(self):
+        manager = self._build_manager(remote_config={})
+        self._insert_task(
+            manager,
+            'task-1',
+            '季度 报告 归档',
+            '2026-04-04T10:00:00',
+            '2026-04-04T09:00:00',
+            '2026-04-04T08:00:00',
+        )
+        self._insert_task(
+            manager,
+            'task-2',
+            '季度 报告 校对',
+            '2026-04-03T10:00:00',
+            '2026-04-03T09:00:00',
+            '2026-04-03T08:00:00',
+        )
+        self._insert_task(
+            manager,
+            'task-3',
+            '季度 会议 纪要',
+            '2026-04-02T10:00:00',
+            '2026-04-02T09:00:00',
+            '2026-04-02T08:00:00',
+        )
+        self._insert_task(
+            manager,
+            'task-incomplete',
+            '季度 报告 未完成',
+            '2026-04-05T10:00:00',
+            '2026-04-05T09:00:00',
+            '2026-04-05T08:00:00',
+            completed=False,
+        )
+        self._insert_task(
+            manager,
+            'task-deleted',
+            '季度 报告 已删除',
+            '2026-04-06T10:00:00',
+            '2026-04-06T09:00:00',
+            '2026-04-06T08:00:00',
+            deleted=True,
+        )
+
+        task_ids = manager.load_completed_task_ids('季度 报告')
+
+        self.assertEqual(task_ids, ['task-1', 'task-2'])
+
+    def test_task_history_page_orders_by_timestamp_desc_and_counts_all_rows(self):
+        manager = self._build_manager(remote_config={})
+        conn = manager.get_connection()
+        conn.executemany(
+            'INSERT INTO task_history (task_id, field_name, field_value, action, timestamp) VALUES (?, ?, ?, ?, ?)',
+            [
+                ('task-1', 'text', '旧标题', 'update', '2026-04-01T09:00:00'),
+                ('task-1', 'notes', '新备注', 'update', '2026-04-03T09:00:00'),
+                ('task-1', 'text', '新标题', 'update', '2026-04-02T09:00:00'),
+                ('task-2', 'text', '其他任务', 'update', '2026-04-04T09:00:00'),
+            ],
+        )
+        conn.commit()
+
+        page = manager.get_task_history_page('task-1', limit=2, offset=1)
+
+        self.assertEqual(manager.count_task_history('task-1'), 3)
+        self.assertEqual(
+            [row['timestamp'] for row in page['text']],
+            ['2026-04-02T09:00:00', '2026-04-01T09:00:00'],
+        )
+        self.assertEqual(page['text'][0]['value'], '新标题')
+
     def test_get_task_history_uses_local_history_even_when_remote_history_exists(self):
         remote_config = {
             "api_base_url": "http://example.com",

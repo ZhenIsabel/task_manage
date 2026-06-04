@@ -17,6 +17,12 @@ class HistoryViewer(QDialog):
     def __init__(self, task_data, parent=None):
         super().__init__(parent)
         self.task_data = task_data
+        self.db_manager = get_db_manager()
+        self.page_size = 50
+        self.history_offset = 0
+        self.history_total_count = 0
+        self.merged_history_rows = []
+        self.history_table = None
         self.setup_ui()
         
     def setup_ui(self):
@@ -58,11 +64,21 @@ class HistoryViewer(QDialog):
             text_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             panel_layout.addWidget(text_label)
         
-        # 加载历史记录
-        self.load_history_records(panel_layout)
+        # 历史记录表格区域
+        self.history_container = QWidget(panel)
+        self.history_container_layout = QVBoxLayout(self.history_container)
+        self.history_container_layout.setContentsMargins(0, 0, 0, 0)
+        self.history_container_layout.setSpacing(0)
+        panel_layout.addWidget(self.history_container)
         
         # 关闭和导出按钮布局
         button_layout = QHBoxLayout()
+
+        # 加载更多按钮
+        self.load_more_button = QPushButton("加载更多")
+        self.load_more_button.clicked.connect(self.load_more_history_records)
+        apply_button_role(self.load_more_button, "secondary")
+        button_layout.addWidget(self.load_more_button)
         button_layout.addStretch()
         
         # 导出按钮
@@ -78,6 +94,9 @@ class HistoryViewer(QDialog):
         button_layout.addWidget(close_button)
         
         panel_layout.addLayout(button_layout)
+
+        # 加载历史记录
+        self.load_history_records(self.history_container_layout)
         
         main_layout.addWidget(panel)
         
@@ -87,52 +106,102 @@ class HistoryViewer(QDialog):
     def load_history_records(self, layout):
         """从数据库加载历史记录并合并显示到一个表格"""
         try:
+            self._clear_layout(layout)
+            self.history_table = None
+            self.history_offset = 0
+            self.history_total_count = 0
+            self.merged_history_rows = []
+
             # 从数据库获取历史记录
             task_id = self.task_data.get('id')
             if not task_id:
                 layout.addWidget(QLabel("未找到任务ID"))
+                self._update_load_more_button()
                 return
-            
-            db_manager = get_db_manager()
-            field_history = db_manager.get_task_history(task_id)
-            
-            if not field_history:
+
+            self.history_total_count = self.db_manager.count_task_history(task_id)
+
+            if self.history_total_count == 0:
                 layout.addWidget(QLabel("未找到该任务的历史记录"))
+                self._update_load_more_button()
                 return
 
-            # 字段名称映射
-            field_name_map = {
-                'text': '任务内容',
-                'notes': '备注',
-                'due_date': '到期日期',
-                'priority': '优先级',
-                'directory': '目录',
-                'create_date': '创建日期'
-            }
-
-            # 合并所有字段的历史记录
-            merged_history = []
-            for field_name, history_list in field_history.items():
-                # 使用友好的字段名称
-                display_name = field_name_map.get(field_name, field_name)
-                for record in history_list:
-                    merged_history.append({
-                        'field': display_name,
-                        'timestamp': record.get('timestamp', ''),
-                        'action': record.get('action', 'update'),
-                        'value': record.get('value', '')
-                    })
-                # 清洗字段
-
-            # 按时间排序
-            merged_history.sort(key=lambda x: x['timestamp'])
-
-            # 创建合并表格
-            self.create_merged_history_table(layout, merged_history)
+            self._load_history_page(layout)
 
         except Exception as e:
             logger.error(f"加载历史记录失败: {str(e)}")
             layout.addWidget(QLabel(f"加载历史记录失败: {str(e)}"))
+            self._update_load_more_button()
+
+    def load_more_history_records(self):
+        """加载下一页历史记录。"""
+        if self.history_offset >= self.history_total_count:
+            self._update_load_more_button()
+            return
+        self._load_history_page(self.history_container_layout)
+
+    def _load_history_page(self, layout):
+        task_id = self.task_data.get('id')
+        field_history = self.db_manager.get_task_history_page(
+            task_id,
+            limit=self.page_size,
+            offset=self.history_offset,
+        )
+        page_rows = self._merge_field_history(field_history)
+        if not page_rows:
+            self.history_offset = len(self.merged_history_rows)
+            self.history_total_count = self.history_offset
+            self._update_load_more_button()
+            return
+
+        self.merged_history_rows.extend(page_rows)
+        self.history_offset = len(self.merged_history_rows)
+        self._clear_layout(layout)
+        self.create_merged_history_table(layout, self.merged_history_rows)
+        self._update_load_more_button()
+
+    def _merge_field_history(self, field_history):
+        # 字段名称映射
+        field_name_map = {
+            'text': '任务内容',
+            'notes': '备注',
+            'due_date': '到期日期',
+            'priority': '优先级',
+            'directory': '目录',
+            'create_date': '创建日期'
+        }
+
+        # 合并所有字段的历史记录
+        merged_history = []
+        for field_name, history_list in field_history.items():
+            display_name = field_name_map.get(field_name, field_name)
+            for record in history_list:
+                merged_history.append({
+                    'field': display_name,
+                    'timestamp': record.get('timestamp', ''),
+                    'action': record.get('action', 'update'),
+                    'value': record.get('value', '')
+                })
+
+        merged_history.sort(key=lambda x: x['timestamp'], reverse=True)
+        return merged_history
+
+    def _clear_layout(self, layout):
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+
+    def _update_load_more_button(self):
+        if not hasattr(self, 'load_more_button'):
+            return
+        if self.history_offset < self.history_total_count:
+            self.load_more_button.setEnabled(True)
+            self.load_more_button.setText(f"加载更多 ({self.history_offset}/{self.history_total_count})")
+        else:
+            self.load_more_button.setEnabled(False)
+            self.load_more_button.setText("已全部加载")
 
     def create_merged_history_table(self, layout, merged_history):
         """创建合并后的历史记录表格"""
@@ -164,6 +233,7 @@ class HistoryViewer(QDialog):
             multiline_columns={3},
         )
 
+        self.history_table = table
         layout.addWidget(table)
     
     def center_on_parent(self):
