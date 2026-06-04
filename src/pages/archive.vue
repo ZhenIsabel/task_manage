@@ -40,7 +40,7 @@ import dataManager from '@/services/dataManager.js';
 import { formatDateShort } from '@/utils/date.js';
 
 const tasks = ref([]);
-const list = computed(() => tasks.value.filter((task) => task.isCompleted));
+const list = computed(() => tasks.value.filter((task) => !task.deleted && task.isCompleted));
 
 function loadTasks() {
   tasks.value = dataManager.loadTasksFromStorage();

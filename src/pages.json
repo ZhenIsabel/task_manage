@@ -38,6 +38,13 @@
         "navigationBarTitleText": "查看",
         "navigationStyle": "custom"
       }
+    },
+    {
+      "path": "pages/remote-conflicts",
+      "style": {
+        "navigationBarTitleText": "远程冲突确认",
+        "navigationStyle": "custom"
+      }
     }
   ],
   "globalStyle": {

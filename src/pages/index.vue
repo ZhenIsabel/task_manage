@@ -11,6 +11,7 @@
         <view class="header">
           <view>
             <text class="main-title">不想干活</text>
+            <text v-if="pendingConflictCount > 0" class="sync-banner" @tap="openConflictPage">有 {{ pendingConflictCount }} 条远程冲突待处理</text>
           </view>
           <view class="header-right">
             <view class="date-display">
@@ -31,12 +32,7 @@
               <scroll-view scroll-y class="task-list" :show-scrollbar="false">
                 <view v-if="quadrantData.tl.length === 0" class="empty-state">无任务</view>
                 <template v-else>
-                  <view
-                    v-for="task in quadrantData.tl"
-                    :key="task.id"
-                    class="task-item"
-                    @tap="goDetail(task)"
-                  >
+                  <view v-for="task in quadrantData.tl" :key="task.id" class="task-item" @tap="goDetail(task)">
                     <view class="checkbox" :class="{ checked: task.isCompleted }" @tap.stop="handleToggleTask(task.id)">
                       <uni-icons v-if="task.isCompleted" type="checkmarkempty" size="12" color="white" />
                     </view>
@@ -57,12 +53,7 @@
               <scroll-view scroll-y class="task-list" :show-scrollbar="false">
                 <view v-if="quadrantData.tr.length === 0" class="empty-state">无任务</view>
                 <template v-else>
-                  <view
-                    v-for="task in quadrantData.tr"
-                    :key="task.id"
-                    class="task-item"
-                    @tap="goDetail(task)"
-                  >
+                  <view v-for="task in quadrantData.tr" :key="task.id" class="task-item" @tap="goDetail(task)">
                     <view class="checkbox" :class="{ checked: task.isCompleted }" @tap.stop="handleToggleTask(task.id)">
                       <uni-icons v-if="task.isCompleted" type="checkmarkempty" size="12" color="white" />
                     </view>
@@ -83,12 +74,7 @@
               <scroll-view scroll-y class="task-list" :show-scrollbar="false">
                 <view v-if="quadrantData.bl.length === 0" class="empty-state">无任务</view>
                 <template v-else>
-                  <view
-                    v-for="task in quadrantData.bl"
-                    :key="task.id"
-                    class="task-item"
-                    @tap="goDetail(task)"
-                  >
+                  <view v-for="task in quadrantData.bl" :key="task.id" class="task-item" @tap="goDetail(task)">
                     <view class="checkbox" :class="{ checked: task.isCompleted }" @tap.stop="handleToggleTask(task.id)">
                       <uni-icons v-if="task.isCompleted" type="checkmarkempty" size="12" color="white" />
                     </view>
@@ -109,12 +95,7 @@
               <scroll-view scroll-y class="task-list" :show-scrollbar="false">
                 <view v-if="quadrantData.br.length === 0" class="empty-state">无任务</view>
                 <template v-else>
-                  <view
-                    v-for="task in quadrantData.br"
-                    :key="task.id"
-                    class="task-item"
-                    @tap="goDetail(task)"
-                  >
+                  <view v-for="task in quadrantData.br" :key="task.id" class="task-item" @tap="goDetail(task)">
                     <view class="checkbox" :class="{ checked: task.isCompleted }" @tap.stop="handleToggleTask(task.id)">
                       <uni-icons v-if="task.isCompleted" type="checkmarkempty" size="12" color="white" />
                     </view>
@@ -166,6 +147,7 @@ const tasks = ref([]);
 const syncStatus = ref(null);
 const fabPressed = ref(false);
 const loading = ref(false);
+const navigatingConflicts = ref(false);
 
 const currentWeekday = computed(() => ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][new Date().getDay()]);
 const currentDateStr = computed(() => {
@@ -175,8 +157,11 @@ const currentDateStr = computed(() => {
   return `${m}.${day}`;
 });
 
+const pendingConflictCount = computed(() => dataManager.getPendingRemoteTaskChanges().length);
+
 const getQuadrantTasks = (importance, urgency) => {
   return tasks.value.filter((task) => {
+    if (task.deleted) return false;
     const isVisible = !task.isCompleted || (task.isCompleted && isToday(task.completedAt));
     const matchImportance = importance === 'high' ? task.importance === 'high' : task.importance !== 'high';
     const matchUrgency = urgency === 'high' ? task.urgency === 'high' : task.urgency !== 'high';
@@ -192,25 +177,45 @@ const quadrantData = computed(() => ({
 }));
 
 function loadTasks() {
-  const local = dataManager.loadTasksFromStorage();
-  tasks.value = local.length ? local : [];
+  tasks.value = dataManager.loadTasksFromStorage();
   syncStatus.value = dataManager.getLastSyncStatus();
 }
 
-function doSyncFromServer() {
+function openConflictPage() {
+  if (navigatingConflicts.value || pendingConflictCount.value <= 0) return;
+  navigatingConflicts.value = true;
+  uni.navigateTo({
+    url: '/pages/remote-conflicts',
+    complete: () => {
+      setTimeout(() => {
+        navigatingConflicts.value = false;
+      }, 300);
+    },
+  });
+}
+
+function doBootstrapSync() {
   if (!dataManager.hasRemoteConfig()) return;
   loading.value = true;
-  dataManager.syncFromServer([...tasks.value]).then((res) => {
+  dataManager.bootstrapRemoteSync().then((res) => {
     loading.value = false;
-    if (res.success && res.merged) tasks.value = res.merged;
+    if (res.success && res.merged) {
+      tasks.value = res.merged;
+    }
     syncStatus.value = dataManager.getLastSyncStatus();
-    if (res.error) uni.showToast({ title: res.error || '同步失败', icon: 'none' });
+    if ((res.pendingChanges || []).length > 0) {
+      openConflictPage();
+      return;
+    }
+    if (res.error) {
+      uni.showToast({ title: res.error || '同步失败', icon: 'none' });
+    }
   });
 }
 
 onMounted(() => {
   loadTasks();
-  if (dataManager.hasRemoteConfig()) doSyncFromServer();
+  doBootstrapSync();
 });
 
 onShow(() => {
@@ -365,6 +370,17 @@ view, text, button, scroll-view, input, textarea {
   .date-display { text-align: right; margin-left: 4px; height: 28px; }
   .day { font-size: 16px; font-weight: 700; display: block; line-height: 1; color: #1f2937; }
   .month { font-size: 12px; color: #6b7280; font-weight: 500; margin-top: 4px; display: block; }
+}
+
+.sync-banner {
+  margin-top: 8px;
+  display: inline-flex;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .quadrant-card {

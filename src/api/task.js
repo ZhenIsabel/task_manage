@@ -1,14 +1,14 @@
 /**
- * ?? API ???????????????????????
+ * 任务远程 API 适配。
  */
 import request from './request.js';
 
-// ??????????????/?????????????????
-const HIGH_LABEL = '\u9ad8';
-const LOW_LABEL = '\u4f4e';
+const HIGH_LABEL = '高';
+const LOW_LABEL = '低';
 
 const HIGH_VALUES = new Set([HIGH_LABEL, 'high', 'HIGH', 'High', 1, '1', true, 'true']);
 const COMPLETED_VALUES = new Set([true, 'true', 1, '1']);
+const DELETED_VALUES = new Set([true, 'true', 1, '1']);
 
 const importanceToServer = (value) => (value === 'high' ? HIGH_LABEL : LOW_LABEL);
 const urgencyToServer = (value) => (value === 'high' ? HIGH_LABEL : LOW_LABEL);
@@ -17,6 +17,10 @@ const urgencyFromServer = (value) => (HIGH_VALUES.has(value) ? 'high' : 'low');
 
 function completedFromServer(value) {
   return COMPLETED_VALUES.has(value);
+}
+
+function deletedFromServer(value) {
+  return DELETED_VALUES.has(value);
 }
 
 const SERVER_MAPPED_FIELDS = new Set([
@@ -31,6 +35,8 @@ const SERVER_MAPPED_FIELDS = new Set([
   'created_at',
   'updated_at',
   'position',
+  'deleted',
+  'history',
 ]);
 
 function extractServerExtras(serverTask) {
@@ -46,13 +52,11 @@ function extractServerExtras(serverTask) {
 }
 
 export function taskToServer(task) {
-  const base = task && typeof task._serverRaw === 'object' && task._serverRaw
-    ? { ...task._serverRaw }
-    : {};
+  const base = task && typeof task._serverRaw === 'object' && task._serverRaw ? { ...task._serverRaw } : {};
   const basePosition = base.position && typeof base.position === 'object' ? base.position : {};
   const taskPosition = task.position && typeof task.position === 'object' ? task.position : {};
 
-  return {
+  const body = {
     ...base,
     id: task.id,
     text: task.title ?? '',
@@ -66,6 +70,7 @@ export function taskToServer(task) {
     urgency: urgencyToServer(task.urgency || 'low'),
     completed: !!task.isCompleted,
     completed_date: task.completedAt || '',
+    deleted: !!task.deleted,
     created_at: task.createdAt || base.created_at || new Date().toISOString(),
     updated_at: task.updatedAt || base.updated_at || new Date().toISOString(),
     position: {
@@ -74,6 +79,12 @@ export function taskToServer(task) {
       y: taskPosition.y ?? basePosition.y ?? 100,
     },
   };
+
+  if (task.history && typeof task.history === 'object') {
+    body.history = task.history;
+  }
+
+  return body;
 }
 
 export function taskFromServer(serverTask) {
@@ -89,6 +100,7 @@ export function taskFromServer(serverTask) {
     urgency: urgencyFromServer(serverTask.urgency || LOW_LABEL),
     isCompleted: completedFromServer(serverTask.completed),
     completedAt: serverTask.completed_date || serverTask.completedAt || null,
+    deleted: deletedFromServer(serverTask.deleted),
     createdAt:
       serverTask.created_at ||
       serverTask.createdAt ||
@@ -157,7 +169,7 @@ export function createOrUpdateTaskOnServer(task) {
 }
 
 export function deleteTaskOnServer(taskId) {
-  return request('DELETE', "/api/tasks/" + taskId).then((res) => {
+  return request('DELETE', `/api/tasks/${taskId}`).then((res) => {
     if (res.success) return { success: true };
     return { success: false, error: res.error };
   });
@@ -168,12 +180,12 @@ export function healthCheck() {
 }
 
 export function getTaskHistoryFromServer(taskId) {
-  return request('GET', "/api/tasks/" + taskId + '/history').then((res) => {
+  return request('GET', `/api/tasks/${taskId}/history`).then((res) => {
     if (!res.success) {
       return { success: false, error: res.error, history: {} };
     }
 
-    const history = (res.data && res.data.history) || {};
+    const history = normalizeTaskHistory((res.data && res.data.history) || {});
     return { success: true, history };
   });
 }
@@ -188,8 +200,39 @@ export function postTaskHistoryToServer(taskId, records) {
     })),
   };
 
-  return request('POST', "/api/tasks/" + taskId + '/history', body).then((res) => {
+  return request('POST', `/api/tasks/${taskId}/history`, body).then((res) => {
     if (res.success) return { success: true };
     return { success: false, error: res.error };
   });
+}
+
+function normalizeTaskHistory(history) {
+  if (!history) return {};
+
+  if (Array.isArray(history)) {
+    const byField = {};
+    history.forEach((record) => {
+      const fieldName = record?.field_name || record?.field || record?.fieldName || 'text';
+      if (!byField[fieldName]) byField[fieldName] = [];
+      byField[fieldName].push({
+        value: record?.field_value ?? record?.value ?? '',
+        timestamp: record?.timestamp || '',
+        action: record?.action || 'update',
+      });
+    });
+    return byField;
+  }
+
+  if (typeof history !== 'object') return {};
+
+  const normalized = {};
+  Object.entries(history).forEach(([fieldName, list]) => {
+    if (!Array.isArray(list)) return;
+    normalized[fieldName] = list.map((record) => ({
+      value: record?.field_value ?? record?.value ?? '',
+      timestamp: record?.timestamp || '',
+      action: record?.action || 'update',
+    }));
+  });
+  return normalized;
 }

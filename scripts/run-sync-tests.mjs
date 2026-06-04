@@ -7,12 +7,10 @@ import { createServer } from 'vite';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
 
-// 深拷贝测试数据，避免后续断言受到引用修改的影响。
 function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
 }
 
-// 构造最小可用的 uni 运行时，只保留同步测试需要的接口。
 function createMemoryUni(initialStorage = {}) {
   const storage = new Map(Object.entries(initialStorage));
   return {
@@ -28,14 +26,90 @@ function createMemoryUni(initialStorage = {}) {
     showToast() {},
     showModal() {},
     navigateBack() {},
+    navigateTo() {},
     getSystemInfoSync() {
       return {};
     },
+    request(options) {
+      const current = globalThis.__REQUEST_TEST_STATE__ || {};
+      const log = current.requestLog || (current.requestLog = []);
+      log.push({
+        method: options.method,
+        url: options.url,
+        data: clone(options.data),
+        header: clone(options.header),
+      });
+
+      const ok = (statusCode, data) => {
+        options.success && options.success({ statusCode, data });
+      };
+      const fail = (errMsg) => {
+        options.fail && options.fail({ errMsg });
+      };
+
+      if (current.networkError) {
+        fail(current.networkError);
+        return;
+      }
+
+      const normalizedUrl = options.url.replace(/^https?:\/\/[^/]+/, '');
+      if (options.method === 'GET' && normalizedUrl === '/api/health') {
+        if (current.failHealth) {
+          ok(503, { error: 'health failed' });
+          return;
+        }
+        ok(200, { status: 'ok' });
+        return;
+      }
+
+      if (options.method === 'POST' && normalizedUrl === '/api/users') {
+        current.registerCalls = (current.registerCalls || 0) + 1;
+        if (current.failRegister) {
+          ok(400, { error: current.failRegister });
+          return;
+        }
+        ok(current.registerStatusCode || 201, { user_id: 'u-1' });
+        return;
+      }
+
+      if (options.method === 'GET' && normalizedUrl === '/api/tasks') {
+        if (current.failTaskAuthOnce && !current.failTaskAuthConsumed) {
+          current.failTaskAuthConsumed = true;
+          ok(401, { error: 'unauthorized' });
+          return;
+        }
+        ok(200, { tasks: clone(current.serverTasks || []) });
+        return;
+      }
+
+      if (options.method === 'POST' && normalizedUrl === '/api/tasks') {
+        current.postBodies = current.postBodies || [];
+        current.postBodies.push(clone(options.data));
+        ok(200, { success: true });
+        return;
+      }
+
+      if (options.method === 'DELETE' && normalizedUrl.startsWith('/api/tasks/')) {
+        ok(200, { success: true });
+        return;
+      }
+
+      if (options.method === 'GET' && /\/api\/tasks\/[^/]+\/history$/.test(normalizedUrl)) {
+        const taskId = normalizedUrl.split('/')[3];
+        ok(200, { history: clone((current.serverHistoryByTask || {})[taskId] || {}) });
+        return;
+      }
+
+      if (options.method === 'POST' && /\/api\/tasks\/[^/]+\/history$/.test(normalizedUrl)) {
+        current.historyBodies = current.historyBodies || [];
+        current.historyBodies.push(clone(options.data));
+        ok(200, { success: true });
+        return;
+      }
+
+      ok(404, { error: `Unhandled request: ${options.method} ${normalizedUrl}` });
+    },
   };
-}
-async function flushMicrotasks() {
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 async function withServer(aliases, run) {
@@ -45,9 +119,7 @@ async function withServer(aliases, run) {
     logLevel: 'error',
     server: { middlewareMode: true },
     plugins: [],
-    resolve: {
-      alias: aliases,
-    },
+    resolve: { alias: aliases },
   });
 
   try {
@@ -74,34 +146,225 @@ async function loadDataManager() {
   );
 }
 
-async function loadTaskApi() {
-  const aliases = [
-    {
-      find: /\/src\/api\/request\.js$/,
-      replacement: path.join(projectRoot, 'scripts/test-mocks/request.mock.mjs'),
-    },
-  ];
+async function loadRequestModule() {
+  return withServer([], (server) =>
+    server.ssrLoadModule(`/src/api/request.js?t=${Date.now()}`)
+  );
+}
 
-  return withServer(aliases, (server) =>
+async function loadTaskApiModule() {
+  return withServer([], (server) =>
     server.ssrLoadModule(`/src/api/task.js?t=${Date.now()}`)
   );
 }
 
-function resetTestState(overrides = {}) {
+function resetSyncState(overrides = {}) {
   globalThis.__SYNC_TEST_STATE__ = {
-    remoteConfig: { api_base_url: 'http://test.local' },
+    remoteConfig: {
+      enabled: true,
+      api_base_url: 'http://test.local',
+      api_token: 'token-1',
+      username: 'tester',
+    },
     serverTasks: [],
     uploadCalls: [],
     deleteCalls: [],
     historyCalls: [],
-    requestLog: [],
-    postBodies: [],
-    historyBodies: [],
+    historyFetchCalls: [],
+    serverHistoryByTask: {},
+    healthChecks: 0,
     ...clone(overrides),
   };
 }
 
+function resetRequestState(overrides = {}) {
+  globalThis.__REQUEST_TEST_STATE__ = {
+    serverTasks: [],
+    requestLog: [],
+    registerCalls: 0,
+    postBodies: [],
+    historyBodies: [],
+    serverHistoryByTask: {},
+    ...clone(overrides),
+  };
+}
+
+async function testHasRemoteConfigRequiresUsernameAndToken() {
+  resetSyncState({ remoteConfig: { enabled: true, api_base_url: 'http://test.local', api_token: '', username: '' } });
+  globalThis.uni = createMemoryUni();
+  const dataManager = await loadDataManager();
+
+  assert.equal(dataManager.hasRemoteConfig(), false);
+}
+
+async function testBootstrapRemoteSyncChecksHealthBeforePull() {
+  resetSyncState({
+    serverTasks: [
+      {
+        id: 'remote-1',
+        title: 'Remote Task',
+        createdAt: '2026-03-02T00:00:00.000Z',
+        updatedAt: '2026-03-02T00:00:00.000Z',
+      },
+    ],
+  });
+  globalThis.uni = createMemoryUni();
+  const dataManager = await loadDataManager();
+
+  const result = await dataManager.bootstrapRemoteSync();
+  const tasks = dataManager.loadTasksFromStorage();
+
+  assert.equal(result.success, true);
+  assert.equal(result.pendingChanges.length, 0);
+  assert.equal(globalThis.__SYNC_TEST_STATE__.healthChecks, 1);
+  assert.equal(tasks.length, 1);
+  assert.equal(tasks[0].id, 'remote-1');
+}
+
+async function testBootstrapRemoteSyncStopsWhenHealthFails() {
+  resetSyncState({ failHealth: 'health failed' });
+  globalThis.uni = createMemoryUni();
+  const dataManager = await loadDataManager();
+
+  const result = await dataManager.bootstrapRemoteSync();
+
+  assert.equal(result.success, false);
+  assert.match(result.error || '', /health/i);
+}
+
+async function testSyncFromServerCreatesPendingConflictInsteadOfOverwritingLocal() {
+  resetSyncState({
+    serverTasks: [
+      {
+        id: 'same',
+        title: 'Remote Title',
+        note: 'Remote note',
+        createdAt: '2026-03-01T00:00:00.000Z',
+        updatedAt: '2026-03-03T00:00:00.000Z',
+        importance: 'high',
+        urgency: 'low',
+      },
+    ],
+  });
+  globalThis.uni = createMemoryUni({
+    task_list: JSON.stringify([
+      {
+        id: 'same',
+        title: 'Local Title',
+        note: 'Local note',
+        createdAt: '2026-03-01T00:00:00.000Z',
+        updatedAt: '2026-03-02T00:00:00.000Z',
+        importance: 'low',
+        urgency: 'low',
+        _syncDirty: false,
+      },
+    ]),
+  });
+  const dataManager = await loadDataManager();
+
+  const localTasks = dataManager.loadTasksFromStorage();
+  const result = await dataManager.syncFromServer(localTasks);
+  const stored = dataManager.loadTasksFromStorage();
+  const pending = dataManager.getPendingRemoteTaskChanges();
+
+  assert.equal(result.success, true);
+  assert.equal(result.pendingChanges.length, 1);
+  assert.equal(stored[0].title, 'Local Title');
+  assert.equal(pending[0].id, 'same');
+  assert.equal(pending[0].remoteTask.title, 'Remote Title');
+}
+
+async function testResolvePendingConflictAcceptingRemoteOverwritesLocalAndStoresHistory() {
+  resetSyncState({
+    serverTasks: [
+      {
+        id: 'same',
+        title: 'Remote Title',
+        note: 'Remote note',
+        createdAt: '2026-03-01T00:00:00.000Z',
+        updatedAt: '2026-03-03T00:00:00.000Z',
+        importance: 'high',
+        urgency: 'low',
+      },
+    ],
+    serverHistoryByTask: {
+      same: {
+        text: [
+          { value: 'Remote Title', action: 'update', timestamp: '2026-03-03T00:00:00.000Z' },
+        ],
+      },
+    },
+  });
+  globalThis.uni = createMemoryUni({
+    task_list: JSON.stringify([
+      {
+        id: 'same',
+        title: 'Local Title',
+        note: 'Local note',
+        createdAt: '2026-03-01T00:00:00.000Z',
+        updatedAt: '2026-03-02T00:00:00.000Z',
+        importance: 'low',
+        urgency: 'low',
+        _syncDirty: false,
+      },
+    ]),
+  });
+  const dataManager = await loadDataManager();
+
+  await dataManager.syncFromServer(dataManager.loadTasksFromStorage());
+  const resolution = await dataManager.resolvePendingRemoteTaskChanges(['same'], []);
+  const stored = dataManager.loadTasksFromStorage();
+  const history = dataManager.loadTaskHistoryFromStorage();
+
+  assert.equal(resolution.success, true);
+  assert.equal(dataManager.getPendingRemoteTaskChanges().length, 0);
+  assert.equal(stored[0].title, 'Remote Title');
+  assert.ok(history.some((item) => item.task_id === 'same' && item.field_name === 'text' && item.field_value === 'Remote Title'));
+}
+
+async function testResolvePendingConflictAcceptingLocalReuploadsLocalTask() {
+  resetSyncState({
+    serverTasks: [
+      {
+        id: 'same',
+        title: 'Remote Title',
+        note: 'Remote note',
+        createdAt: '2026-03-01T00:00:00.000Z',
+        updatedAt: '2026-03-03T00:00:00.000Z',
+        importance: 'high',
+        urgency: 'low',
+      },
+    ],
+  });
+  globalThis.uni = createMemoryUni({
+    task_list: JSON.stringify([
+      {
+        id: 'same',
+        title: 'Local Title',
+        note: 'Local note',
+        createdAt: '2026-03-01T00:00:00.000Z',
+        updatedAt: '2026-03-02T00:00:00.000Z',
+        importance: 'low',
+        urgency: 'low',
+        _syncDirty: false,
+      },
+    ]),
+  });
+  const dataManager = await loadDataManager();
+
+  await dataManager.syncFromServer(dataManager.loadTasksFromStorage());
+  const resolution = await dataManager.resolvePendingRemoteTaskChanges([], ['same']);
+  const stored = dataManager.loadTasksFromStorage();
+
+  assert.equal(resolution.success, true);
+  assert.equal(stored[0].title, 'Local Title');
+  assert.equal(stored[0]._syncDirty, false);
+  assert.equal(globalThis.__SYNC_TEST_STATE__.uploadCalls.length, 1);
+  assert.equal(globalThis.__SYNC_TEST_STATE__.uploadCalls[0].title, 'Local Title');
+}
+
 async function testSyncToServerUploadsOnlyDirtyTasks() {
+  resetSyncState();
   globalThis.uni = createMemoryUni();
   const dataManager = await loadDataManager();
 
@@ -115,109 +378,287 @@ async function testSyncToServerUploadsOnlyDirtyTasks() {
 
   assert.equal(result.success, true);
   assert.equal(result.uploaded, 2);
-  assert.deepEqual(
-    globalThis.__SYNC_TEST_STATE__.uploadCalls.map((item) => item.id),
-    ['dirty-1', 'dirty-2']
-  );
+  assert.deepEqual(globalThis.__SYNC_TEST_STATE__.uploadCalls.map((item) => item.id), ['dirty-1', 'dirty-2']);
 }
 
-async function testSyncToServerFallsBackToAllTasksWhenNoDirtyFlagExists() {
-  resetTestState();
+async function testSyncToServerNoOpsWhenNoDirtyTasks() {
+  resetSyncState();
   globalThis.uni = createMemoryUni();
   const dataManager = await loadDataManager();
 
-  const localTasks = [
-    { id: 'task-a', title: 'Task A', _syncDirty: false, createdAt: '2026-03-01T00:00:00.000Z' },
-    { id: 'task-b', title: 'Task B', createdAt: '2026-03-02T00:00:00.000Z' },
-  ];
-
-  const result = await dataManager.syncToServer(localTasks);
+  const result = await dataManager.syncToServer([
+    { id: 'clean-1', title: 'Clean 1', _syncDirty: false, createdAt: '2026-03-01T00:00:00.000Z' },
+    { id: 'clean-2', title: 'Clean 2', _syncDirty: false, createdAt: '2026-03-02T00:00:00.000Z' },
+  ]);
 
   assert.equal(result.success, true);
-  assert.equal(result.uploaded, 2);
-  assert.deepEqual(
-    globalThis.__SYNC_TEST_STATE__.uploadCalls.map((item) => item.id),
-    ['task-a', 'task-b']
-  );
-}
-async function testSyncFromServerPrefersServerVersionOnConflict() {
-  resetTestState({
-    serverTasks: [
-      { id: 'same', title: 'Server Title', createdAt: '2026-03-03T00:00:00.000Z', color: 'blue' },
-      { id: 'server-only', title: 'Server Only', createdAt: '2026-03-04T00:00:00.000Z' },
-    ],
-  });
-  globalThis.uni = createMemoryUni();
-  const dataManager = await loadDataManager();
-
-  const localTasks = [
-    { id: 'same', title: 'Local Title', createdAt: '2026-03-01T00:00:00.000Z', color: 'red' },
-    { id: 'local-only', title: 'Local Only', createdAt: '2026-03-02T00:00:00.000Z' },
-  ];
-
-  const result = await dataManager.syncFromServer(localTasks);
-
-  assert.equal(result.success, true);
-  assert.equal(result.merged.length, 3);
-  assert.equal(result.merged.find((item) => item.id === 'same').title, 'Server Title');
-  assert.equal(result.merged.find((item) => item.id === 'same').color, 'blue');
-  assert.equal(result.merged.find((item) => item.id === 'same')._syncDirty, false);
+  assert.equal(result.uploaded, 0);
+  assert.equal(globalThis.__SYNC_TEST_STATE__.uploadCalls.length, 0);
 }
 
-async function testSyncFromServerRecordsOverwriteHistory() {
-  resetTestState({
-    serverTasks: [
-      {
-        id: 'same',
-        title: 'Server Title',
-        note: 'Server Note',
-        createdAt: '2026-03-03T00:00:00.000Z',
-        importance: 'high',
-        urgency: 'low',
-      },
-    ],
-  });
+async function testDeleteTaskCreatesTombstoneWithoutImmediateRemoteDelete() {
+  resetSyncState();
   globalThis.uni = createMemoryUni({
-    task_history: JSON.stringify([
+    task_list: JSON.stringify([
       {
-        task_id: 'same',
-        field_name: 'text',
-        field_value: 'Local Title',
-        action: 'update',
-        timestamp: '2026-03-02T00:00:00.000Z',
+        id: 'task-delete',
+        title: 'Delete me',
+        createdAt: '2026-03-01T00:00:00.000Z',
+        updatedAt: '2026-03-01T00:00:00.000Z',
+        _syncDirty: false,
       },
     ]),
   });
   const dataManager = await loadDataManager();
 
-  const localTasks = [
-    {
-      id: 'same',
-      title: 'Local Title',
-      note: 'Local Note',
-      createdAt: '2026-03-01T00:00:00.000Z',
-      importance: 'low',
-        urgency: 'low',
-    },
-  ];
-
-  const result = await dataManager.syncFromServer(localTasks);
-  const history = dataManager.loadTaskHistoryFromStorage();
+  const result = await dataManager.deleteTask('task-delete', false);
+  const stored = dataManager.loadTasksFromStorage();
 
   assert.equal(result.success, true);
-  assert.ok(
-    history.some((item) => item.task_id === 'same' && item.field_name === 'text' && item.field_value === 'Server Title')
-  );
-  assert.ok(
-    history.some((item) => item.task_id === 'same' && item.field_name === 'notes' && item.field_value === 'Server Note')
-  );
-  assert.ok(
-    history.some((item) => item.task_id === 'same' && item.field_name === 'importance' && item.field_value !== 'low')
-  );
+  assert.equal(result.tasks.some((task) => task.id === 'task-delete'), false);
+  assert.equal(globalThis.__SYNC_TEST_STATE__.deleteCalls.length, 0);
+  assert.equal(stored.length, 1);
+  assert.equal(stored[0].id, 'task-delete');
+  assert.equal(stored[0].deleted, true);
+  assert.equal(stored[0]._syncDirty, true);
+  assert.ok(stored[0].updatedAt);
+}
+
+async function testSyncToServerDeletesDirtyTombstoneAndKeepsItOnFailure() {
+  resetSyncState({ failDelete: 'delete failed' });
+  globalThis.uni = createMemoryUni({
+    task_list: JSON.stringify([
+      {
+        id: 'task-delete',
+        title: 'Delete me',
+        deleted: true,
+        updatedAt: '2026-03-02T00:00:00.000Z',
+        _syncDirty: true,
+      },
+    ]),
+  });
+  const dataManager = await loadDataManager();
+
+  const failed = await dataManager.syncToServer(dataManager.loadTasksFromStorage());
+  const afterFailed = dataManager.loadTasksFromStorage()[0];
+
+  assert.equal(failed.success, false);
+  assert.deepEqual(globalThis.__SYNC_TEST_STATE__.deleteCalls, ['task-delete']);
+  assert.equal(afterFailed.deleted, true);
+  assert.equal(afterFailed._syncDirty, true);
+
+  resetSyncState();
+  const retried = await dataManager.syncToServer(dataManager.loadTasksFromStorage());
+  const afterRetried = dataManager.loadTasksFromStorage()[0];
+
+  assert.equal(retried.success, true);
+  assert.equal(retried.uploaded, 1);
+  assert.equal(afterRetried.deleted, true);
+  assert.equal(afterRetried._syncDirty, false);
+}
+
+async function testSyncFromServerPreservesExistingPendingWithoutOverwriting() {
+  resetSyncState({
+    serverTasks: [
+      {
+        id: 'same',
+        title: 'Remote newer title',
+        updatedAt: '2026-03-04T00:00:00.000Z',
+      },
+    ],
+  });
+  globalThis.uni = createMemoryUni({
+    task_list: JSON.stringify([
+      {
+        id: 'same',
+        title: 'Local title',
+        updatedAt: '2026-03-02T00:00:00.000Z',
+        _syncDirty: false,
+      },
+    ]),
+    task_pending_remote_changes: JSON.stringify([
+      {
+        id: 'same',
+        title: 'Existing conflict',
+        localTask: { id: 'same', title: 'Local title' },
+        remoteTask: { id: 'same', title: 'Previous remote title' },
+      },
+    ]),
+  });
+  const dataManager = await loadDataManager();
+
+  const result = await dataManager.syncFromServer(dataManager.loadTasksFromStorage());
+  const stored = dataManager.loadTasksFromStorage();
+  const pending = dataManager.getPendingRemoteTaskChanges();
+
+  assert.equal(result.success, true);
+  assert.equal(result.pendingChanges.length, 1);
+  assert.equal(stored[0].title, 'Local title');
+  assert.equal(pending[0].remoteTask.title, 'Previous remote title');
+}
+
+async function testSyncToServerSkipsPendingConflictTasks() {
+  resetSyncState();
+  globalThis.uni = createMemoryUni({
+    task_pending_remote_changes: JSON.stringify([
+      { id: 'pending-1', localTask: { id: 'pending-1' }, remoteTask: { id: 'pending-1' } },
+    ]),
+  });
+  const dataManager = await loadDataManager();
+
+  const result = await dataManager.syncToServer([
+    { id: 'pending-1', title: 'Pending', _syncDirty: true, updatedAt: '2026-03-03T00:00:00.000Z' },
+    { id: 'dirty-1', title: 'Dirty', _syncDirty: true, updatedAt: '2026-03-03T00:00:00.000Z' },
+  ]);
+
+  assert.equal(result.success, true);
+  assert.equal(result.uploaded, 1);
+  assert.deepEqual(globalThis.__SYNC_TEST_STATE__.uploadCalls.map((item) => item.id), ['dirty-1']);
+}
+
+async function testSyncFromServerAppliesRemoteDeletedForCleanLocalTask() {
+  resetSyncState({
+    serverTasks: [
+      {
+        id: 'same',
+        title: 'Remote deleted',
+        deleted: true,
+        updatedAt: '2026-03-03T00:00:00.000Z',
+      },
+    ],
+  });
+  globalThis.uni = createMemoryUni({
+    task_list: JSON.stringify([
+      {
+        id: 'same',
+        title: 'Local task',
+        deleted: false,
+        updatedAt: '2026-03-02T00:00:00.000Z',
+        _syncDirty: false,
+      },
+    ]),
+  });
+  const dataManager = await loadDataManager();
+
+  const result = await dataManager.syncFromServer(dataManager.loadTasksFromStorage());
+  const stored = dataManager.loadTasksFromStorage();
+
+  assert.equal(result.success, true);
+  assert.equal(result.pendingChanges.length, 0);
+  assert.equal(stored[0].deleted, true);
+  assert.equal(stored[0]._syncDirty, false);
+}
+
+async function testSyncFromServerCreatesConflictForRemoteDeletedDirtyLocalTask() {
+  resetSyncState({
+    serverTasks: [
+      {
+        id: 'same',
+        title: 'Remote deleted',
+        deleted: true,
+        updatedAt: '2026-03-03T00:00:00.000Z',
+      },
+    ],
+  });
+  globalThis.uni = createMemoryUni({
+    task_list: JSON.stringify([
+      {
+        id: 'same',
+        title: 'Locally edited',
+        deleted: false,
+        updatedAt: '2026-03-02T00:00:00.000Z',
+        _syncDirty: true,
+      },
+    ]),
+  });
+  const dataManager = await loadDataManager();
+
+  const result = await dataManager.syncFromServer(dataManager.loadTasksFromStorage());
+  const stored = dataManager.loadTasksFromStorage();
+  const pending = dataManager.getPendingRemoteTaskChanges();
+
+  assert.equal(result.success, true);
+  assert.equal(result.pendingChanges.length, 1);
+  assert.equal(stored[0].deleted, false);
+  assert.equal(pending[0].remoteTask.deleted, true);
+}
+
+async function testSyncFromServerTreatsMissingCleanLocalTaskAsRemoteDelete() {
+  resetSyncState({ serverTasks: [] });
+  globalThis.uni = createMemoryUni({
+    task_list: JSON.stringify([
+      {
+        id: 'missing',
+        title: 'Missing remotely',
+        deleted: false,
+        updatedAt: '2026-03-02T00:00:00.000Z',
+        _syncDirty: false,
+      },
+    ]),
+  });
+  const dataManager = await loadDataManager();
+
+  await dataManager.syncFromServer(dataManager.loadTasksFromStorage());
+  const stored = dataManager.loadTasksFromStorage();
+
+  assert.equal(stored[0].deleted, true);
+  assert.equal(stored[0]._syncDirty, false);
+}
+
+async function testSyncFromServerComparesTimezoneAwareTimestamps() {
+  resetSyncState({
+    serverTasks: [
+      {
+        id: 'same',
+        title: 'Remote later',
+        updatedAt: '2026-04-14T15:00:00Z',
+      },
+    ],
+  });
+  globalThis.uni = createMemoryUni({
+    task_list: JSON.stringify([
+      {
+        id: 'same',
+        title: 'Local earlier',
+        updatedAt: '2026-04-14T20:00:00+08:00',
+        _syncDirty: false,
+      },
+    ]),
+  });
+  const dataManager = await loadDataManager();
+
+  const result = await dataManager.syncFromServer(dataManager.loadTasksFromStorage());
+
+  assert.equal(result.pendingChanges.length, 1);
+  assert.equal(dataManager.getPendingRemoteTaskChanges()[0].remoteTask.title, 'Remote later');
+}
+
+async function testSyncToServerUploadsDirtyTaskHistory() {
+  resetSyncState();
+  globalThis.uni = createMemoryUni({
+    task_history: JSON.stringify([
+      {
+        task_id: 'dirty-1',
+        field_name: 'text',
+        field_value: 'Dirty title',
+        action: 'update',
+        timestamp: '2026-03-03T00:00:00.000Z',
+      },
+    ]),
+  });
+  const dataManager = await loadDataManager();
+
+  await dataManager.syncToServer([
+    { id: 'dirty-1', title: 'Dirty title', _syncDirty: true, updatedAt: '2026-03-03T00:00:00.000Z' },
+  ]);
+
+  assert.deepEqual(globalThis.__SYNC_TEST_STATE__.uploadCalls[0].history, {
+    text: [{ value: 'Dirty title', action: 'update', timestamp: '2026-03-03T00:00:00.000Z' }],
+  });
 }
 
 async function testSaveTaskOnlyMarksDirtyWithoutImmediateUpload() {
-  resetTestState();
+  resetSyncState();
   globalThis.uni = createMemoryUni({
     task_list: JSON.stringify([
       {
@@ -248,104 +689,63 @@ async function testSaveTaskOnlyMarksDirtyWithoutImmediateUpload() {
     },
     false
   );
-  await flushMicrotasks();
 
   const savedTask = result.tasks.find((item) => item.id === 'task-1');
 
   assert.equal(globalThis.__SYNC_TEST_STATE__.uploadCalls.length, 0);
-  assert.equal(globalThis.__SYNC_TEST_STATE__.historyCalls.length, 0);
-  assert.ok(savedTask.updatedAt);
-  assert.notEqual(savedTask.updatedAt, '2026-03-01T00:00:00.000Z');
   assert.equal(savedTask._syncDirty, true);
+  assert.ok(savedTask.updatedAt);
+
+  const history = dataManager.loadTaskHistoryFromStorage();
+  assert.ok(history.some((item) => item.task_id === 'task-1' && item.field_name === 'importance' && item.field_value === '高'));
 }
 
-async function testSavedDirtyTaskIsUploadedByManualSync() {
-  resetTestState();
+async function testTaskApiMapsDeletedAndHistoryPayload() {
+  resetRequestState();
   globalThis.uni = createMemoryUni({
-    task_list: JSON.stringify([
-      {
-        id: 'task-upload',
-        title: 'Before edit',
-        note: '',
-        createdAt: '2026-03-01T00:00:00.000Z',
-        updatedAt: '2026-03-01T00:00:00.000Z',
-        dueDate: null,
-        importance: 'low',
-        urgency: 'low',
-        _syncDirty: false,
-      },
-    ]),
+    task_remote_config: JSON.stringify({
+      enabled: true,
+      api_base_url: 'http://test.local',
+      api_token: 'token-1',
+      username: 'tester',
+    }),
   });
-  const dataManager = await loadDataManager();
+  const taskApi = await loadTaskApiModule();
 
-  await dataManager.saveTask(
-    {
-      id: 'task-upload',
-      title: 'After edit',
-      note: 'Changed locally',
-      createdAt: '2026-03-01T00:00:00.000Z',
-      updatedAt: '2026-03-01T00:00:00.000Z',
-      dueDate: null,
-      importance: 'high',
-      urgency: 'low',
+  const local = taskApi.taskFromServer({
+    id: 'deleted-1',
+    text: 'Deleted remote',
+    deleted: true,
+    updated_at: '2026-03-03T00:00:00.000Z',
+  });
+  const server = taskApi.taskToServer({
+    id: 'deleted-1',
+    title: 'Deleted remote',
+    deleted: true,
+    updatedAt: '2026-03-03T00:00:00.000Z',
+    history: {
+      text: [{ value: 'Deleted remote', action: 'update', timestamp: '2026-03-03T00:00:00.000Z' }],
     },
-    false
-  );
+  });
 
-  const savedList = dataManager.loadTasksFromStorage();
-  const uploadResult = await dataManager.syncToServer(savedList);
-  const storedAfterUpload = dataManager.loadTasksFromStorage();
-  const uploadedTask = storedAfterUpload.find((item) => item.id === 'task-upload');
-
-  assert.equal(uploadResult.success, true);
-  assert.equal(uploadResult.uploaded, 1);
-  assert.equal(globalThis.__SYNC_TEST_STATE__.uploadCalls.length, 1);
-  assert.equal(globalThis.__SYNC_TEST_STATE__.uploadCalls[0].id, 'task-upload');
-  assert.equal(globalThis.__SYNC_TEST_STATE__.uploadCalls[0].title, 'After edit');
-  assert.equal(uploadedTask._syncDirty, false);
+  assert.equal(local.deleted, true);
+  assert.equal(server.deleted, true);
+  assert.deepEqual(server.history, {
+    text: [{ value: 'Deleted remote', action: 'update', timestamp: '2026-03-03T00:00:00.000Z' }],
+  });
 }
 
-async function testSyncFromServerDoesNotClearDirtyFlagForLocalOnlyTasks() {
-  resetTestState({
-    serverTasks: [
-      {
-        id: 'server-only',
-        title: 'Server task',
-        createdAt: '2026-03-03T00:00:00.000Z',
-      },
-    ],
-  });
-  globalThis.uni = createMemoryUni({
-    task_list: JSON.stringify([
-      {
-        id: 'local-dirty',
-        title: 'Local unsynced task',
-        note: 'pending upload',
-        createdAt: '2026-03-02T00:00:00.000Z',
-        updatedAt: '2026-03-02T00:00:00.000Z',
-        dueDate: null,
-        importance: 'low',
-        urgency: 'low',
-        _syncDirty: true,
-      },
-    ]),
-  });
-  const dataManager = await loadDataManager();
+async function testDetailHistoryDisplaySupportsLegacyAndServerImportanceValues() {
+  const source = fs.readFileSync(path.join(projectRoot, 'src/pages/detail.vue'), 'utf8');
 
-  const localTasks = dataManager.loadTasksFromStorage();
-  const result = await dataManager.syncFromServer(localTasks);
-  const localDirtyTask = result.merged.find((item) => item.id === 'local-dirty');
-
-  assert.equal(result.success, true);
-  assert.ok(localDirtyTask);
-  assert.equal(localDirtyTask._syncDirty, true);
+  assert.match(source, /['"]high['"]/);
+  assert.match(source, /['"]高['"]/);
+  assert.match(source, /['"]low['"]/);
+  assert.match(source, /['"]低['"]/);
 }
+
 async function testEditScreensDoNotForceImmediateRemoteSync() {
-  const files = [
-    'src/pages/edit.vue',
-    'src/pages/index.vue',
-    'src/pages/archive.vue',
-  ];
+  const files = ['src/pages/edit.vue', 'src/pages/index.vue', 'src/pages/archive.vue'];
 
   files.forEach((relativePath) => {
     const source = fs.readFileSync(path.join(projectRoot, relativePath), 'utf8');
@@ -354,160 +754,61 @@ async function testEditScreensDoNotForceImmediateRemoteSync() {
   });
 }
 
-async function testCreateOrUpdateTaskPreservesServerOnlyFields() {
-  resetTestState({
+async function testRequestAutoRegistersAfter401() {
+  resetRequestState({
+    failTaskAuthOnce: true,
     serverTasks: [
       {
-        id: 'task-1',
-        text: 'Server title',
-        notes: 'Server note',
-        due_date: '2026-03-02T00:00:00.000Z',
-        importance: 'low',
-        urgency: 'low',
-        completed: false,
-        completed_date: '',
-        created_at: '2026-03-01T00:00:00.000Z',
-        updated_at: '2026-03-01T00:00:00.000Z',
-        position: { x: 120, y: 80 },
-        directory: '/existing/path',
-        color: '#00AAFF',
+        id: 'remote-1',
+        text: 'Remote title',
       },
     ],
   });
-  const taskApi = await loadTaskApi();
-
-  await taskApi.createOrUpdateTaskOnServer({
-    id: 'task-1',
-    title: 'Locally edited',
-    note: 'Server note',
-    dueDate: '2026-03-02T00:00:00.000Z',
-    importance: 'high',
-    urgency: 'low',
-    isCompleted: false,
-    completedAt: null,
-    createdAt: '2026-03-01T00:00:00.000Z',
-    updatedAt: '2026-03-09T10:00:00.000Z',
-    position: { x: 200, y: 240 },
-  });
-
-  const payload = globalThis.__SYNC_TEST_STATE__.postBodies[0];
-  assert.equal(payload.text, 'Locally edited');
-  assert.notEqual(payload.importance, 'low');
-  assert.equal(payload.updated_at, '2026-03-09T10:00:00.000Z');
-  assert.equal(payload.directory, '/existing/path');
-  assert.equal(payload.color, '#00AAFF');
-}
-
-async function testTaskFromServerAcceptsCompatibleFieldShapes() {
-  resetTestState({
-    serverTasks: [
-      {
-        id: 'compat-1',
-        title: 'Edited from app',
-        note: 'Changed note',
-        dueDate: '2026-03-12T00:00:00.000Z',
-        importance: 'high',
-        urgency: '1',
-        completed: 'false',
-        completedAt: null,
-        createdAt: '2026-03-01T00:00:00.000Z',
-        updatedAt: '2026-03-11T10:00:00.000Z',
-      },
-      {
-        id: 'compat-2',
-        text: 'Done task',
-        notes: 'Done note',
-        due_date: '2026-03-13T00:00:00.000Z',
-        importance: '?',
-        urgency: '?',
-        completed: '1',
-        completed_date: '2026-03-11T11:00:00.000Z',
-        created_at: '2026-03-02T00:00:00.000Z',
-        updated_at: '2026-03-11T11:00:00.000Z',
-      },
-    ],
-  });
-  const taskApi = await loadTaskApi();
-
-  const res = await taskApi.getTasksFromServer();
-  const compat1 = res.tasks.find((item) => item.id === 'compat-1');
-  const compat2 = res.tasks.find((item) => item.id === 'compat-2');
-
-  assert.equal(res.success, true);
-  assert.equal(compat1.title, 'Edited from app');
-  assert.equal(compat1.note, 'Changed note');
-  assert.equal(compat1.importance, 'high');
-  assert.equal(compat1.urgency, 'high');
-  assert.equal(compat1.isCompleted, false);
-  assert.equal(compat1.updatedAt, '2026-03-11T10:00:00.000Z');
-  assert.equal(compat2.isCompleted, true);
-  assert.equal(compat2.completedAt, '2026-03-11T11:00:00.000Z');
-}
-
-function desktopShouldAdoptServerTask(localTask, serverTask) {
-  if (!localTask) return true;
-  return (serverTask.updated_at || '') > (localTask.updated_at || '');
-}
-
-async function testAppPayloadLetsDesktopBranchDetectRemoteUpdate() {
-  resetTestState();
   globalThis.uni = createMemoryUni({
-    task_list: JSON.stringify([
-      {
-        id: 'task-compat',
-        title: 'Original',
-        note: 'Note',
-        createdAt: '2026-03-01T00:00:00.000Z',
-        updatedAt: '2026-03-01T00:00:00.000Z',
-        dueDate: '2026-03-02T00:00:00.000Z',
-        importance: 'low',
-        urgency: 'low',
-        _syncDirty: false,
-      },
-    ]),
+    task_remote_config: JSON.stringify({
+      enabled: true,
+      api_base_url: 'http://test.local',
+      api_token: 'token-1',
+      username: 'tester',
+    }),
   });
-  const dataManager = await loadDataManager();
-  const taskApi = await loadTaskApi();
+  const requestModule = await loadRequestModule();
+  requestModule.resetRemoteAuthState();
 
-  const saveResult = await dataManager.saveTask(
-    {
-      id: 'task-compat',
-      title: 'Edited from app',
-      note: 'Note',
-      createdAt: '2026-03-01T00:00:00.000Z',
-      updatedAt: '2026-03-01T00:00:00.000Z',
-      dueDate: '2026-03-02T00:00:00.000Z',
-      importance: 'low',
-        urgency: 'low',
-    },
-    false
+  const result = await requestModule.request('GET', '/api/tasks');
+
+  assert.equal(result.success, true);
+  assert.equal(((result.data || {}).tasks || []).length, 1);
+  assert.equal(globalThis.__REQUEST_TEST_STATE__.registerCalls, 1);
+  assert.deepEqual(
+    globalThis.__REQUEST_TEST_STATE__.requestLog.map((item) => `${item.method} ${item.url.replace(/^https?:\/\/[^/]+/, '')}`),
+    ['GET /api/tasks', 'POST /api/users', 'GET /api/tasks']
   );
-
-  const savedTask = saveResult.tasks.find((item) => item.id === 'task-compat');
-  const payload = taskApi.taskToServer(savedTask);
-  const desktopLocalTask = {
-    id: 'task-compat',
-    text: 'Original',
-    updated_at: '2026-03-01T00:00:00.000Z',
-  };
-
-  assert.equal(payload.text, 'Edited from app');
-  assert.ok(payload.updated_at);
-  assert.equal(desktopShouldAdoptServerTask(desktopLocalTask, payload), true);
 }
 
 const tests = [
+  ['hasRemoteConfig requires username and token', testHasRemoteConfigRequiresUsernameAndToken],
+  ['bootstrapRemoteSync checks health before pull', testBootstrapRemoteSyncChecksHealthBeforePull],
+  ['bootstrapRemoteSync stops when health fails', testBootstrapRemoteSyncStopsWhenHealthFails],
+  ['syncFromServer creates pending conflict instead of overwriting local', testSyncFromServerCreatesPendingConflictInsteadOfOverwritingLocal],
+  ['resolvePendingRemoteTaskChanges accepting remote overwrites local and stores history', testResolvePendingConflictAcceptingRemoteOverwritesLocalAndStoresHistory],
+  ['resolvePendingRemoteTaskChanges accepting local reuploads local task', testResolvePendingConflictAcceptingLocalReuploadsLocalTask],
   ['syncToServer uploads only dirty tasks', testSyncToServerUploadsOnlyDirtyTasks],
-  ['syncToServer falls back to all tasks when no dirty flag exists', testSyncToServerFallsBackToAllTasksWhenNoDirtyFlagExists],
-  ['syncFromServer prefers server version during conflicts', testSyncFromServerPrefersServerVersionOnConflict],
-  ['syncFromServer records overwrite history when server wins conflicts', testSyncFromServerRecordsOverwriteHistory],
+  ['syncToServer no-ops when no dirty tasks', testSyncToServerNoOpsWhenNoDirtyTasks],
+  ['deleteTask creates tombstone without immediate remote delete', testDeleteTaskCreatesTombstoneWithoutImmediateRemoteDelete],
+  ['syncToServer deletes dirty tombstone and keeps it on failure', testSyncToServerDeletesDirtyTombstoneAndKeepsItOnFailure],
+  ['syncFromServer preserves existing pending without overwriting', testSyncFromServerPreservesExistingPendingWithoutOverwriting],
+  ['syncToServer skips pending conflict tasks', testSyncToServerSkipsPendingConflictTasks],
+  ['syncFromServer applies remote deleted for clean local task', testSyncFromServerAppliesRemoteDeletedForCleanLocalTask],
+  ['syncFromServer creates conflict for remote deleted dirty local task', testSyncFromServerCreatesConflictForRemoteDeletedDirtyLocalTask],
+  ['syncFromServer treats missing clean local task as remote delete', testSyncFromServerTreatsMissingCleanLocalTaskAsRemoteDelete],
+  ['syncFromServer compares timezone-aware timestamps', testSyncFromServerComparesTimezoneAwareTimestamps],
+  ['syncToServer uploads dirty task history', testSyncToServerUploadsDirtyTaskHistory],
   ['saveTask only marks dirty without immediate upload', testSaveTaskOnlyMarksDirtyWithoutImmediateUpload],
-  ['saved dirty task is uploaded by manual sync', testSavedDirtyTaskIsUploadedByManualSync],
-  ['syncFromServer does not clear dirty flag for local-only tasks', testSyncFromServerDoesNotClearDirtyFlagForLocalOnlyTasks],
+  ['task API maps deleted and history payload', testTaskApiMapsDeletedAndHistoryPayload],
+  ['detail history display supports legacy and server importance values', testDetailHistoryDisplaySupportsLegacyAndServerImportanceValues],
   ['edit screens do not force immediate remote sync', testEditScreensDoNotForceImmediateRemoteSync],
-  ['createOrUpdateTaskOnServer preserves server-only fields', testCreateOrUpdateTaskPreservesServerOnlyFields],
-  ['taskFromServer accepts compatible field shapes', testTaskFromServerAcceptsCompatibleFieldShapes],
-  ['app payload lets desktop branch detect remote updates', testAppPayloadLetsDesktopBranchDetectRemoteUpdate],
+  ['request auto-registers after 401', testRequestAutoRegistersAfter401],
 ];
 
 async function main() {

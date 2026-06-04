@@ -8,13 +8,30 @@
     </view>
 
     <view class="form-card glass-card">
+      <view class="switch-row">
+        <view>
+          <text class="section-title">远程同步</text>
+          <text class="section-subtitle">仅接入普通任务 tasks，同步策略与 PC 端一致。</text>
+        </view>
+        <switch :checked="form.enabled" color="#6366f1" @change="handleEnabledChange" />
+      </view>
+
       <text class="label">服务器地址</text>
       <input
         v-model="form.api_base_url"
         class="input"
-        placeholder="例如 https://your-server.com 或 http://localhost:5000"
+        placeholder="例如 https://your-server.com"
         placeholder-class="placeholder"
       />
+
+      <text class="label">用户名</text>
+      <input
+        v-model="form.username"
+        class="input"
+        placeholder="与远程注册用户一致"
+        placeholder-class="placeholder"
+      />
+
       <text class="label">API Token</text>
       <input
         v-model="form.api_token"
@@ -28,16 +45,17 @@
 
     <view v-if="hasRemote" class="actions-card glass-card">
       <text class="section-title">数据同步</text>
-      <button class="btn-action" @tap="syncFrom">从服务器拉取任务</button>
+      <button class="btn-action" @tap="runBootstrapSync">健康检查并拉取任务</button>
+      <button class="btn-action" @tap="syncFrom">仅拉取服务器任务</button>
       <button class="btn-action" @tap="syncTo">上传本地任务到服务器</button>
-      <button class="btn-action danger" :disabled="clearDisabled" :class="{ disabled: clearDisabled }" @tap="clearAndUpload">清空服务器并用本地覆盖</button>
+      <button class="btn-action warning" v-if="pendingCount > 0" @tap="openConflictPage">处理 {{ pendingCount }} 条冲突</button>
       <view v-if="lastSync" class="sync-info">
         <text>最近同步：{{ lastSync.sync_type }} - {{ lastSync.message }}</text>
       </view>
     </view>
 
-    <view class="tip">
-      <text>与远程服务器上此前配置过的任务数据库对接，需配置相同的 api_base_url 和 api_token。</text>
+    <view class="tip glass-card tip-card">
+      <text>业务接口会带 Bearer token；若遇到 401，app 会按用户名和 token 自动调用 /api/users 注册一次后重试。远程与本地内容冲突时，不会直接覆盖，而是进入确认页。</text>
     </view>
   </view>
 </template>
@@ -48,84 +66,105 @@ import { getRemoteConfig, setRemoteConfig } from '@/api/config.js';
 import dataManager from '@/services/dataManager.js';
 
 const form = reactive({
+  enabled: false,
   api_base_url: '',
   api_token: '',
+  username: '',
 });
 
 const hasRemote = ref(false);
 const lastSync = ref(null);
-const uploadDisabled = false;
-const clearDisabled = true;
+const pendingCount = ref(0);
+
+function refreshStatus() {
+  hasRemote.value = dataManager.hasRemoteConfig();
+  lastSync.value = dataManager.getLastSyncStatus();
+  pendingCount.value = dataManager.getPendingRemoteTaskChanges().length;
+}
 
 onMounted(() => {
   const cfg = getRemoteConfig();
+  form.enabled = !!cfg.enabled;
   form.api_base_url = cfg.api_base_url || '';
   form.api_token = cfg.api_token || '';
-  hasRemote.value = !!cfg.api_base_url;
-  lastSync.value = dataManager.getLastSyncStatus();
+  form.username = cfg.username || '';
+  refreshStatus();
 });
 
-function saveConfig() {
+function persistConfig() {
   setRemoteConfig({
+    enabled: !!form.enabled,
     api_base_url: (form.api_base_url || '').trim(),
     api_token: (form.api_token || '').trim(),
+    username: (form.username || '').trim(),
   });
-  hasRemote.value = !!form.api_base_url.trim();
+  refreshStatus();
+}
+
+function saveConfig() {
+  persistConfig();
   uni.showToast({ title: '已保存', icon: 'success' });
+}
+
+function handleEnabledChange(event) {
+  form.enabled = !!event.detail.value;
 }
 
 function goBack() {
   uni.navigateBack();
 }
 
+function openConflictPage() {
+  if (pendingCount.value <= 0) return;
+  uni.navigateTo({ url: '/pages/remote-conflicts' });
+}
+
+function handleSyncResult(res, successTitle) {
+  refreshStatus();
+  if (res.success) {
+    if ((res.pendingChanges || []).length > 0) {
+      uni.showToast({ title: `发现 ${res.pendingChanges.length} 条冲突`, icon: 'none' });
+      setTimeout(() => openConflictPage(), 200);
+      return;
+    }
+    uni.showToast({ title: successTitle, icon: 'success' });
+    return;
+  }
+
+  uni.showToast({ title: res.error || '同步失败', icon: 'none' });
+}
+
+function runBootstrapSync() {
+  persistConfig();
+  uni.showLoading({ title: '检查中...' });
+  dataManager.bootstrapRemoteSync().then((res) => {
+    uni.hideLoading();
+    handleSyncResult(res, '同步完成');
+  });
+}
+
 function syncFrom() {
+  persistConfig();
   const local = dataManager.loadTasksFromStorage();
   uni.showLoading({ title: '拉取中...' });
   dataManager.syncFromServer(local).then((res) => {
     uni.hideLoading();
-    lastSync.value = dataManager.getLastSyncStatus();
-    if (res.success) {
-      uni.showToast({ title: '拉取成功', icon: 'success' });
-    } else {
-      uni.showToast({ title: res.error || '拉取失败', icon: 'none' });
-    }
+    handleSyncResult(res, '拉取成功');
   });
 }
 
 function syncTo() {
-  if (uploadDisabled) return;
+  persistConfig();
   const local = dataManager.loadTasksFromStorage();
   uni.showLoading({ title: '上传中...' });
   dataManager.syncToServer(local).then((res) => {
     uni.hideLoading();
-    lastSync.value = dataManager.getLastSyncStatus();
+    refreshStatus();
     if (res.success) {
       uni.showToast({ title: `已上传 ${res.uploaded || 0} 条`, icon: 'success' });
     } else {
       uni.showToast({ title: res.error || '上传失败', icon: 'none' });
     }
-  });
-}
-
-function clearAndUpload() {
-  if (clearDisabled) return;
-  uni.showModal({
-    title: '确认',
-    content: '将先清空服务器上的任务，再用本地任务覆盖。是否继续？',
-    success: (r) => {
-      if (!r.confirm) return;
-      const local = dataManager.loadTasksFromStorage();
-      uni.showLoading({ title: '执行中...' });
-      dataManager.clearServerAndUpload(local).then((res) => {
-        uni.hideLoading();
-        lastSync.value = dataManager.getLastSyncStatus();
-        if (res.success) {
-          uni.showToast({ title: '已完成', icon: 'success' });
-        } else {
-          uni.showToast({ title: res.error || '失败', icon: 'none' });
-        }
-      });
-    },
   });
 }
 </script>
@@ -156,6 +195,29 @@ function clearAndUpload() {
   margin-bottom: 16px;
 }
 
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #374151;
+  display: block;
+}
+
+.section-subtitle {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
 .form-card .label {
   display: block;
   font-size: 13px;
@@ -163,10 +225,6 @@ function clearAndUpload() {
   color: #374151;
   margin-bottom: 6px;
   margin-top: 12px;
-}
-
-.form-card .label:first-child {
-  margin-top: 0;
 }
 
 .input {
@@ -199,14 +257,6 @@ function clearAndUpload() {
   border: 1px solid $glass-border;
 }
 
-.section-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #374151;
-  margin-bottom: 12px;
-  display: block;
-}
-
 .btn-action {
   width: 100%;
   height: 44px;
@@ -217,37 +267,25 @@ function clearAndUpload() {
   border-radius: 12px;
   font-size: 14px;
   font-weight: 600;
-  margin-bottom: 10px;
+  margin-top: 10px;
 }
 
-.btn-action.danger {
-  background: rgba(220, 38, 38, 0.08);
-  color: #dc2626;
-  border-color: rgba(220, 38, 38, 0.2);
-}
-
-.btn-action.disabled {
-  opacity: 0.5;
-  color: #9ca3af;
-  border-color: rgba(0, 0, 0, 0.08);
-  background: rgba(0, 0, 0, 0.04);
-}
-
-.btn-action.danger.disabled {
-  color: #9ca3af;
-  border-color: rgba(0, 0, 0, 0.08);
+.btn-action.warning {
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+  border-color: rgba(245, 158, 11, 0.25);
 }
 
 .sync-info {
-  margin-top: 12px;
+  margin-top: 14px;
   font-size: 12px;
   color: #6b7280;
+  line-height: 1.5;
 }
 
-.tip {
+.tip-card {
   font-size: 12px;
-  color: #9ca3af;
-  line-height: 1.5;
-  padding: 0 4px;
+  color: #6b7280;
+  line-height: 1.7;
 }
 </style>

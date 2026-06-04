@@ -123,10 +123,19 @@ const FIELD_DISPLAY = {
   importance: '重要程度',
 };
 
+const HIGH_HISTORY_VALUES = new Set(['高', 'high', 'HIGH', 'High']);
+const LOW_HISTORY_VALUES = new Set(['低', 'low', 'LOW', 'Low']);
+
 function formatFieldValue(field, value) {
   if (!value) return '';
-  if (field === 'urgency') return value === '高' ? '紧急' : '不急';
-  if (field === 'importance') return value === '高' ? '重要' : '一般';
+  if (field === 'urgency') {
+    if (HIGH_HISTORY_VALUES.has(value)) return '紧急';
+    if (LOW_HISTORY_VALUES.has(value)) return '不急';
+  }
+  if (field === 'importance') {
+    if (HIGH_HISTORY_VALUES.has(value)) return '重要';
+    if (LOW_HISTORY_VALUES.has(value)) return '一般';
+  }
   return value;
 }
 
