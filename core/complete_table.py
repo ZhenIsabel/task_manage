@@ -24,6 +24,7 @@ class CompleteTableDialog(QDialog):
         self.page_size = 50
         self.loaded_count = 0
         self.total_count = 0
+        self.selection_total_count_override = None
         self.current_search_query = ""
         self.search_debounce_timer = QTimer(self)
         self.search_debounce_timer.setSingleShot(True)
@@ -200,8 +201,42 @@ class CompleteTableDialog(QDialog):
         normalized_title = str(title).casefold()
         return all(keyword in normalized_title for keyword in keywords)
 
+    def _normalize_task_id(self, task_id):
+        return str(task_id) if task_id else None
+
+    def _load_completed_task_ids_for_selection(self):
+        if hasattr(self.db_manager, "load_completed_task_ids"):
+            return {
+                task_id
+                for task_id in (
+                    self._normalize_task_id(task_id)
+                    for task_id in self.db_manager.load_completed_task_ids(self.current_search_query)
+                )
+                if task_id
+            }
+        return {
+            task_id
+            for task_id in (
+                self._normalize_task_id(task.get("id"))
+                for task in self.completed_tasks
+            )
+            if task_id
+        }
+
+    def _selection_total_count(self, visible_checkbox_count=0):
+        if self.selection_total_count_override is not None:
+            return max(
+                self.selection_total_count_override,
+                visible_checkbox_count,
+                len(self.selected_tasks),
+            )
+        return max(self.total_count, visible_checkbox_count, len(self.selected_tasks))
+
     def _render_completed_tasks(self, tasks, empty_message, clear_selection=True):
         previous_selected = set() if clear_selection else set(self.selected_tasks)
+        self.selected_tasks = set(previous_selected)
+        if clear_selection:
+            self.selection_total_count_override = None
         rows = [
             [
                 "",
@@ -219,16 +254,12 @@ class CompleteTableDialog(QDialog):
         for row, task in enumerate(tasks):
             checkbox = QCheckBox()
             checkbox.stateChanged.connect(self.on_selection_changed)
-            checkbox.setProperty('task_id', task['id'])
-            if task['id'] in previous_selected:
+            task_id = self._normalize_task_id(task.get('id'))
+            checkbox.setProperty('task_id', task_id)
+            if task_id in previous_selected:
                 checkbox.setChecked(True)
             self.table.setCellWidget(row, 0, checkbox)
 
-        self.selected_tasks = {
-            task['id']
-            for task in tasks
-            if task['id'] in previous_selected
-        }
         self.restore_button.setEnabled(len(self.selected_tasks) > 0)
         self.on_selection_changed()
 
@@ -257,47 +288,67 @@ class CompleteTableDialog(QDialog):
     
     def on_selection_changed(self):
         """选择状态改变时的回调"""
-        # 重新计算选中的任务
-        self.selected_tasks.clear()
+        # 只用当前可见行更新可见任务，保留分页外的选中任务 ID。
+        visible_task_ids = set()
+        checked_visible_task_ids = set()
         
         for row in range(self.table.rowCount()):
             checkbox = self.table.cellWidget(row, 0)
-            if checkbox and checkbox.isChecked():
-                task_id = checkbox.property('task_id')
-                if task_id:
-                    self.selected_tasks.add(task_id)
-        
+            if not checkbox:
+                continue
+            task_id = self._normalize_task_id(checkbox.property('task_id'))
+            if not task_id:
+                continue
+            visible_task_ids.add(task_id)
+            if checkbox.isChecked():
+                checked_visible_task_ids.add(task_id)
+
+        self.selected_tasks.difference_update(visible_task_ids)
+        self.selected_tasks.update(checked_visible_task_ids)
+
         # 更新还原按钮状态
         self.restore_button.setEnabled(len(self.selected_tasks) > 0)
-        
+
         # 更新全选按钮文本
         total_checkboxes = sum(
             1
             for row in range(self.table.rowCount())
             if self.table.cellWidget(row, 0)
         )
+        selection_total_count = self._selection_total_count(total_checkboxes)
         checked_count = len(self.selected_tasks)
-        
+
         if checked_count == 0:
+            self.selection_total_count_override = None
             self.select_all_button.setText("全选")
-        elif total_checkboxes and checked_count == total_checkboxes:
+        elif selection_total_count and checked_count >= selection_total_count:
             self.select_all_button.setText("取消全选")
         else:
-            self.select_all_button.setText(f"全选 ({checked_count}/{total_checkboxes})")
+            self.select_all_button.setText(f"全选 ({checked_count}/{selection_total_count})")
+
+    def _set_visible_checkboxes_from_selection(self):
+        for row in range(self.table.rowCount()):
+            checkbox = self.table.cellWidget(row, 0)
+            if checkbox:
+                task_id = self._normalize_task_id(checkbox.property('task_id'))
+                checkbox.blockSignals(True)
+                checkbox.setChecked(bool(task_id and task_id in self.selected_tasks))
+                checkbox.blockSignals(False)
     
     def toggle_select_all(self):
         """切换全选状态"""
-        # 检查是否所有项都已选中
-        checkboxes = [
-            self.table.cellWidget(row, 0)
-            for row in range(self.table.rowCount())
-            if self.table.cellWidget(row, 0)
-        ]
-        all_selected = bool(checkboxes) and len(self.selected_tasks) == len(checkboxes)
-        
-        # 设置所有复选框状态
-        for checkbox in checkboxes:
-            checkbox.setChecked(not all_selected)
+        matching_task_ids = self._load_completed_task_ids_for_selection()
+        all_selected = bool(matching_task_ids) and matching_task_ids.issubset(self.selected_tasks)
+
+        if all_selected:
+            self.selected_tasks.clear()
+            self.selection_total_count_override = None
+        else:
+            self.selected_tasks = set(matching_task_ids)
+            self.selection_total_count_override = len(matching_task_ids)
+
+        self._set_visible_checkboxes_from_selection()
+        self.on_selection_changed()
     
     def restore_selected_tasks(self):
         """还原选中的任务"""

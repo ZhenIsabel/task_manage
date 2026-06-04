@@ -157,6 +157,55 @@ class DatabaseManagerHistorySyncTests(unittest.TestCase):
         self.assertEqual([task['id'] for task in page], ['task-2'])
         self.assertEqual(manager.count_completed_tasks('季度 报告'), 2)
 
+    def test_completed_task_ids_use_same_completed_keyword_filter(self):
+        manager = self._build_manager(remote_config={})
+        self._insert_task(
+            manager,
+            'task-1',
+            '季度 报告 归档',
+            '2026-04-04T10:00:00',
+            '2026-04-04T09:00:00',
+            '2026-04-04T08:00:00',
+        )
+        self._insert_task(
+            manager,
+            'task-2',
+            '季度 报告 校对',
+            '2026-04-03T10:00:00',
+            '2026-04-03T09:00:00',
+            '2026-04-03T08:00:00',
+        )
+        self._insert_task(
+            manager,
+            'task-3',
+            '季度 会议 纪要',
+            '2026-04-02T10:00:00',
+            '2026-04-02T09:00:00',
+            '2026-04-02T08:00:00',
+        )
+        self._insert_task(
+            manager,
+            'task-incomplete',
+            '季度 报告 未完成',
+            '2026-04-05T10:00:00',
+            '2026-04-05T09:00:00',
+            '2026-04-05T08:00:00',
+            completed=False,
+        )
+        self._insert_task(
+            manager,
+            'task-deleted',
+            '季度 报告 已删除',
+            '2026-04-06T10:00:00',
+            '2026-04-06T09:00:00',
+            '2026-04-06T08:00:00',
+            deleted=True,
+        )
+
+        task_ids = manager.load_completed_task_ids('季度 报告')
+
+        self.assertEqual(task_ids, ['task-1', 'task-2'])
+
     def test_task_history_page_orders_by_timestamp_desc_and_counts_all_rows(self):
         manager = self._build_manager(remote_config={})
         conn = manager.get_connection()

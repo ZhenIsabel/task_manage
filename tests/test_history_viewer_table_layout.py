@@ -37,6 +37,7 @@ class FakeCompletedTasksDbManager:
         self.tasks = list(tasks)
         self.page_calls = []
         self.count_calls = []
+        self.id_calls = []
 
     def load_tasks(self, all_tasks=False):
         raise AssertionError("已完成任务弹窗不应再通过 load_tasks(all_tasks=True) 全量加载")
@@ -60,6 +61,10 @@ class FakeCompletedTasksDbManager:
     def count_completed_tasks(self, search_query=""):
         self.count_calls.append(search_query)
         return len(self._filtered_tasks(search_query))
+
+    def load_completed_task_ids(self, search_query=""):
+        self.id_calls.append(search_query)
+        return [task["id"] for task in self._filtered_tasks(search_query)]
 
 
 class FakeHistoryDbManager:
@@ -108,6 +113,7 @@ class FakeHistoryDbManager:
 class FakeCompletedTasksStaleCountDbManager:
     def __init__(self):
         self.page_calls = []
+        self.id_calls = []
 
     def count_completed_tasks(self, search_query=""):
         return 3
@@ -120,6 +126,10 @@ class FakeCompletedTasksStaleCountDbManager:
                 {"id": "task-2", "text": "任务二", "completed_date": "2026-04-03", "notes": ""},
             ][:limit]
         return []
+
+    def load_completed_task_ids(self, search_query=""):
+        self.id_calls.append(search_query)
+        return ["task-1", "task-2"]
 
 
 class FakeHistoryStaleCountDbManager:
@@ -433,6 +443,91 @@ class HistoryViewerTableLayoutTests(unittest.TestCase):
             )
             self.assertFalse(dialog.load_more_button.isEnabled())
             self.assertEqual(dialog.load_more_button.text(), "已全部加载")
+
+    def test_complete_table_select_all_should_select_every_completed_task_not_only_loaded_rows(self):
+        fake_db = FakeCompletedTasksDbManager(
+            [
+                {"id": "task-1", "text": "任务一", "completed_date": "2026-04-04", "notes": ""},
+                {"id": "task-2", "text": "任务二", "completed_date": "2026-04-03", "notes": ""},
+                {"id": "task-3", "text": "任务三", "completed_date": "2026-04-02", "notes": ""},
+            ]
+        )
+
+        with patch("core.complete_table.get_db_manager", return_value=fake_db):
+            dialog = CompleteTableDialog()
+            dialog.page_size = 2
+            dialog._load_completed_tasks()
+
+            self.assertEqual(dialog.table.rowCount(), 2)
+            dialog.select_all_button.click()
+            QApplication.processEvents()
+
+            self.assertEqual(dialog.selected_tasks, {"task-1", "task-2", "task-3"})
+            self.assertTrue(dialog.table.cellWidget(0, 0).isChecked())
+            self.assertTrue(dialog.table.cellWidget(1, 0).isChecked())
+            self.assertEqual(dialog.select_all_button.text(), "取消全选")
+
+    def test_complete_table_select_all_should_clear_when_live_ids_all_selected_despite_stale_count(self):
+        fake_db = FakeCompletedTasksStaleCountDbManager()
+
+        with patch("core.complete_table.get_db_manager", return_value=fake_db):
+            dialog = CompleteTableDialog()
+            dialog.page_size = 2
+            dialog._load_completed_tasks()
+
+            dialog.select_all_button.click()
+            QApplication.processEvents()
+
+            self.assertEqual(dialog.selected_tasks, {"task-1", "task-2"})
+            self.assertEqual(dialog.select_all_button.text(), "取消全选")
+
+            dialog.select_all_button.click()
+            QApplication.processEvents()
+
+            self.assertEqual(dialog.selected_tasks, set())
+            self.assertFalse(dialog.table.cellWidget(0, 0).isChecked())
+            self.assertFalse(dialog.table.cellWidget(1, 0).isChecked())
+            self.assertFalse(dialog.restore_button.isEnabled())
+            self.assertEqual(dialog.select_all_button.text(), "全选")
+
+    def test_complete_table_select_all_should_use_current_search_query_and_check_loaded_more_rows(self):
+        fake_db = FakeCompletedTasksDbManager(
+            [
+                {"id": "task-1", "text": "季度报告归档", "completed_date": "2026-04-04", "notes": ""},
+                {"id": "task-2", "text": "季度会议纪要", "completed_date": "2026-04-03", "notes": ""},
+                {"id": "task-3", "text": "季度报告校对", "completed_date": "2026-04-02", "notes": ""},
+                {"id": "task-4", "text": "年度报告", "completed_date": "2026-04-01", "notes": ""},
+            ]
+        )
+
+        with patch("core.complete_table.get_db_manager", return_value=fake_db):
+            dialog = CompleteTableDialog()
+            dialog.page_size = 1
+
+            search_input = dialog.findChild(QLineEdit, "completed_task_search_input")
+            search_input.setText("季度 报告")
+            self.assertTrue(
+                self._wait_until(
+                    lambda: (
+                        fake_db.page_calls[-1]["search_query"] == "季度 报告"
+                        and dialog.table.rowCount() == 1
+                    )
+                ),
+                "搜索后应先渲染匹配结果第一页",
+            )
+
+            dialog.select_all_button.click()
+            QApplication.processEvents()
+
+            self.assertEqual(dialog.selected_tasks, {"task-1", "task-3"})
+            self.assertEqual(fake_db.id_calls[-1], "季度 报告")
+
+            dialog.load_more_button.click()
+            QApplication.processEvents()
+
+            self.assertEqual(dialog.table.rowCount(), 2)
+            self.assertEqual(dialog.table.item(1, 1).text(), "季度报告校对")
+            self.assertTrue(dialog.table.cellWidget(1, 0).isChecked())
 
     def test_complete_table_should_disable_sorting_to_keep_checkboxes_aligned_with_rows(self):
         fake_db = FakeCompletedTasksDbManager(

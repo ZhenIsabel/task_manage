@@ -1409,6 +1409,27 @@ class DatabaseManager:
             logger.error(f"统计已完成任务失败: {str(e)}")
             return 0
 
+    def load_completed_task_ids(self, search_query: str = "") -> List[str]:
+        """读取当前已完成任务筛选条件下的全部任务 ID。"""
+        try:
+            self.flush_cache_to_db()
+            where_sql, params = self._build_completed_tasks_filter(search_query)
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                f'''
+                SELECT id
+                FROM tasks
+                WHERE {where_sql}
+                ORDER BY completed_date DESC, updated_at DESC, created_at DESC
+                ''',
+                params,
+            )
+            return [str(row['id']) for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error(f"加载已完成任务ID失败: {str(e)}")
+            return []
+
     def get_task_history(self, task_id: str) -> Dict[str, List[Dict[str, Any]]]:
         """只从本地数据库获取任务历史。"""
         try:
