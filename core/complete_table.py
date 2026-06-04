@@ -21,6 +21,10 @@ class CompleteTableDialog(QDialog):
         self.db_manager = get_db_manager()
         self.selected_tasks = set()  # 存储选中的任务ID
         self.completed_tasks = []
+        self.page_size = 50
+        self.loaded_count = 0
+        self.total_count = 0
+        self.current_search_query = ""
         self.search_debounce_timer = QTimer(self)
         self.search_debounce_timer.setSingleShot(True)
         self.search_debounce_timer.setInterval(500)
@@ -88,6 +92,11 @@ class CompleteTableDialog(QDialog):
         self.select_all_button = QPushButton("全选")
         self.select_all_button.clicked.connect(self.toggle_select_all)
         apply_button_role(self.select_all_button, "secondary")
+
+        # 加载更多按钮
+        self.load_more_button = QPushButton("加载更多")
+        self.load_more_button.clicked.connect(self._load_more_completed_tasks)
+        apply_button_role(self.load_more_button, "secondary")
         
         # 还原按钮
         self.restore_button = QPushButton("还原选中任务")
@@ -101,6 +110,7 @@ class CompleteTableDialog(QDialog):
         apply_button_role(self.close_button, "ghost")
         
         button_layout.addWidget(self.select_all_button)
+        button_layout.addWidget(self.load_more_button)
         button_layout.addStretch()
         button_layout.addWidget(self.restore_button)
         button_layout.addWidget(self.close_button)
@@ -120,40 +130,68 @@ class CompleteTableDialog(QDialog):
             self.move(x, y)
     
     def _load_completed_tasks(self):
-        """加载已完成的任务"""
+        """加载已完成任务第一页。"""
         try:
-            # 从数据库获取所有任务
-            all_tasks = self.db_manager.load_tasks(all_tasks=True)
-            
-            # 筛选出已完成的任务
-            self.completed_tasks = [task for task in all_tasks if task.get('completed', False)]
-            
-            # 按完成日期倒序排列
-            self.completed_tasks.sort(key=lambda t: t.get('completed_date', ''), reverse=True)
-            self._apply_completed_task_filter()
-            
-            logger.info(f"加载了 {len(self.completed_tasks)} 个已完成任务")
+            self.current_search_query = self.search_input.text() if hasattr(self, 'search_input') else ""
+            self.total_count = self.db_manager.count_completed_tasks(self.current_search_query)
+            self.completed_tasks = self.db_manager.load_completed_tasks_page(
+                limit=self.page_size,
+                offset=0,
+                search_query=self.current_search_query,
+            )
+            self.loaded_count = len(self.completed_tasks)
+
+            empty_message = (
+                "未找到匹配的已完成任务"
+                if self.current_search_query.strip()
+                else "暂无已完成任务"
+            )
+            self._render_completed_tasks(self.completed_tasks, empty_message, clear_selection=True)
+            self._update_load_more_button()
+
+            logger.info(f"加载了 {self.loaded_count}/{self.total_count} 个已完成任务")
                 
         except Exception as e:
             logger.error(f"加载已完成任务失败: {str(e)}")
             show_error(self, "错误", f"加载已完成任务失败: {str(e)}")
 
+    def _load_more_completed_tasks(self):
+        """加载下一页已完成任务并追加到当前表格。"""
+        if self.loaded_count >= self.total_count:
+            self._update_load_more_button()
+            return
+
+        try:
+            next_page = self.db_manager.load_completed_tasks_page(
+                limit=self.page_size,
+                offset=self.loaded_count,
+                search_query=self.current_search_query,
+            )
+            if not next_page:
+                self.loaded_count = len(self.completed_tasks)
+                self.total_count = self.loaded_count
+                self._update_load_more_button()
+                return
+
+            self.completed_tasks.extend(next_page)
+            self.loaded_count = len(self.completed_tasks)
+            empty_message = (
+                "未找到匹配的已完成任务"
+                if self.current_search_query.strip()
+                else "暂无已完成任务"
+            )
+            self._render_completed_tasks(self.completed_tasks, empty_message, clear_selection=False)
+            self._update_load_more_button()
+        except Exception as e:
+            logger.error(f"加载更多已完成任务失败: {str(e)}")
+            show_error(self, "错误", f"加载更多已完成任务失败: {str(e)}")
+
     def _schedule_completed_task_filter(self):
         self.search_debounce_timer.start()
 
     def _apply_completed_task_filter(self):
-        """根据搜索框内容过滤已完成任务标题。"""
-        keywords = self._parse_search_keywords(self.search_input.text())
-        if not keywords:
-            self._render_completed_tasks(self.completed_tasks, "暂无已完成任务")
-            return
-
-        filtered_tasks = [
-            task
-            for task in self.completed_tasks
-            if self._title_matches_keywords(task.get("text", ""), keywords)
-        ]
-        self._render_completed_tasks(filtered_tasks, "未找到匹配的已完成任务")
+        """根据搜索框内容重新加载匹配结果第一页。"""
+        self._load_completed_tasks()
 
     def _parse_search_keywords(self, query):
         return [keyword.casefold() for keyword in str(query).split() if keyword]
@@ -162,7 +200,8 @@ class CompleteTableDialog(QDialog):
         normalized_title = str(title).casefold()
         return all(keyword in normalized_title for keyword in keywords)
 
-    def _render_completed_tasks(self, tasks, empty_message):
+    def _render_completed_tasks(self, tasks, empty_message, clear_selection=True):
+        previous_selected = set() if clear_selection else set(self.selected_tasks)
         rows = [
             [
                 "",
@@ -181,15 +220,29 @@ class CompleteTableDialog(QDialog):
             checkbox = QCheckBox()
             checkbox.stateChanged.connect(self.on_selection_changed)
             checkbox.setProperty('task_id', task['id'])
+            if task['id'] in previous_selected:
+                checkbox.setChecked(True)
             self.table.setCellWidget(row, 0, checkbox)
 
-        self.selected_tasks.clear()
-        self.restore_button.setEnabled(False)
-        self.select_all_button.setText("全选")
+        self.selected_tasks = {
+            task['id']
+            for task in tasks
+            if task['id'] in previous_selected
+        }
+        self.restore_button.setEnabled(len(self.selected_tasks) > 0)
+        self.on_selection_changed()
 
         if not tasks:
             self.table.item(0, 1).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.table.setSpan(0, 1, 1, 3)  # 合并单元格
+
+    def _update_load_more_button(self):
+        if self.loaded_count < self.total_count:
+            self.load_more_button.setEnabled(True)
+            self.load_more_button.setText(f"加载更多 ({self.loaded_count}/{self.total_count})")
+        else:
+            self.load_more_button.setEnabled(False)
+            self.load_more_button.setText("已全部加载")
 
     def _create_table(self, rows):
         table = AdaptiveTextTableWidget(
@@ -199,6 +252,7 @@ class CompleteTableDialog(QDialog):
             multiline_columns={3},
         )
         table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        table.setSortingEnabled(False)
         return table
     
     def on_selection_changed(self):
@@ -288,9 +342,6 @@ class CompleteTableDialog(QDialog):
                 
                 # 刷新表格
                 self._load_completed_tasks()
-                self.selected_tasks.clear()
-                self.restore_button.setEnabled(False)
-                self.select_all_button.setText("全选")
                 
                 # 通知父窗口刷新任务列表
                 if hasattr(self.parent_widget, 'load_tasks'):

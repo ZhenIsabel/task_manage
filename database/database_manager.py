@@ -218,6 +218,14 @@ class DatabaseManager:
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_tasks_sync_status ON tasks(sync_status)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_task_history_task_id ON task_history(task_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_task_history_timestamp ON task_history(timestamp)')
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_tasks_completed_deleted_dates
+                ON tasks(completed, deleted, completed_date DESC, updated_at DESC, created_at DESC)
+            ''')
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_task_history_task_timestamp
+                ON task_history(task_id, timestamp DESC)
+            ''')
             
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_scheduled_active ON scheduled_tasks(active)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_scheduled_next_run ON scheduled_tasks(next_run_at)')
@@ -1325,6 +1333,82 @@ class DatabaseManager:
             logger.error(f"加载任务失败: {str(e)}")
             return []
 
+    def _parse_task_search_keywords(self, search_query: str) -> List[str]:
+        return [keyword.casefold() for keyword in str(search_query or '').split() if keyword]
+
+    def _escape_like_keyword(self, keyword: str) -> str:
+        return (
+            keyword
+            .replace('\\', '\\\\')
+            .replace('%', '\\%')
+            .replace('_', '\\_')
+        )
+
+    def _build_completed_tasks_filter(self, search_query: str = "") -> tuple[str, List[Any]]:
+        clauses = ['completed = 1', 'deleted = 0']
+        params: List[Any] = []
+        for keyword in self._parse_task_search_keywords(search_query):
+            clauses.append("LOWER(COALESCE(text, '')) LIKE ? ESCAPE '\\'")
+            params.append(f"%{self._escape_like_keyword(keyword)}%")
+        return ' AND '.join(clauses), params
+
+    def load_completed_tasks_page(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        search_query: str = "",
+    ) -> List[Dict[str, Any]]:
+        """分页读取已完成且未删除的任务。"""
+        try:
+            self.flush_cache_to_db()
+            safe_limit = max(0, int(limit))
+            safe_offset = max(0, int(offset))
+            where_sql, params = self._build_completed_tasks_filter(search_query)
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                f'''
+                SELECT *
+                FROM tasks
+                WHERE {where_sql}
+                ORDER BY completed_date DESC, updated_at DESC, created_at DESC
+                LIMIT ? OFFSET ?
+                ''',
+                (*params, safe_limit, safe_offset),
+            )
+            tasks = []
+            for row in cursor.fetchall():
+                task = dict(row)
+                task['position'] = {
+                    'x': task.get('position_x', 100),
+                    'y': task.get('position_y', 100),
+                }
+                tasks.append(task)
+            return tasks
+        except Exception as e:
+            logger.error(f"分页加载已完成任务失败: {str(e)}")
+            return []
+
+    def count_completed_tasks(self, search_query: str = "") -> int:
+        """统计已完成且未删除的任务数量。"""
+        try:
+            self.flush_cache_to_db()
+            where_sql, params = self._build_completed_tasks_filter(search_query)
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                f'''
+                SELECT COUNT(*)
+                FROM tasks
+                WHERE {where_sql}
+                ''',
+                params,
+            )
+            return int(cursor.fetchone()[0])
+        except Exception as e:
+            logger.error(f"统计已完成任务失败: {str(e)}")
+            return 0
+
     def get_task_history(self, task_id: str) -> Dict[str, List[Dict[str, Any]]]:
         """只从本地数据库获取任务历史。"""
         try:
@@ -1333,6 +1417,61 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"获取任务历史记录失败: {str(e)}")
             return {}
+
+    def get_task_history_page(
+        self,
+        task_id: str,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """按时间倒序分页读取单个任务的历史记录。"""
+        try:
+            self.flush_cache_to_db()
+            safe_limit = max(0, int(limit))
+            safe_offset = max(0, int(offset))
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                SELECT field_name, field_value, action, timestamp
+                FROM task_history
+                WHERE task_id = ?
+                ORDER BY timestamp DESC
+                LIMIT ? OFFSET ?
+                ''',
+                (task_id, safe_limit, safe_offset),
+            )
+            field_history: Dict[str, List[Dict[str, Any]]] = {}
+            for record in cursor.fetchall():
+                field_name = record['field_name']
+                field_history.setdefault(field_name, []).append({
+                    'value': record['field_value'],
+                    'timestamp': record['timestamp'],
+                    'action': record['action'],
+                })
+            return field_history
+        except Exception as e:
+            logger.error(f"分页获取任务历史记录失败: {str(e)}")
+            return {}
+
+    def count_task_history(self, task_id: str) -> int:
+        """统计单个任务的历史记录数量。"""
+        try:
+            self.flush_cache_to_db()
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                SELECT COUNT(*)
+                FROM task_history
+                WHERE task_id = ?
+                ''',
+                (task_id,),
+            )
+            return int(cursor.fetchone()[0])
+        except Exception as e:
+            logger.error(f"统计任务历史记录失败: {str(e)}")
+            return 0
 
     def delete_task(self, task_id: str) -> bool:
         """逻辑删除任务（仅标记为deleted，延迟写入数据库）"""

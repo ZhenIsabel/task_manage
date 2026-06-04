@@ -1,7 +1,26 @@
 import os
+import sys
+import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+
+class _Win32Stub(types.ModuleType):
+    def __getattr__(self, name):
+        return 0
+
+
+for _module_name in ("win32api", "win32con", "win32gui", "win32print"):
+    sys.modules.setdefault(_module_name, _Win32Stub(_module_name))
+
+_shellcon = _Win32Stub("shellcon")
+_shell_module = types.ModuleType("win32comext.shell")
+_shell_module.shellcon = _shellcon
+sys.modules.setdefault("win32comext", types.ModuleType("win32comext"))
+sys.modules.setdefault("win32comext.shell", _shell_module)
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFontMetrics
@@ -13,7 +32,116 @@ from core.history_viewer import HistoryViewer
 from ui.adaptive_table import AdaptiveTextTableWidget, compute_multiline_item_size_hint
 
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+class FakeCompletedTasksDbManager:
+    def __init__(self, tasks):
+        self.tasks = list(tasks)
+        self.page_calls = []
+        self.count_calls = []
+
+    def load_tasks(self, all_tasks=False):
+        raise AssertionError("已完成任务弹窗不应再通过 load_tasks(all_tasks=True) 全量加载")
+
+    def _filtered_tasks(self, search_query=""):
+        keywords = [keyword.casefold() for keyword in str(search_query or "").split() if keyword]
+        if not keywords:
+            return list(self.tasks)
+        return [
+            task
+            for task in self.tasks
+            if all(keyword in task.get("text", "").casefold() for keyword in keywords)
+        ]
+
+    def load_completed_tasks_page(self, limit=100, offset=0, search_query=""):
+        self.page_calls.append(
+            {"limit": limit, "offset": offset, "search_query": search_query}
+        )
+        return self._filtered_tasks(search_query)[offset:offset + limit]
+
+    def count_completed_tasks(self, search_query=""):
+        self.count_calls.append(search_query)
+        return len(self._filtered_tasks(search_query))
+
+
+class FakeHistoryDbManager:
+    def __init__(self, records):
+        self.records = list(records)
+        self.page_calls = []
+        self.full_history_calls = []
+
+    def count_task_history(self, task_id):
+        return len([record for record in self.records if record["task_id"] == task_id])
+
+    def get_task_history_page(self, task_id, limit=100, offset=0):
+        self.page_calls.append({"task_id": task_id, "limit": limit, "offset": offset})
+        selected = [
+            record
+            for record in self.records
+            if record["task_id"] == task_id
+        ][offset:offset + limit]
+        grouped = {}
+        for record in selected:
+            grouped.setdefault(record["field_name"], []).append(
+                {
+                    "timestamp": record["timestamp"],
+                    "action": record["action"],
+                    "value": record["value"],
+                }
+            )
+        return grouped
+
+    def get_task_history(self, task_id):
+        self.full_history_calls.append(task_id)
+        grouped = {}
+        for record in self.records:
+            if record["task_id"] != task_id:
+                continue
+            grouped.setdefault(record["field_name"], []).append(
+                {
+                    "timestamp": record["timestamp"],
+                    "action": record["action"],
+                    "value": record["value"],
+                }
+            )
+        return grouped
+
+
+class FakeCompletedTasksStaleCountDbManager:
+    def __init__(self):
+        self.page_calls = []
+
+    def count_completed_tasks(self, search_query=""):
+        return 3
+
+    def load_completed_tasks_page(self, limit=100, offset=0, search_query=""):
+        self.page_calls.append({"limit": limit, "offset": offset, "search_query": search_query})
+        if offset == 0:
+            return [
+                {"id": "task-1", "text": "任务一", "completed_date": "2026-04-04", "notes": ""},
+                {"id": "task-2", "text": "任务二", "completed_date": "2026-04-03", "notes": ""},
+            ][:limit]
+        return []
+
+
+class FakeHistoryStaleCountDbManager:
+    def __init__(self):
+        self.page_calls = []
+
+    def count_task_history(self, task_id):
+        return 3
+
+    def get_task_history_page(self, task_id, limit=100, offset=0):
+        self.page_calls.append({"task_id": task_id, "limit": limit, "offset": offset})
+        if offset == 0:
+            return {
+                "text": [
+                    {"timestamp": "2026-04-04T09:00:00", "action": "update", "value": "记录一"},
+                    {"timestamp": "2026-04-03T09:00:00", "action": "update", "value": "记录二"},
+                ][:limit]
+            }
+        return {}
+
+    def get_task_history(self, task_id):
+        return {}
 
 
 class HistoryViewerTableLayoutTests(unittest.TestCase):
@@ -152,20 +280,20 @@ class HistoryViewerTableLayoutTests(unittest.TestCase):
         )
 
     def test_complete_table_should_reuse_same_table_instance_when_reloading(self):
-        class FakeDbManager:
-            def load_tasks(self, all_tasks=False):
-                return [
-                    {
-                        "id": "task-1",
-                        "text": "任务A",
-                        "completed": True,
-                        "completed_date": "2026-04-04",
-                        "priority": "高",
-                        "notes": "第一行\n第二行",
-                    }
-                ]
+        fake_db = FakeCompletedTasksDbManager(
+            [
+                {
+                    "id": "task-1",
+                    "text": "任务A",
+                    "completed": True,
+                    "completed_date": "2026-04-04",
+                    "priority": "高",
+                    "notes": "第一行\n第二行",
+                }
+            ]
+        )
 
-        with patch("core.complete_table.get_db_manager", return_value=FakeDbManager()):
+        with patch("core.complete_table.get_db_manager", return_value=fake_db):
             dialog = CompleteTableDialog()
             first_table = dialog.table
 
@@ -183,33 +311,33 @@ class HistoryViewerTableLayoutTests(unittest.TestCase):
             )
 
     def test_complete_table_should_filter_completed_tasks_by_space_separated_title_keywords(self):
-        class FakeDbManager:
-            def load_tasks(self, all_tasks=False):
-                return [
-                    {
-                        "id": "task-1",
-                        "text": "季度报告归档",
-                        "completed": True,
-                        "completed_date": "2026-04-04",
-                        "notes": "",
-                    },
-                    {
-                        "id": "task-2",
-                        "text": "季度会议纪要",
-                        "completed": True,
-                        "completed_date": "2026-04-03",
-                        "notes": "",
-                    },
-                    {
-                        "id": "task-3",
-                        "text": "年度报告校对",
-                        "completed": True,
-                        "completed_date": "2026-04-02",
-                        "notes": "",
-                    },
-                ]
+        fake_db = FakeCompletedTasksDbManager(
+            [
+                {
+                    "id": "task-1",
+                    "text": "季度报告归档",
+                    "completed": True,
+                    "completed_date": "2026-04-04",
+                    "notes": "",
+                },
+                {
+                    "id": "task-2",
+                    "text": "季度会议纪要",
+                    "completed": True,
+                    "completed_date": "2026-04-03",
+                    "notes": "",
+                },
+                {
+                    "id": "task-3",
+                    "text": "年度报告校对",
+                    "completed": True,
+                    "completed_date": "2026-04-02",
+                    "notes": "",
+                },
+            ]
+        )
 
-        with patch("core.complete_table.get_db_manager", return_value=FakeDbManager()):
+        with patch("core.complete_table.get_db_manager", return_value=fake_db):
             dialog = CompleteTableDialog()
             search_input = dialog.findChild(QLineEdit, "completed_task_search_input")
 
@@ -229,26 +357,26 @@ class HistoryViewerTableLayoutTests(unittest.TestCase):
             self.assertEqual(visible_titles, ["季度报告归档"])
 
     def test_complete_table_search_should_wait_before_filtering_while_input_changes(self):
-        class FakeDbManager:
-            def load_tasks(self, all_tasks=False):
-                return [
-                    {
-                        "id": "task-1",
-                        "text": "季度报告归档",
-                        "completed": True,
-                        "completed_date": "2026-04-04",
-                        "notes": "",
-                    },
-                    {
-                        "id": "task-2",
-                        "text": "年度复盘",
-                        "completed": True,
-                        "completed_date": "2026-04-03",
-                        "notes": "",
-                    },
-                ]
+        fake_db = FakeCompletedTasksDbManager(
+            [
+                {
+                    "id": "task-1",
+                    "text": "季度报告归档",
+                    "completed": True,
+                    "completed_date": "2026-04-04",
+                    "notes": "",
+                },
+                {
+                    "id": "task-2",
+                    "text": "年度复盘",
+                    "completed": True,
+                    "completed_date": "2026-04-03",
+                    "notes": "",
+                },
+            ]
+        )
 
-        with patch("core.complete_table.get_db_manager", return_value=FakeDbManager()):
+        with patch("core.complete_table.get_db_manager", return_value=fake_db):
             dialog = CompleteTableDialog()
             search_input = dialog.findChild(QLineEdit, "completed_task_search_input")
 
@@ -279,6 +407,177 @@ class HistoryViewerTableLayoutTests(unittest.TestCase):
                 for row in range(dialog.table.rowCount())
             ]
             self.assertEqual(visible_titles, ["年度复盘"])
+
+    def test_complete_table_should_append_next_page_when_loading_more(self):
+        fake_db = FakeCompletedTasksDbManager(
+            [
+                {"id": "task-1", "text": "任务一", "completed_date": "2026-04-04", "notes": ""},
+                {"id": "task-2", "text": "任务二", "completed_date": "2026-04-03", "notes": ""},
+                {"id": "task-3", "text": "任务三", "completed_date": "2026-04-02", "notes": ""},
+            ]
+        )
+
+        with patch("core.complete_table.get_db_manager", return_value=fake_db):
+            dialog = CompleteTableDialog()
+            dialog.page_size = 2
+            dialog._load_completed_tasks()
+
+            self.assertEqual(dialog.table.rowCount(), 2)
+            dialog.load_more_button.click()
+            QApplication.processEvents()
+
+            self.assertEqual(dialog.table.rowCount(), 3)
+            self.assertEqual(
+                [dialog.table.item(row, 1).text() for row in range(dialog.table.rowCount())],
+                ["任务一", "任务二", "任务三"],
+            )
+            self.assertFalse(dialog.load_more_button.isEnabled())
+            self.assertEqual(dialog.load_more_button.text(), "已全部加载")
+
+    def test_complete_table_should_disable_sorting_to_keep_checkboxes_aligned_with_rows(self):
+        fake_db = FakeCompletedTasksDbManager(
+            [
+                {"id": "task-1", "text": "任务一", "completed_date": "2026-04-04", "notes": ""},
+                {"id": "task-2", "text": "任务二", "completed_date": "2026-04-03", "notes": ""},
+            ]
+        )
+
+        with patch("core.complete_table.get_db_manager", return_value=fake_db):
+            dialog = CompleteTableDialog()
+
+            self.assertFalse(
+                dialog.table.isSortingEnabled(),
+                "已完成任务表依赖数据库排序，禁用交互排序可避免复选框 task_id 与可见行错位",
+            )
+            self.assertEqual(dialog.table.item(0, 1).text(), "任务一")
+            self.assertEqual(dialog.table.cellWidget(0, 0).property("task_id"), "task-1")
+
+    def test_complete_table_should_disable_load_more_after_stale_count_returns_empty_page(self):
+        fake_db = FakeCompletedTasksStaleCountDbManager()
+
+        with patch("core.complete_table.get_db_manager", return_value=fake_db):
+            dialog = CompleteTableDialog()
+            dialog.page_size = 2
+            dialog._load_completed_tasks()
+
+            self.assertTrue(dialog.load_more_button.isEnabled())
+            dialog.load_more_button.click()
+            QApplication.processEvents()
+
+            self.assertFalse(dialog.load_more_button.isEnabled())
+            self.assertEqual(dialog.load_more_button.text(), "已全部加载")
+            self.assertEqual(fake_db.page_calls[-1]["offset"], 2)
+
+    def test_complete_table_search_should_reset_paging_to_first_matching_page(self):
+        fake_db = FakeCompletedTasksDbManager(
+            [
+                {"id": "task-1", "text": "季度报告归档", "completed_date": "2026-04-04", "notes": ""},
+                {"id": "task-2", "text": "季度会议纪要", "completed_date": "2026-04-03", "notes": ""},
+                {"id": "task-3", "text": "年度复盘", "completed_date": "2026-04-02", "notes": ""},
+            ]
+        )
+
+        with patch("core.complete_table.get_db_manager", return_value=fake_db):
+            dialog = CompleteTableDialog()
+            dialog.page_size = 1
+            dialog._load_completed_tasks()
+            dialog.load_more_button.click()
+            QApplication.processEvents()
+
+            search_input = dialog.findChild(QLineEdit, "completed_task_search_input")
+            search_input.setText("年度")
+            self.assertTrue(
+                self._wait_until(lambda: dialog.table.item(0, 1).text() == "年度复盘"),
+                "搜索后应重置 offset 并只渲染匹配结果第一页",
+            )
+
+            self.assertEqual(dialog.table.rowCount(), 1)
+            self.assertEqual(fake_db.page_calls[-1]["offset"], 0)
+            self.assertEqual(fake_db.page_calls[-1]["search_query"], "年度")
+
+    def test_history_viewer_should_load_first_history_page_and_append_more(self):
+        records = [
+            {
+                "task_id": "task-1",
+                "field_name": "text",
+                "timestamp": f"2026-04-{day:02d}T09:00:00",
+                "action": "update",
+                "value": f"记录{day}",
+            }
+            for day in range(30, 0, -1)
+        ]
+        fake_db = FakeHistoryDbManager(records)
+
+        with patch("core.history_viewer.get_db_manager", return_value=fake_db):
+            viewer = HistoryViewer({"id": "task-1", "text": "测试任务"})
+            viewer.page_size = 10
+            viewer.load_history_records(viewer.history_container_layout)
+
+            self.assertEqual(viewer.history_table.rowCount(), 10)
+            self.assertEqual(viewer.history_table.item(0, 3).text(), "记录30")
+
+            viewer.load_more_button.click()
+            QApplication.processEvents()
+
+            self.assertEqual(viewer.history_table.rowCount(), 20)
+            self.assertEqual(viewer.history_table.item(19, 3).text(), "记录11")
+            self.assertEqual(fake_db.page_calls[-1]["offset"], 10)
+
+    def test_history_viewer_should_disable_load_more_after_stale_count_returns_empty_page(self):
+        fake_db = FakeHistoryStaleCountDbManager()
+
+        with patch("core.history_viewer.get_db_manager", return_value=fake_db):
+            viewer = HistoryViewer({"id": "task-1", "text": "测试任务"})
+            viewer.page_size = 2
+            viewer.load_history_records(viewer.history_container_layout)
+
+            self.assertTrue(viewer.load_more_button.isEnabled())
+            viewer.load_more_button.click()
+            QApplication.processEvents()
+
+            self.assertFalse(viewer.load_more_button.isEnabled())
+            self.assertEqual(viewer.load_more_button.text(), "已全部加载")
+            self.assertEqual(fake_db.page_calls[-1]["offset"], 2)
+
+    def test_history_viewer_export_should_still_read_full_history(self):
+        records = [
+            {
+                "task_id": "task-1",
+                "field_name": "text",
+                "timestamp": "2026-04-04T09:00:00",
+                "action": "update",
+                "value": "分页内记录",
+            },
+            {
+                "task_id": "task-1",
+                "field_name": "notes",
+                "timestamp": "2026-04-01T09:00:00",
+                "action": "update",
+                "value": "分页外记录",
+            },
+        ]
+        fake_db = FakeHistoryDbManager(records)
+
+        class FakeDataFrame:
+            exported_rows = None
+
+            def __init__(self, rows):
+                FakeDataFrame.exported_rows = rows
+
+            def to_excel(self, filename, index=False):
+                self.filename = filename
+
+        fake_pandas = type("FakePandas", (), {"DataFrame": FakeDataFrame})
+
+        with patch("core.history_viewer.get_db_manager", return_value=fake_db), \
+             patch.dict(sys.modules, {"pandas": fake_pandas}), \
+             patch("PyQt6.QtWidgets.QFileDialog.getSaveFileName", return_value=("history.xlsx", "Excel文件 (*.xlsx)")), \
+             patch("core.history_viewer.show_success"):
+            viewer = HistoryViewer({"id": "task-1", "text": "测试任务"})
+            viewer.export_history()
+
+        self.assertEqual(fake_db.full_history_calls, ["task-1"])
+        self.assertEqual(len(FakeDataFrame.exported_rows), 2)
 
 if __name__ == "__main__":
     unittest.main()
