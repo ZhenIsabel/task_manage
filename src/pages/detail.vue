@@ -110,6 +110,7 @@ import { ref, reactive, computed } from 'vue';
 import { onLoad, onShow } from '@dcloudio/uni-app';
 import dataManager from '@/services/dataManager.js';
 import { getTaskHistoryFromServer } from '@/api/task.js';
+import { buildHistoryTimeline, mergeDisplayHistory } from '@/utils/taskHistory.js';
 
 const taskId = ref('');
 const task = reactive({
@@ -123,112 +124,6 @@ const task = reactive({
 });
 const historyList = ref([]);
 const isCompletedTask = computed(() => !!task.isCompleted);
-
-const FIELD_DISPLAY = {
-  text: '任务内容',
-  notes: '备注',
-  due_date: '截止日期',
-  urgency: '紧急程度',
-  importance: '重要程度',
-};
-
-const HIGH_HISTORY_VALUES = new Set(['高', 'high', 'HIGH', 'High']);
-const LOW_HISTORY_VALUES = new Set(['低', 'low', 'LOW', 'Low']);
-
-function formatFieldValue(field, value) {
-  if (!value) return '';
-  if (field === 'urgency') {
-    if (HIGH_HISTORY_VALUES.has(value)) return '紧急';
-    if (LOW_HISTORY_VALUES.has(value)) return '不急';
-  }
-  if (field === 'importance') {
-    if (HIGH_HISTORY_VALUES.has(value)) return '重要';
-    if (LOW_HISTORY_VALUES.has(value)) return '一般';
-  }
-  return value;
-}
-
-function mergeFieldHistory(localHistory, serverHistory) {
-  const byField = {};
-  const push = (fieldName, item) => {
-    if (!byField[fieldName]) byField[fieldName] = [];
-    byField[fieldName].push(item);
-  };
-
-  Object.entries(localHistory || {}).forEach(([fieldName, list]) => {
-    (list || []).forEach((record) => {
-      push(fieldName, {
-        value: record.value,
-        timestamp: record.timestamp,
-        action: record.action,
-      });
-    });
-  });
-
-  Object.entries(serverHistory || {}).forEach(([fieldName, list]) => {
-    (list || []).forEach((record) => {
-      push(fieldName, {
-        value: record.value,
-        timestamp: record.timestamp,
-        action: record.action,
-      });
-    });
-  });
-
-  Object.keys(byField).forEach((fieldName) => {
-    byField[fieldName].sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
-  });
-
-  return byField;
-}
-
-function buildMergedList(byField) {
-  const merged = [];
-  Object.entries(byField).forEach(([fieldName, list]) => {
-    list.forEach((record) => {
-      merged.push({
-        field: fieldName,
-        timestamp: record.timestamp,
-        action: record.action || 'update',
-        value: record.value,
-      });
-    });
-  });
-
-  merged.sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
-  return merged;
-}
-
-function buildTimelineList(merged) {
-  const lastVal = {};
-  const byTs = {};
-
-  merged.forEach((record) => {
-    const ts = record.timestamp || '';
-    const fieldDisplay = FIELD_DISPLAY[record.field] || record.field;
-    const oldVal = lastVal[record.field] !== undefined ? formatFieldValue(record.field, lastVal[record.field]) : '';
-    const newVal = formatFieldValue(record.field, record.value);
-
-    if (!byTs[ts]) byTs[ts] = { timestamp: ts, actions: [], details: [] };
-    byTs[ts].actions.push(record.action);
-    byTs[ts].details.push({ field: fieldDisplay, oldVal, newVal });
-    lastVal[record.field] = record.value;
-  });
-
-  return Object.entries(byTs)
-    .sort((a, b) => b[1].timestamp.localeCompare(a[1].timestamp))
-    .map(([ts, item], index) => {
-      const hasCreate = (item.actions || []).some((action) => action === 'create');
-      return {
-        id: `h-${index}-${ts}`,
-        type: hasCreate ? 'create' : 'update',
-        timestamp: item.timestamp,
-        summary: hasCreate ? '创建了任务' : '修改了任务详情',
-        expanded: false,
-        details: item.details || [],
-      };
-    });
-}
 
 function loadTaskAndHistory() {
   if (!taskId.value) return;
@@ -248,9 +143,8 @@ function loadTaskAndHistory() {
   const localHistory = dataManager.getTaskHistory(taskId.value);
   let serverHistory = {};
   const finish = () => {
-    const byField = mergeFieldHistory(localHistory, serverHistory);
-    const merged = buildMergedList(byField);
-    historyList.value = buildTimelineList(merged);
+    const merged = mergeDisplayHistory(localHistory, serverHistory);
+    historyList.value = buildHistoryTimeline(merged);
   };
 
   if (dataManager.hasRemoteConfig()) {

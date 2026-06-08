@@ -158,6 +158,12 @@ async function loadTaskApiModule() {
   );
 }
 
+async function loadTaskHistoryModule() {
+  return withServer([], (server) =>
+    server.ssrLoadModule(`/src/utils/taskHistory.js?t=${Date.now()}`)
+  );
+}
+
 function resetSyncState(overrides = {}) {
   globalThis.__SYNC_TEST_STATE__ = {
     remoteConfig: {
@@ -657,6 +663,38 @@ async function testSyncToServerUploadsDirtyTaskHistory() {
   });
 }
 
+async function testSyncToServerUploadsNonDisplayTaskHistoryFields() {
+  resetSyncState();
+  globalThis.uni = createMemoryUni({
+    task_history: JSON.stringify([
+      {
+        task_id: 'dirty-1',
+        field_name: 'color',
+        field_value: '#ef4444',
+        action: 'update',
+        timestamp: '2026-03-03T00:00:00.000Z',
+      },
+      {
+        task_id: 'dirty-1',
+        field_name: 'position',
+        field_value: '{"x":120,"y":240}',
+        action: 'update',
+        timestamp: '2026-03-03T00:01:00.000Z',
+      },
+    ]),
+  });
+  const dataManager = await loadDataManager();
+
+  await dataManager.syncToServer([
+    { id: 'dirty-1', title: 'Dirty title', _syncDirty: true, updatedAt: '2026-03-03T00:00:00.000Z' },
+  ]);
+
+  assert.deepEqual(globalThis.__SYNC_TEST_STATE__.uploadCalls[0].history, {
+    color: [{ value: '#ef4444', action: 'update', timestamp: '2026-03-03T00:00:00.000Z' }],
+    position: [{ value: '{"x":120,"y":240}', action: 'update', timestamp: '2026-03-03T00:01:00.000Z' }],
+  });
+}
+
 async function testSaveTaskOnlyMarksDirtyWithoutImmediateUpload() {
   resetSyncState();
   globalThis.uni = createMemoryUni({
@@ -736,12 +774,129 @@ async function testTaskApiMapsDeletedAndHistoryPayload() {
 }
 
 async function testDetailHistoryDisplaySupportsLegacyAndServerImportanceValues() {
-  const source = fs.readFileSync(path.join(projectRoot, 'src/pages/detail.vue'), 'utf8');
+  const { mergeDisplayHistory, buildHistoryTimeline } = await loadTaskHistoryModule();
+  const timeline = buildHistoryTimeline(mergeDisplayHistory({
+    importance: [
+      { value: 'high', action: 'create', timestamp: '2026-05-01T08:00:00.000Z' },
+      { value: '低', action: 'update', timestamp: '2026-05-01T08:05:00.000Z' },
+    ],
+    urgency: [
+      { value: '高', action: 'create', timestamp: '2026-05-01T08:00:00.000Z' },
+      { value: 'low', action: 'update', timestamp: '2026-05-01T08:05:00.000Z' },
+    ],
+  }, {}));
+  const details = timeline.flatMap((event) => event.details || []);
 
-  assert.match(source, /['"]high['"]/);
-  assert.match(source, /['"]高['"]/);
-  assert.match(source, /['"]low['"]/);
-  assert.match(source, /['"]低['"]/);
+  assert.deepEqual(details.filter((detail) => detail.field === '重要程度'), [
+    { field: '重要程度', oldVal: '重要', newVal: '一般' },
+    { field: '重要程度', oldVal: '', newVal: '重要' },
+  ]);
+  assert.deepEqual(details.filter((detail) => detail.field === '紧急程度'), [
+    { field: '紧急程度', oldVal: '紧急', newVal: '不急' },
+    { field: '紧急程度', oldVal: '', newVal: '紧急' },
+  ]);
+}
+
+async function testTaskHistoryTimelineShowsOnlyDisplayFields() {
+  const { mergeDisplayHistory, buildHistoryTimeline } = await loadTaskHistoryModule();
+
+  const merged = mergeDisplayHistory(
+    {
+      text: [{ value: '准备方案', action: 'create', timestamp: '2026-05-01T08:00:00.000Z' }],
+      notes: [{ value: '同步备注', action: 'update', timestamp: '2026-05-01T08:05:00.000Z' }],
+      color: [{ value: '#ef4444', action: 'update', timestamp: '2026-05-01T08:10:00.000Z' }],
+      position: [{ value: { x: 120, y: 240 }, action: 'update', timestamp: '2026-05-01T08:10:00.000Z' }],
+    },
+    {
+      due_date: [{ value: '2026-05-09', action: 'update', timestamp: '2026-05-01T08:15:00.000Z' }],
+      urgency: [{ value: '高', action: 'update', timestamp: '2026-05-01T08:20:00.000Z' }],
+      color: [{ value: '#10b981', action: 'update', timestamp: '2026-05-01T08:25:00.000Z' }],
+    }
+  );
+  const timeline = buildHistoryTimeline(merged);
+  const displayedFields = timeline.flatMap((event) => (event.details || []).map((detail) => detail.field));
+
+  assert.deepEqual(
+    new Set(displayedFields),
+    new Set(['任务内容', '备注', '截止日期', '紧急程度'])
+  );
+  assert.ok(!displayedFields.includes('color'));
+  assert.ok(!displayedFields.includes('position'));
+}
+
+async function testTaskHistoryTimelineDedupesIdenticalLocalAndServerRecords() {
+  const { mergeDisplayHistory, buildHistoryTimeline } = await loadTaskHistoryModule();
+  const sameRecord = { value: '准备方案', action: 'update', timestamp: '2026-05-01T08:00:00.000Z' };
+
+  const merged = mergeDisplayHistory(
+    { text: [sameRecord] },
+    { text: [{ ...sameRecord }] }
+  );
+  const timeline = buildHistoryTimeline(merged);
+  const details = timeline.flatMap((event) => event.details || []);
+
+  assert.equal(timeline.length, 1);
+  assert.equal(details.length, 1);
+  assert.deepEqual(details[0], {
+    field: '任务内容',
+    oldVal: '',
+    newVal: '准备方案',
+  });
+}
+
+async function testTaskHistoryTimelineSkipsDetailsWhenFormattedValuesMatch() {
+  const { mergeDisplayHistory, buildHistoryTimeline } = await loadTaskHistoryModule();
+
+  const merged = mergeDisplayHistory(
+    {
+      importance: [
+        { value: 'high', action: 'update', timestamp: '2026-05-01T08:00:00.000Z' },
+        { value: '高', action: 'update', timestamp: '2026-05-01T08:05:00.000Z' },
+        { value: true, action: 'update', timestamp: '2026-05-01T08:10:00.000Z' },
+      ],
+      notes: [{ value: '补充说明', action: 'update', timestamp: '2026-05-01T08:05:00.000Z' }],
+      due_date: [
+        { value: '2026-05-09', action: 'update', timestamp: '2026-05-01T08:15:00.000Z' },
+        { value: '2026-05-09T00:00:00.000Z', action: 'update', timestamp: '2026-05-01T08:20:00.000Z' },
+      ],
+    },
+    {}
+  );
+  const timeline = buildHistoryTimeline(merged);
+  const sameTimestampEvent = timeline.find((event) => event.timestamp === '2026-05-01T08:05:00.000Z');
+
+  assert.ok(sameTimestampEvent);
+  assert.deepEqual(sameTimestampEvent.details, [
+    { field: '备注', oldVal: '', newVal: '补充说明' },
+  ]);
+  const allDetails = timeline.flatMap((event) => event.details || []);
+  assert.equal(allDetails.filter((detail) => detail.field === '重要程度').length, 1);
+  assert.equal(allDetails.filter((detail) => detail.field === '截止日期').length, 1);
+  assert.ok(!allDetails.some((detail) => detail.oldVal === detail.newVal));
+}
+
+async function testTaskHistoryTimelineDoesNotCreateEmptyEventsAfterFiltering() {
+  const { mergeDisplayHistory, buildHistoryTimeline } = await loadTaskHistoryModule();
+
+  const merged = mergeDisplayHistory(
+    {
+      text: [{ value: '准备方案', action: 'create', timestamp: '2026-05-01T08:00:00.000Z' }],
+      color: [{ value: '#ef4444', action: 'update', timestamp: '2026-05-01T08:10:00.000Z' }],
+      position: [{ value: { x: 120, y: 240 }, action: 'update', timestamp: '2026-05-01T08:10:00.000Z' }],
+      importance: [{ value: 'high', action: 'update', timestamp: '2026-05-01T08:20:00.000Z' }],
+    },
+    {
+      importance: [{ value: '高', action: 'update', timestamp: '2026-05-01T08:25:00.000Z' }],
+    }
+  );
+  const timeline = buildHistoryTimeline(merged);
+  const timestamps = timeline.map((event) => event.timestamp);
+
+  assert.deepEqual(new Set(timestamps), new Set([
+    '2026-05-01T08:00:00.000Z',
+    '2026-05-01T08:20:00.000Z',
+  ]));
+  assert.ok(timeline.every((event) => (event.details || []).length > 0));
 }
 
 async function testArchiveTaskRowsOpenDetailAndRestoreTapStaysLocal() {
@@ -833,9 +988,14 @@ const tests = [
   ['syncFromServer treats missing clean local task as remote delete', testSyncFromServerTreatsMissingCleanLocalTaskAsRemoteDelete],
   ['syncFromServer compares timezone-aware timestamps', testSyncFromServerComparesTimezoneAwareTimestamps],
   ['syncToServer uploads dirty task history', testSyncToServerUploadsDirtyTaskHistory],
+  ['syncToServer uploads non-display task history fields', testSyncToServerUploadsNonDisplayTaskHistoryFields],
   ['saveTask only marks dirty without immediate upload', testSaveTaskOnlyMarksDirtyWithoutImmediateUpload],
   ['task API maps deleted and history payload', testTaskApiMapsDeletedAndHistoryPayload],
   ['detail history display supports legacy and server importance values', testDetailHistoryDisplaySupportsLegacyAndServerImportanceValues],
+  ['task history timeline shows only display fields', testTaskHistoryTimelineShowsOnlyDisplayFields],
+  ['task history timeline dedupes identical local and server records', testTaskHistoryTimelineDedupesIdenticalLocalAndServerRecords],
+  ['task history timeline skips details when formatted values match', testTaskHistoryTimelineSkipsDetailsWhenFormattedValuesMatch],
+  ['task history timeline does not create empty events after filtering', testTaskHistoryTimelineDoesNotCreateEmptyEventsAfterFiltering],
   ['archive task rows open detail and restore tap stays local', testArchiveTaskRowsOpenDetailAndRestoreTapStaysLocal],
   ['completed detail uses restore action instead of edit or delete', testCompletedDetailUsesRestoreActionInsteadOfEditOrDelete],
   ['edit screens do not force immediate remote sync', testEditScreensDoNotForceImmediateRemoteSync],
