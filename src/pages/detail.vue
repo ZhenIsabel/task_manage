@@ -8,8 +8,16 @@
               <uni-icons type="back" size="24" color="#1f2937" />
             </view>
             <text class="nav-title">任务详情</text>
-            <view class="glass-btn primary-theme" @tap="goToEdit">
-              <uni-icons type="compose" size="24" color="#4f46e5" />
+            <view
+              class="glass-btn primary-theme"
+              :class="{ 'restore-theme': isCompletedTask }"
+              @tap="handleHeaderAction"
+            >
+              <uni-icons
+                :type="isCompletedTask ? 'redo' : 'compose'"
+                size="24"
+                :color="isCompletedTask ? '#15803d' : '#4f46e5'"
+              />
             </view>
           </view>
 
@@ -98,7 +106,7 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue';
+import { ref, reactive, computed } from 'vue';
 import { onLoad, onShow } from '@dcloudio/uni-app';
 import dataManager from '@/services/dataManager.js';
 import { getTaskHistoryFromServer } from '@/api/task.js';
@@ -114,6 +122,7 @@ const task = reactive({
   dueDate: null,
 });
 const historyList = ref([]);
+const isCompletedTask = computed(() => !!task.isCompleted);
 
 const FIELD_DISPLAY = {
   text: '任务内容',
@@ -272,6 +281,34 @@ function goToEdit() {
   uni.navigateTo({ url: `/pages/edit?id=${id}` });
 }
 
+function handleHeaderAction() {
+  if (isCompletedTask.value) {
+    restoreTask();
+    return;
+  }
+  goToEdit();
+}
+
+function restoreTask() {
+  const id = task.id || taskId.value;
+  if (!id) return;
+
+  const all = dataManager.loadTasksFromStorage();
+  const found = all.find((item) => item.id === id);
+  if (!found) return;
+
+  const updated = {
+    ...found,
+    isCompleted: false,
+    completedAt: null,
+  };
+
+  dataManager.saveTask(updated, false).then(() => {
+    uni.showToast({ title: '已恢复', icon: 'success' });
+    loadTaskAndHistory();
+  }).catch(() => {});
+}
+
 function toggleHistory(index) {
   const item = historyList.value[index];
   if (item?.details?.length) item.expanded = !item.expanded;
@@ -340,6 +377,11 @@ function formatTime(isoStr) {
 .glass-btn.primary-theme {
   background: rgba(224, 231, 255, 0.8);
   color: #4f46e5;
+}
+
+.glass-btn.restore-theme {
+  background: rgb(231, 244, 235);
+  color: #15803d;
 }
 
 .main-info-card {

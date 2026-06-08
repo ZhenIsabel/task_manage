@@ -34,12 +34,12 @@
         </view>
 
         <template v-else>
-          <view v-for="task in list" :key="task.id" class="glass-card archive-item">
+          <view v-for="task in list" :key="task.id" class="glass-card archive-item" @tap="goDetail(task)">
             <view class="archive-info">
               <text class="archive-title">{{ task.title }}</text>
               <text class="archive-date">{{ formatDateShort(task.completedAt) }} 完成</text>
             </view>
-            <view class="btn-restore" @tap="handleRestore(task.id)">
+            <view class="btn-restore" @tap.stop="handleRestore(task.id)">
               <uni-icons type="redo" size="16" color="#15803d" />
             </view>
           </view>
@@ -70,6 +70,11 @@ onShow(loadTasks);
 
 function goBack() {
   uni.navigateBack();
+}
+
+function goDetail(task) {
+  if (!task?.id) return;
+  uni.navigateTo({ url: '/pages/detail?id=' + encodeURIComponent(task.id) });
 }
 
 function handleRestore(id) {

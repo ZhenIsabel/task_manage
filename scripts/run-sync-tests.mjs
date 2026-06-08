@@ -744,6 +744,26 @@ async function testDetailHistoryDisplaySupportsLegacyAndServerImportanceValues()
   assert.match(source, /['"]低['"]/);
 }
 
+async function testArchiveTaskRowsOpenDetailAndRestoreTapStaysLocal() {
+  const source = fs.readFileSync(path.join(projectRoot, 'src/pages/archive.vue'), 'utf8');
+
+  assert.match(source, /class="glass-card archive-item"[^>]*@tap="goDetail\(task\)"/);
+  assert.match(source, /class="btn-restore"[^>]*@tap\.stop="handleRestore\(task\.id\)"/);
+  assert.match(source, /function goDetail\(task\)/);
+  assert.match(source, /\/pages\/detail\?id=/);
+}
+
+async function testCompletedDetailUsesRestoreActionInsteadOfEditOrDelete() {
+  const source = fs.readFileSync(path.join(projectRoot, 'src/pages/detail.vue'), 'utf8');
+
+  assert.match(source, /const isCompletedTask = computed\(\(\) => !!task\.isCompleted\)/);
+  assert.match(source, /@tap="handleHeaderAction"/);
+  assert.match(source, /:type="isCompletedTask \? 'redo' : 'compose'"/);
+  assert.match(source, /function restoreTask\(\)/);
+  assert.match(source, /saveTask\(updated,\s*false\)/);
+  assert.doesNotMatch(source, /deleteTask\(/);
+}
+
 async function testEditScreensDoNotForceImmediateRemoteSync() {
   const files = ['src/pages/edit.vue', 'src/pages/index.vue', 'src/pages/archive.vue'];
 
@@ -816,6 +836,8 @@ const tests = [
   ['saveTask only marks dirty without immediate upload', testSaveTaskOnlyMarksDirtyWithoutImmediateUpload],
   ['task API maps deleted and history payload', testTaskApiMapsDeletedAndHistoryPayload],
   ['detail history display supports legacy and server importance values', testDetailHistoryDisplaySupportsLegacyAndServerImportanceValues],
+  ['archive task rows open detail and restore tap stays local', testArchiveTaskRowsOpenDetailAndRestoreTapStaysLocal],
+  ['completed detail uses restore action instead of edit or delete', testCompletedDetailUsesRestoreActionInsteadOfEditOrDelete],
   ['edit screens do not force immediate remote sync', testEditScreensDoNotForceImmediateRemoteSync],
   ['index refreshes pending conflict count from reactive state', testIndexRefreshesPendingConflictCountFromReactiveState],
   ['request auto-registers after 401', testRequestAutoRegistersAfter401],
