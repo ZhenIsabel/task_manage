@@ -754,6 +754,15 @@ async function testEditScreensDoNotForceImmediateRemoteSync() {
   });
 }
 
+async function testIndexRefreshesPendingConflictCountFromReactiveState() {
+  const source = fs.readFileSync(path.join(projectRoot, 'src/pages/index.vue'), 'utf8');
+
+  assert.match(source, /const pendingConflictCount = ref\(0\)/);
+  assert.match(source, /function refreshPendingConflictCount\(\)/);
+  assert.match(source, /pendingConflictCount\.value = dataManager\.getPendingRemoteTaskChanges\(\)\.length/);
+  assert.doesNotMatch(source, /const pendingConflictCount = computed\(\(\) => dataManager\.getPendingRemoteTaskChanges\(\)\.length\)/);
+}
+
 async function testRequestAutoRegistersAfter401() {
   resetRequestState({
     failTaskAuthOnce: true,
@@ -808,6 +817,7 @@ const tests = [
   ['task API maps deleted and history payload', testTaskApiMapsDeletedAndHistoryPayload],
   ['detail history display supports legacy and server importance values', testDetailHistoryDisplaySupportsLegacyAndServerImportanceValues],
   ['edit screens do not force immediate remote sync', testEditScreensDoNotForceImmediateRemoteSync],
+  ['index refreshes pending conflict count from reactive state', testIndexRefreshesPendingConflictCountFromReactiveState],
   ['request auto-registers after 401', testRequestAutoRegistersAfter401],
 ];
 

@@ -148,6 +148,7 @@ const syncStatus = ref(null);
 const fabPressed = ref(false);
 const loading = ref(false);
 const navigatingConflicts = ref(false);
+const pendingConflictCount = ref(0);
 
 const currentWeekday = computed(() => ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][new Date().getDay()]);
 const currentDateStr = computed(() => {
@@ -156,8 +157,6 @@ const currentDateStr = computed(() => {
   const day = String(d.getDate()).padStart(2, '0');
   return `${m}.${day}`;
 });
-
-const pendingConflictCount = computed(() => dataManager.getPendingRemoteTaskChanges().length);
 
 const getQuadrantTasks = (importance, urgency) => {
   return tasks.value.filter((task) => {
@@ -179,6 +178,11 @@ const quadrantData = computed(() => ({
 function loadTasks() {
   tasks.value = dataManager.loadTasksFromStorage();
   syncStatus.value = dataManager.getLastSyncStatus();
+  refreshPendingConflictCount();
+}
+
+function refreshPendingConflictCount() {
+  pendingConflictCount.value = dataManager.getPendingRemoteTaskChanges().length;
 }
 
 function openConflictPage() {
@@ -203,6 +207,7 @@ function doBootstrapSync() {
       tasks.value = res.merged;
     }
     syncStatus.value = dataManager.getLastSyncStatus();
+    refreshPendingConflictCount();
     if ((res.pendingChanges || []).length > 0) {
       openConflictPage();
       return;
