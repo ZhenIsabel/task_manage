@@ -1,6 +1,8 @@
 import os
 import unittest
+from unittest.mock import Mock, patch
 
+from PyQt6.QtCore import QCoreApplication, QEvent
 from PyQt6.QtWidgets import QApplication, QGraphicsDropShadowEffect, QWidget
 
 from core.task_label import TaskLabel
@@ -78,6 +80,65 @@ class TaskLabelShadowTests(unittest.TestCase):
 
         self.assertIsNotNone(label.detail_popup)
         self.assertEqual(label.detail_popup.layout().count(), 4)
+
+    def test_reopened_details_should_close_when_task_is_deleted(self):
+        host = QWidget()
+        host.resize(800, 600)
+        host.current_detail_popup = None
+        label = TaskLabel(
+            task_id="reopened-popup-test",
+            color="#7ED6DF",
+            parent=host,
+            field_definitions=[
+                {"name": "text", "label": "任务内容", "type": "text", "required": True},
+                {"name": "due_date", "label": "到期日期", "type": "date", "required": False},
+                {"name": "notes", "label": "备注", "type": "multiline", "required": False},
+                {"name": "urgency", "label": "紧急程度", "type": "select", "required": False},
+                {"name": "importance", "label": "重要程度", "type": "select", "required": False},
+                {"name": "create_date", "label": "创建日期", "type": "date", "required": False},
+                {"name": "completed_date", "label": "完成日期", "type": "date", "required": False},
+            ],
+            text="重复打开详情",
+            due_date="",
+            notes="",
+            urgency="低",
+            importance="高",
+            create_date="2026-06-09",
+            completed_date="",
+        )
+        self.addCleanup(label.deleteLater)
+        self.addCleanup(host.deleteLater)
+
+        host.show()
+        label.show()
+        label.contextMenuEvent(None)
+        QApplication.processEvents()
+        previous_popup = label.detail_popup
+
+        label.contextMenuEvent(None)
+        current_popup = label.detail_popup
+        current_status_label = label.status_label
+        self.assertIsNot(previous_popup, current_popup)
+
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        QApplication.processEvents()
+
+        self.assertIs(label.detail_popup, current_popup)
+        self.assertIs(label.status_label, current_status_label)
+        self.assertIs(host.current_detail_popup, current_popup)
+        self.assertTrue(current_popup.isVisible())
+
+        db_manager = Mock()
+        db_manager.delete_task.return_value = True
+        with patch("qfluentwidgets.MessageBox.exec", return_value=True), patch(
+            "database.database_manager.get_db_manager",
+            return_value=db_manager,
+        ):
+            label.handle_delete()
+
+        db_manager.delete_task.assert_called_once_with("reopened-popup-test")
+        self.assertFalse(current_popup.isVisible())
+        self.assertIsNone(host.current_detail_popup)
 
     def test_status_toggle_should_still_save_after_detail_popup_is_deleted(self):
         host = QWidget()
