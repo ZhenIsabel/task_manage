@@ -136,8 +136,10 @@ class QuadrantWidget(QWidget):
         # self.gantt_button.setCursor(Qt.CursorShape.PointingHandCursor)
         
         self.complete_button = QPushButton("完成", self)
-        self.complete_button.clicked.connect(self.show_complete_dialog)
+        self.complete_button.clicked.connect(self._handle_archive_button_clicked)
         self.complete_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._create_archive_menu(style_manager)
+        self._update_archive_button_mode()
 
         self.settings_button = QPushButton("设置", self)
         self.settings_button.clicked.connect(self.show_settings)
@@ -514,6 +516,7 @@ class QuadrantWidget(QWidget):
         # 更新按钮文本
         self.edit_mode = not self.edit_mode
         self.edit_button.setText("正在编辑" if self.edit_mode else "正在查看")
+        self._update_archive_button_mode()
         
         # 更新任务的可拖动状态
         for task in self.tasks:
@@ -1138,6 +1141,37 @@ class QuadrantWidget(QWidget):
         """显示已完成任务对话框"""
         from .complete_table import CompleteTableDialog
         dialog = CompleteTableDialog(self)
+        dialog.exec()
+
+    def _create_archive_menu(self, style_manager):
+        """创建编辑状态下的归档事项菜单，仅在初始化时调用一次。"""
+        self.archive_menu = QMenu(self.complete_button)
+        self.archive_menu.setStyleSheet(style_manager.get_stylesheet("menu"))
+        self.action_show_completed = QAction("完成", self.complete_button)
+        self.action_show_deleted = QAction("删除", self.complete_button)
+        self.archive_menu.addAction(self.action_show_completed)
+        self.archive_menu.addAction(self.action_show_deleted)
+        self.action_show_completed.triggered.connect(self.show_complete_dialog)
+        self.action_show_deleted.triggered.connect(self.show_deleted_dialog)
+
+    def _update_archive_button_mode(self):
+        """根据编辑状态切换完成直达入口和更多菜单。"""
+        if self.edit_mode:
+            self.complete_button.setText("更多")
+            self.complete_button.setMenu(self.archive_menu)
+        else:
+            self.complete_button.setMenu(None)
+            self.complete_button.setText("完成")
+
+    def _handle_archive_button_clicked(self, checked=False):
+        """查看状态下直达已完成事项；编辑状态由菜单动作负责路由。"""
+        if not self.edit_mode:
+            self.show_complete_dialog()
+
+    def show_deleted_dialog(self):
+        """显示已删除事项对话框。"""
+        from .deleted_table import DeletedTableDialog
+        dialog = DeletedTableDialog(self)
         dialog.exec()
 
     def update_ui_config(self, key, value):

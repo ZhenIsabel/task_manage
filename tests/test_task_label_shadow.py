@@ -50,6 +50,35 @@ class TaskLabelShadowTests(unittest.TestCase):
             "第一行<br>第二行",
         )
 
+    def test_context_menu_should_open_details_without_create_date_field(self):
+        host = QWidget()
+        host.resize(800, 600)
+        label = TaskLabel(
+            task_id="missing-create-date-test",
+            color="#7ED6DF",
+            parent=host,
+            field_definitions=[
+                {"name": "text", "label": "任务内容", "type": "text", "required": True},
+                {"name": "due_date", "label": "到期日期", "type": "date", "required": False},
+                {"name": "notes", "label": "备注", "type": "multiline", "required": False},
+                {"name": "urgency", "label": "紧急程度", "type": "select", "required": False},
+                {"name": "importance", "label": "重要程度", "type": "select", "required": False},
+            ],
+            text="没有创建日期字段的任务",
+            due_date="",
+            notes="",
+            urgency="低",
+            importance="高",
+        )
+        self.addCleanup(label.deleteLater)
+        self.addCleanup(host.deleteLater)
+
+        label.contextMenuEvent(None)
+        QApplication.processEvents()
+
+        self.assertIsNotNone(label.detail_popup)
+        self.assertEqual(label.detail_popup.layout().count(), 4)
+
     def test_status_toggle_should_still_save_after_detail_popup_is_deleted(self):
         host = QWidget()
         label = TaskLabel(

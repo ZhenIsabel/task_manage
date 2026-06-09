@@ -1352,6 +1352,14 @@ class DatabaseManager:
             params.append(f"%{self._escape_like_keyword(keyword)}%")
         return ' AND '.join(clauses), params
 
+    def _build_deleted_tasks_filter(self, search_query: str = "") -> tuple[str, List[Any]]:
+        clauses = ['deleted = 1']
+        params: List[Any] = []
+        for keyword in self._parse_task_search_keywords(search_query):
+            clauses.append("LOWER(COALESCE(text, '')) LIKE ? ESCAPE '\\'")
+            params.append(f"%{self._escape_like_keyword(keyword)}%")
+        return ' AND '.join(clauses), params
+
     def load_completed_tasks_page(
         self,
         limit: int = 100,
@@ -1429,6 +1437,122 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"加载已完成任务ID失败: {str(e)}")
             return []
+
+    def load_deleted_tasks_page(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        search_query: str = "",
+    ) -> List[Dict[str, Any]]:
+        """分页读取逻辑删除的任务。"""
+        try:
+            self.flush_cache_to_db()
+            safe_limit = max(0, int(limit))
+            safe_offset = max(0, int(offset))
+            where_sql, params = self._build_deleted_tasks_filter(search_query)
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                f'''
+                SELECT *
+                FROM tasks
+                WHERE {where_sql}
+                ORDER BY updated_at DESC, created_at DESC
+                LIMIT ? OFFSET ?
+                ''',
+                (*params, safe_limit, safe_offset),
+            )
+            tasks = []
+            for row in cursor.fetchall():
+                task = dict(row)
+                task['position'] = {
+                    'x': task.get('position_x', 100),
+                    'y': task.get('position_y', 100),
+                }
+                tasks.append(task)
+            return tasks
+        except Exception as e:
+            logger.error(f"分页加载已删除任务失败: {str(e)}")
+            return []
+
+    def count_deleted_tasks(self, search_query: str = "") -> int:
+        """统计逻辑删除的任务数量。"""
+        try:
+            self.flush_cache_to_db()
+            where_sql, params = self._build_deleted_tasks_filter(search_query)
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                f'''
+                SELECT COUNT(*)
+                FROM tasks
+                WHERE {where_sql}
+                ''',
+                params,
+            )
+            return int(cursor.fetchone()[0])
+        except Exception as e:
+            logger.error(f"统计已删除任务失败: {str(e)}")
+            return 0
+
+    def load_deleted_task_ids(self, search_query: str = "") -> List[str]:
+        """读取当前已删除任务筛选条件下的全部任务 ID。"""
+        try:
+            self.flush_cache_to_db()
+            where_sql, params = self._build_deleted_tasks_filter(search_query)
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                f'''
+                SELECT id
+                FROM tasks
+                WHERE {where_sql}
+                ORDER BY updated_at DESC, created_at DESC
+                ''',
+                params,
+            )
+            return [str(row['id']) for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error(f"加载已删除任务ID失败: {str(e)}")
+            return []
+
+    def restore_completed_task(self, task_id: str) -> bool:
+        """将未删除的已完成任务还原为未完成状态。"""
+        try:
+            with self._cache_lock:
+                task = self._task_cache.get(task_id)
+                if not task or task.get('deleted') or not task.get('completed'):
+                    return False
+                task['completed'] = False
+                task['completed_date'] = ''
+                task['updated_at'] = datetime.now().isoformat()
+                task['sync_status'] = 'modified'
+                self._cache_dirty = True
+                self._entity_cache['task']['dirty'] = True
+            logger.info(f"已完成任务已还原: {task_id}")
+            return True
+        except Exception as e:
+            logger.error(f"还原已完成任务失败: {str(e)}")
+            return False
+
+    def restore_deleted_task(self, task_id: str) -> bool:
+        """撤销任务的逻辑删除状态，并保留删除前的完成状态。"""
+        try:
+            with self._cache_lock:
+                task = self._task_cache.get(task_id)
+                if not task or not task.get('deleted'):
+                    return False
+                task['deleted'] = False
+                task['updated_at'] = datetime.now().isoformat()
+                task['sync_status'] = 'modified'
+                self._deleted_task_ids.discard(task_id)
+                self._cache_dirty = True
+                self._entity_cache['task']['dirty'] = True
+            logger.info(f"已删除任务已还原: {task_id}")
+            return True
+        except Exception as e:
+            logger.error(f"还原已删除任务失败: {str(e)}")
+            return False
 
     def get_task_history(self, task_id: str) -> Dict[str, List[Dict[str, Any]]]:
         """只从本地数据库获取任务历史。"""

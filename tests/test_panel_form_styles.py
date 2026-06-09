@@ -56,7 +56,7 @@ class PanelFormStyleIntegrationTests(unittest.TestCase):
     def test_primary_dialogs_should_apply_shared_button_roles(self):
         for rel_path in (
             'core/add_task_dialog.py',
-            'core/complete_table.py',
+            'core/archive_table.py',
             'core/export_summary_dialog.py',
             'core/history_viewer.py',
             'core/scheduler.py',

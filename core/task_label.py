@@ -556,7 +556,8 @@ class TaskLabel(QWidget):
 
         created_label = QLabel("创建时间", created_section)
         created_label.setObjectName("detail_small_label")
-        created_value = QLabel(str(self.create_date), created_section)
+        created_time = getattr(self, "create_date", "") or getattr(self, "created_at", "")
+        created_value = QLabel(str(created_time), created_section)
         created_value.setObjectName("detail_small_value")
         created_layout.addWidget(created_label)
         created_layout.addWidget(created_value)

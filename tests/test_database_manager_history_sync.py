@@ -206,6 +206,208 @@ class DatabaseManagerHistorySyncTests(unittest.TestCase):
 
         self.assertEqual(task_ids, ['task-1', 'task-2'])
 
+    def test_deleted_tasks_page_includes_completed_and_incomplete_and_orders_by_update_then_create(self):
+        manager = self._build_manager(remote_config={})
+        self._insert_task(
+            manager,
+            'task-deleted-older',
+            '较早删除',
+            '',
+            '2026-06-08T10:00:00',
+            '2026-06-08T09:00:00',
+            completed=False,
+            deleted=True,
+        )
+        self._insert_task(
+            manager,
+            'task-deleted-completed',
+            '已完成后删除',
+            '2026-06-07T08:00:00',
+            '2026-06-09T10:00:00',
+            '2026-06-09T08:00:00',
+            completed=True,
+            deleted=True,
+        )
+        self._insert_task(
+            manager,
+            'task-deleted-created-newer',
+            '同一删除时间创建较新',
+            '',
+            '2026-06-08T10:00:00',
+            '2026-06-08T09:30:00',
+            completed=False,
+            deleted=True,
+        )
+        self._insert_task(
+            manager,
+            'task-active',
+            '未删除任务',
+            '',
+            '2026-06-10T10:00:00',
+            '2026-06-10T09:00:00',
+            completed=False,
+            deleted=False,
+        )
+
+        page = manager.load_deleted_tasks_page(limit=10, offset=0)
+
+        self.assertEqual(
+            [task['id'] for task in page],
+            [
+                'task-deleted-completed',
+                'task-deleted-created-newer',
+                'task-deleted-older',
+            ],
+        )
+        self.assertTrue(page[0]['completed'])
+
+    def test_deleted_tasks_queries_share_keyword_literal_filter_and_paging(self):
+        manager = self._build_manager(remote_config={})
+        self._insert_task(
+            manager,
+            'task-percent',
+            '季度 100% 报告',
+            '',
+            '2026-06-09T10:00:00',
+            '2026-06-09T09:00:00',
+            completed=False,
+            deleted=True,
+        )
+        self._insert_task(
+            manager,
+            'task-underscore',
+            '季度 A_B 报告',
+            '',
+            '2026-06-08T10:00:00',
+            '2026-06-08T09:00:00',
+            completed=False,
+            deleted=True,
+        )
+        self._insert_task(
+            manager,
+            'task-other',
+            '季度普通报告',
+            '',
+            '2026-06-07T10:00:00',
+            '2026-06-07T09:00:00',
+            completed=False,
+            deleted=True,
+        )
+
+        percent_page = manager.load_deleted_tasks_page(
+            limit=1,
+            offset=0,
+            search_query='季度 100%',
+        )
+        underscore_page = manager.load_deleted_tasks_page(
+            limit=1,
+            offset=0,
+            search_query='季度 A_B',
+        )
+
+        self.assertEqual([task['id'] for task in percent_page], ['task-percent'])
+        self.assertEqual([task['id'] for task in underscore_page], ['task-underscore'])
+        self.assertEqual(manager.count_deleted_tasks('季度 报告'), 3)
+        self.assertEqual(
+            manager.load_deleted_task_ids('季度 报告'),
+            ['task-percent', 'task-underscore', 'task-other'],
+        )
+
+    def test_restore_deleted_task_only_clears_deleted_and_marks_task_modified(self):
+        manager = self._build_manager(remote_config={})
+        self._insert_task(
+            manager,
+            'task-deleted-completed',
+            '已完成后删除',
+            '2026-06-07T08:00:00',
+            '2026-06-09T10:00:00',
+            '2026-06-01T09:00:00',
+            completed=True,
+            deleted=True,
+        )
+        manager._load_all_tasks_to_cache()
+        original_completed_date = manager._task_cache['task-deleted-completed']['completed_date']
+        original_updated_at = manager._task_cache['task-deleted-completed']['updated_at']
+
+        restored = manager.restore_deleted_task('task-deleted-completed')
+
+        task = manager._task_cache['task-deleted-completed']
+        self.assertTrue(restored)
+        self.assertFalse(task['deleted'])
+        self.assertTrue(task['completed'])
+        self.assertEqual(task['completed_date'], original_completed_date)
+        self.assertNotEqual(task['updated_at'], original_updated_at)
+        self.assertEqual(task['sync_status'], 'modified')
+        self.assertNotIn('task-deleted-completed', manager._deleted_task_ids)
+        self.assertTrue(manager._cache_dirty)
+        self.assertTrue(manager._entity_cache['task']['dirty'])
+
+    def test_restore_completed_task_keeps_existing_uncomplete_semantics(self):
+        manager = self._build_manager(remote_config={})
+        self._insert_task(
+            manager,
+            'task-completed',
+            '已完成任务',
+            '2026-06-07T08:00:00',
+            '2026-06-09T10:00:00',
+            '2026-06-01T09:00:00',
+            completed=True,
+            deleted=False,
+        )
+        manager._load_all_tasks_to_cache()
+
+        restored = manager.restore_completed_task('task-completed')
+
+        task = manager._task_cache['task-completed']
+        self.assertTrue(restored)
+        self.assertFalse(task['completed'])
+        self.assertEqual(task['completed_date'], '')
+        self.assertFalse(task['deleted'])
+        self.assertEqual(task['sync_status'], 'modified')
+        self.assertTrue(manager._cache_dirty)
+        self.assertTrue(manager._entity_cache['task']['dirty'])
+
+    def test_restored_deleted_tasks_return_to_their_previous_completed_visibility(self):
+        manager = self._build_manager(remote_config={})
+        self._insert_task(
+            manager,
+            'task-deleted-incomplete',
+            '删除前未完成',
+            '',
+            '2026-06-09T10:00:00',
+            '2026-06-01T09:00:00',
+            completed=False,
+            deleted=True,
+        )
+        self._insert_task(
+            manager,
+            'task-deleted-completed',
+            '删除前已完成',
+            '2026-06-01',
+            '2026-06-09T11:00:00',
+            '2026-06-01T08:00:00',
+            completed=True,
+            deleted=True,
+        )
+        manager._load_all_tasks_to_cache()
+
+        self.assertTrue(manager.restore_deleted_task('task-deleted-incomplete'))
+        self.assertTrue(manager.restore_deleted_task('task-deleted-completed'))
+        manager.flush_cache_to_db()
+
+        visible_task_ids = {
+            task['id']
+            for task in manager.load_tasks(include_completed_today=True)
+        }
+        completed_task_ids = {
+            task['id']
+            for task in manager.load_completed_tasks_page(limit=10, offset=0)
+        }
+        self.assertIn('task-deleted-incomplete', visible_task_ids)
+        self.assertNotIn('task-deleted-completed', visible_task_ids)
+        self.assertIn('task-deleted-completed', completed_task_ids)
+        self.assertEqual(manager.count_deleted_tasks(), 0)
+
     def test_task_history_page_orders_by_timestamp_desc_and_counts_all_rows(self):
         manager = self._build_manager(remote_config={})
         conn = manager.get_connection()

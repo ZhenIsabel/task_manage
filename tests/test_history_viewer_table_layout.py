@@ -213,11 +213,11 @@ class HistoryViewerTableLayoutTests(unittest.TestCase):
         )
 
     def test_complete_table_should_build_table_through_adaptive_widget(self):
-        source = self._read("core/complete_table.py")
+        source = self._read("core/archive_table.py")
         self.assertIn(
             "AdaptiveTextTableWidget(",
             source,
-            "已完成任务表格应切换为 ui 层的通用自适应表格组件",
+            "通用归档事项表格应通过 ui 层的自适应表格组件创建",
         )
         self.assertIn(
             "rows = [",
