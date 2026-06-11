@@ -47,7 +47,7 @@
 ```text
 task_manage/
 ├─ AGENTS.md                         # 仓库级 AI 规则；分析时未跟踪
-├─ README.md                         # 产品背景，部分架构/启动说明已过时
+├─ README.md                         # 当前安装、使用、功能边界与开发入口
 ├─ main.py                           # 桌面应用直接入口
 ├─ font_families.py                  # Qt/QSS/Web 字体栈常量
 ├─ requirements.txt                  # Python 运行依赖

@@ -58,19 +58,22 @@
 - 多处宽泛 `except:` 隐藏具体错误。
 - 主窗口和 DB 管理器体积大，改动影响面广。
 
-### README 与当前源码偏差
+### README 对齐状态
 
-| README 说法 | 当前事实 |
-|---|---|
-| 根目录有 `ui.py`、`quadrant_widget.py` 等平铺文件 | 已迁入 `ui/`、`core/`、`database/`、`config/` |
-| `python tray_launcher.py` | 实际文件为 `windows/tray_launcher.py`；推荐 `windows/start.bat` 或直接 `python main.py` |
-| 存在 `sync_manager.py` | 当前是 `database/sync_manual.py`，且导入路径可疑 |
-| 存在 `server_example.py`、`server_requirements.txt` | 当前仓库不存在服务器实现 |
-| 应用配置存储在数据库 | 当前主配置存储在 `config/config.json`；SQLite `config` 表未使用 |
-| 完整客户端-服务器架构含服务器数据库 | 仓库只有客户端 REST 契约，无法验证服务端数据库 |
-| 同步冲突为纯时间戳自动解决 | 当前 GUI 有 5 分钟本地优先 + 逐条人工选择 |
-| 本地模式可运行托盘入口 | 可行，但 README 路径错误 |
-| API 示例 payload 以 `priority` 为主 | 当前核心分类是 urgency/importance，priority 仅兼容保留 |
+`README.md` 已于 2026-06-11 按当前源码全面重写，原有的目录、启动、
+服务端、配置位置、同步冲突和 `priority` 主字段等偏差已移除。当前 README：
+
+- 使用 `core/`、`database/`、`config/`、`ui/` 和 `windows/` 的真实目录结构。
+- 提供 `main.py`、`windows/start.bat` 和 `windows/tray_launcher.py` 的实际启动方式。
+- 明确主配置位于 `config/config.json`，远程配置位于
+  `config/remote_config.json`，本地数据库位于 `database/tasks.db`。
+- 明确仓库不包含远程服务器实现，只描述客户端实际使用的 REST 契约。
+- 描述 5 分钟本地优先与逐条确认的冲突处理，并以
+  `urgency`/`importance` 作为四象限核心分类。
+- 补充定时任务、完成/删除归档、Excel/LLM 概要导出、甘特图边界和测试基线。
+
+后续修改入口、依赖、配置、数据库、同步协议、归档、导出或测试基线时，应把
+README 纳入同一变更检查，避免再次积累用户文档偏差。
 
 ## AI 工作协议
 
