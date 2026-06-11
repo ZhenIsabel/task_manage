@@ -2,9 +2,7 @@ import logging
 import logging.handlers
 import os
 import sys
-import traceback
 
-import os
 APP_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 ICON_PATH = os.path.join(APP_ROOT, "icons")
 

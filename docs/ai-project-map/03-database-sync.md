@@ -98,20 +98,30 @@ _scheduled_task_cache: id -> 定时任务记录
 _task_history_cache: 待插入历史 tuple 列表
 _deleted_task_ids / _deleted_scheduled_task_ids: tombstone ID 集合
 _entity_cache: 为 task / scheduled_task 包装 records、deleted_ids、dirty、loaded
+_dirty_task_ids / _dirty_scheduled_ids: 增量 flush 的待落盘 ID 集合
 _pending_remote_task_changes: change_key -> 待用户确认的远程变化
 ```
 
-所有主要缓存读写应在 `_cache_lock` 下进行；listener 列表另用 `_listener_lock`。
+所有缓存写入及 dirty-ID 更新必须与 flush 使用同一个 `_cache_lock`。普通任务
+`save_task()` 已在锁内完成写入；定时任务的创建、更新、删除、远端新增以及同步成功后的
+`sync_status` 更新也在锁内完成，避免 flush 提交后清空 dirty 集合时丢失并发写入。
+`list_scheduled_tasks()` 和 `get_scheduled_task()` 当前仍未自行加锁，调用方若需要原子的
+“读-改-写”操作，必须像定时任务更新/删除路径一样在外层持锁。listener 列表另用
+`_listener_lock`。
 
 ### flush 行为
 
 - 默认后台周期：5 秒。
 - `flush_cache_to_db()` 在锁内：
-  1. 对 `_task_cache` **所有记录**执行 `INSERT OR REPLACE`。
-  2. 对 `_scheduled_task_cache` **所有记录**执行 `INSERT OR REPLACE`。
+  1. 若普通任务 dirty，只对 `_dirty_task_ids` 对应记录执行 `INSERT OR REPLACE`。
+  2. 若定时任务 dirty，只对 `_dirty_scheduled_ids` 对应记录执行 `INSERT OR REPLACE`。
   3. 对历史缓存执行 `INSERT OR IGNORE`。
-  4. 单事务 commit，随后清 dirty。
+  4. 单事务 commit，随后清 dirty 标记和两个 dirty-ID 集合。
+- 为兼容仍只设置旧 dirty 标记的路径，dirty 为真但对应 ID 集合为空时会退回该实体的
+  全量写入。
 - 分页读取、历史读取、导出、同步、关闭前都会主动 flush。
+- 关闭连接时先停止周期同步和周期 flush 线程，再执行最后一次 flush 和关闭连接，避免
+  后台线程在连接关闭后再次写入。
 - flush 线程为 daemon；进程被外部强杀时不能保证最后一批数据落盘。
 - `INSERT OR REPLACE` 在 SQLite 语义上是删除后插入；当前主连接未启用外键，历史未被级联删除，但未来若启用外键必须重新评估。
 

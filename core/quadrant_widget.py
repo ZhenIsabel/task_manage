@@ -978,8 +978,6 @@ class QuadrantWidget(QWidget):
         
         # 准备数据行
         rows = []
-        # test
-        logger.info(all_tasks_data[0])
         for task_data in all_tasks_data:
             # 可选：如果你只想导出未被删除的任务，加上下面一行
             # if task_data.get('deleted', False): continue
@@ -1116,7 +1114,6 @@ class QuadrantWidget(QWidget):
         view = QWebEngineView(dlg)
         view.setUrl(QUrl(url))
         view.setMinimumSize(900, 600)
-        panel_layout.addWidget(view)
 
         # 下方按钮行
         btn_row = QHBoxLayout()

@@ -8,7 +8,6 @@ from config.config_manager import load_config
 from core.quadrant_widget import QuadrantWidget
 from ui.scrollbar import install_global_fluent_scrollbars
 from ui.ui import UIManager
-from gantt.app import gantt_app
 from core.utils import init_logging
 from core.scheduler import TaskScheduler
 from ui.notifications import show_error
@@ -24,7 +23,9 @@ class TaskManagerApp:
         self.config = None
         self.refresh_timer = None
         self.task_scheduler = None
-        self.last_refresh_date = None
+        # 最近一次已满足的刷新时间点（datetime）；用时间点而非日期，
+        # 这样当天把刷新时间改晚后，新时间点仍会触发
+        self.last_refresh_target = None
         
     def initialize(self):
         """初始化应用"""
@@ -44,42 +45,23 @@ class TaskManagerApp:
             
             # 注册主窗口到UI管理器
             self.ui_manager.register_widget("main_window", self.main_window, "visible")
-            
-            # 注册控制面板
-            if hasattr(self.main_window, 'control_widget'):
-                self.ui_manager.register_widget("control_panel", self.main_window.control_widget, "visible")
-            
-            # 注册编辑按钮
-            if hasattr(self.main_window, 'edit_button'):
-                self.ui_manager.register_widget("edit_button", self.main_window.edit_button, "visible")
-            
-            # 注册添加任务按钮
-            if hasattr(self.main_window, 'add_task_button'):
-                self.ui_manager.register_widget("add_task_button", self.main_window.add_task_button, "hidden")
-            
-            # 注册导出任务按钮
-            if hasattr(self.main_window, 'export_tasks_button'):
-                self.ui_manager.register_widget("export_tasks_button", self.main_window.export_tasks_button, "hidden")
-            
-            # 注册撤销按钮
-            if hasattr(self.main_window, 'undo_button'):
-                self.ui_manager.register_widget("undo_button", self.main_window.undo_button, "hidden")
-            
-            # 注册设置按钮
-            if hasattr(self.main_window, 'settings_button'):
-                self.ui_manager.register_widget("settings_button", self.main_window.settings_button, "visible")
-            
-            # 注册完成按钮
-            if hasattr(self.main_window, 'complete_button'):
-                self.ui_manager.register_widget("complete_button", self.main_window.complete_button, "visible")
-            
-            # 注册退出按钮
-            if hasattr(self.main_window, 'exit_button'):
-                self.ui_manager.register_widget("exit_button", self.main_window.exit_button, "visible")
 
-            # 注册定时任务按钮
-            if hasattr(self.main_window,'scheduled_task_button'):
-                self.ui_manager.register_widget("scheduled_task_button", self.main_window.scheduled_task_button, "hidden")
+            # 注册主窗口上的控件：(注册名/属性名, 初始状态)
+            widget_registrations = [
+                ("control_panel", "control_widget", "visible"),
+                ("edit_button", "edit_button", "visible"),
+                ("add_task_button", "add_task_button", "hidden"),
+                ("export_tasks_button", "export_tasks_button", "hidden"),
+                ("undo_button", "undo_button", "hidden"),
+                ("settings_button", "settings_button", "visible"),
+                ("complete_button", "complete_button", "visible"),
+                ("exit_button", "exit_button", "visible"),
+                ("scheduled_task_button", "scheduled_task_button", "hidden"),
+            ]
+            for name, attr, state in widget_registrations:
+                widget = getattr(self.main_window, attr, None)
+                if widget is not None:
+                    self.ui_manager.register_widget(name, widget, state)
 
             # 加载任务
             self.main_window.load_tasks()
@@ -116,55 +98,63 @@ class TaskManagerApp:
         """动画完成回调"""
         logger.debug(f"动画完成: {widget_name}")
     
+    def _get_refresh_time(self):
+        """解析配置中的每日刷新时间，失败返回None"""
+        refresh_time_str = self.config.get('auto_refresh', {}).get('refresh_time', '00:02:00')
+        try:
+            hour, minute, second = map(int, refresh_time_str.split(':'))
+            return time(hour, minute, second)
+        except Exception as e:
+            logger.error(f"解析刷新时间失败: {refresh_time_str}, 错误: {str(e)}")
+            return None
+
     def setup_auto_refresh(self):
         """设置自动刷新定时器"""
         try:
             auto_refresh_config = self.config.get('auto_refresh', {})
             enabled = auto_refresh_config.get('enabled', True)
-            
+
             if not enabled:
                 logger.info("自动刷新功能已禁用")
                 return
-            
+
+            # 若启动时已过当日刷新时间，将该时间点视为已满足，避免启动即触发；
+            # 之后若把刷新时间改到更晚，新时间点仍会正常触发
+            refresh_time = self._get_refresh_time()
+            now = datetime.now()
+            if refresh_time is not None and now.time() >= refresh_time:
+                self.last_refresh_target = datetime.combine(now.date(), refresh_time)
+
             # 创建定时器，每分钟检查一次
             self.refresh_timer = QTimer()
             self.refresh_timer.timeout.connect(self.check_auto_refresh)
             self.refresh_timer.start(60000)  # 每60秒检查一次
-            
+
             logger.info("自动刷新定时器已启动")
         except Exception as e:
             logger.error(f"设置自动刷新失败: {str(e)}")
-    
+
     def check_auto_refresh(self):
         """检查是否需要自动刷新"""
         try:
             auto_refresh_config = self.config.get('auto_refresh', {})
             if not auto_refresh_config.get('enabled', True):
                 return
-            
-            refresh_time_str = auto_refresh_config.get('refresh_time', '00:02:00')
-            
-            # 解析刷新时间
-            try:
-                hour, minute, second = map(int, refresh_time_str.split(':'))
-                refresh_time = time(hour, minute, second)
-            except Exception as e:
-                logger.error(f"解析刷新时间失败: {refresh_time_str}, 错误: {str(e)}")
+
+            refresh_time = self._get_refresh_time()
+            if refresh_time is None:
                 return
-            
+
             now = datetime.now()
-            current_time = now.time()
-            current_date = now.date()
-            
-            # 检查是否到达刷新时间且今天还未刷新过
-            if (current_time.hour == refresh_time.hour and 
-                current_time.minute == refresh_time.minute and
-                self.last_refresh_date != current_date):
-                
-                logger.info(f"到达刷新时间: {refresh_time_str}，开始刷新页面并检查定时任务")
+
+            # 已过当日刷新时间点且该时间点尚未满足过即触发；
+            # 用 >= 而非精确分钟匹配，避免定时器漂移跳过目标分钟
+            target = datetime.combine(now.date(), refresh_time)
+            if now >= target and (self.last_refresh_target is None or self.last_refresh_target < target):
+                logger.info(f"到达刷新时间: {refresh_time}，开始刷新页面并检查定时任务")
                 self.do_auto_refresh()
-                self.last_refresh_date = current_date
-        
+                self.last_refresh_target = target
+
         except Exception as e:
             logger.error(f"检查自动刷新失败: {str(e)}")
     
@@ -213,6 +203,9 @@ class TaskManagerApp:
 
 
 def start_gantt_server():
+    # 延迟导入，避免主程序启动时加载 Flask
+    from gantt.app import gantt_app
+
     # 彻底静音 stdout/stderr，避免 click.echo flush 失败
     sys.stdout = open(os.devnull, "w")
     sys.stderr = open(os.devnull, "w")

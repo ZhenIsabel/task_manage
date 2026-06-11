@@ -23,7 +23,7 @@ def parse_date(s):
     for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S"):
         try:
             return datetime.strptime(s, fmt).strftime("%Y-%m-%d")
-        except:
+        except (ValueError, TypeError):
             pass
     return None
 
@@ -88,4 +88,5 @@ def index():
 
 if __name__ == "__main__":
     # 运行：  DB_PATH=/path/to/your.db  python app.py
-    gantt_app.run(host="127.0.0.1", port=5000, debug=True)
+    # debug 模式会暴露 Werkzeug 调试器（可执行任意代码），默认关闭
+    gantt_app.run(host="127.0.0.1", port=5000, debug=False)

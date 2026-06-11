@@ -16,7 +16,6 @@
 - `DatabaseManager.load_tasks(all_tasks=True)` 返回缓存中所有普通任务，包括完成和删除。
 - pandas 输出 Excel。
 - 当前列仍偏旧：包含 `priority`，未导出 urgency/importance。
-- 代码会把第一条完整任务字典写入 INFO 日志；若任务 notes/directory 含敏感信息，可能造成日志泄露。
 
 ### 历史导出
 
@@ -66,6 +65,8 @@ sequenceDiagram
 
 - start：`create_date`，无法解析则今天。
 - end：`due_date`，空或非法则 start +3 天。
+- 日期解析接受当前支持的日期/日期时间字符串；SQLite 遗留行中的 bytes、整数等非文本
+  值按非法日期处理，不会让 `/tasks` 返回 500。
 - completed 任务在服务端循环中被跳过。
 - deleted 在 SQL 中过滤。
 - name：`text`，空则 ID。
@@ -79,3 +80,4 @@ sequenceDiagram
 - `DB_PATH` 读取发生在 `gantt.app` import 时；`QuadrantWidget` 后续修改环境变量并不会更新已绑定常量。
 - `package.json` 的本地 `frappe-gantt` 依赖未被页面使用；页面依赖公共 CDN，离线不可用。
 - CORS 对服务全开；服务仅绑定 loopback，风险较低但仍应避免扩大监听地址。
+- Flask 直接运行入口和桌面内启动路径都关闭 debug；不要重新启用 Werkzeug 调试器。

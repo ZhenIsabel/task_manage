@@ -47,19 +47,28 @@ DEFAULT_CONFIG = {
     ]
 }
 
-logger = logging.getLogger(__name__)
+def _merge_defaults(defaults, config):
+    """递归用默认值补齐配置中缺失的键；用户已有的值保持不变。"""
+    merged = dict(config)
+    for key, default_value in defaults.items():
+        if key not in merged:
+            merged[key] = default_value
+        elif isinstance(default_value, dict) and isinstance(merged[key], dict):
+            merged[key] = _merge_defaults(default_value, merged[key])
+    return merged
+
 
 def load_config():
     """从文件加载配置"""
     if not os.path.exists(CONFIG_FILE):
         save_config(DEFAULT_CONFIG)  # 创建默认配置
         return DEFAULT_CONFIG
-    
+
     try:
         with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
             config = json.load(f)
-            # 合并默认配置确保完整性
-            return {**DEFAULT_CONFIG, **config}
+            # 合并默认配置确保完整性（含嵌套键）
+            return _merge_defaults(DEFAULT_CONFIG, config)
     except Exception as e:
         logger.error(f"加载配置失败: {str(e)}")
         return DEFAULT_CONFIG
