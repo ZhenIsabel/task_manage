@@ -31,20 +31,23 @@
 & '.\venv\Scripts\python.exe' -m unittest discover -s tests -v
 ```
 
-### 当前测试基线（2026-06-12）
+### 当前测试基线（2026-06-12，测试清理后）
 
-- 基线不是全绿。2026-06-12 在沙盒（Linux、PyQt6 offscreen、pytest）逐文件验证的既有失败共 4 个模块、16 个用例，均为预存在问题，与 due_offset_days 改动无关：
-  - `test_database_manager_remote.py`：8 failed（设置对话框相关；测试文件缺少 `deepcopy`/`MagicMock` 导入导致 `NameError`，以及 patch `core.quadrant_widget.QMessageBox` 不存在的属性）。
-  - `test_settings_dialog.py`：5 failed。
-  - `test_panel_form_styles.py`：2 failed。
-  - `test_urgency_importance_ui.py`：1 failed。
-- 其余测试文件（含新增 `test_scheduler_regressions.py` 的 23 个用例）全部通过。
-- 后续 AI 不应把上述既有失败自动归因于自己的改动，也不应声称当前全套测试为绿色；修复它们时应作为独立任务重新验证。
-- 注意：一次性 `pytest tests/` 跑全部文件可能因 Qt 在同一进程内多套件交互而崩溃；逐文件运行可稳定复现上述基线。
+- 基线全绿：13 个测试文件、共 191 个用例，2026-06-12 在沙盒（Linux、PyQt6 offscreen、unittest 逐文件）验证全部通过。
+- 本次测试清理修复了此前 4 个模块共 16 个既有失败（均为测试与代码漂移，非产品缺陷）：
+  - `test_database_manager_remote.py`：补 `deepcopy`/`MagicMock` 导入；patch 目标从已不存在的 `core.quadrant_widget.QMessageBox.warning` 改为现行的 `core.quadrant_widget.show_error`。
+  - `test_settings_dialog.py`：圆角控件已改为 `qfluentwidgets.DoubleSpinBox`，`findChild` 类型同步为 `QDoubleSpinBox`；“其他”页签几何断言改为先切页签再断言同行（隐藏页签不计算布局）。
+  - `test_panel_form_styles.py`：按钮尺寸 token 不再快照具体像素值，改为结构断言（sm/md/lg 齐全且递增）；`settings_panel QCheckBox` 作用域断言改为 `QLineEdit`（开关已迁移 SwitchButton）。
+  - `test_urgency_importance_ui.py`：目录选择按钮文案断言由“选择”改为现行的“路径”。
+- 同时删除了 2 个独立墓碑测试文件（`test_remove_drop_shadow.py`、`test_ui_dialog_transparency.py`），其断言合并进 `test_panel_form_styles.py::LegacyUiContractTests`。
+- 新增 `test_config_manager.py`、`test_gantt_app.py`，并在 `test_scheduler_regressions.py` 追加 `FrequencyRuleTests`。
+- 注意：一次性 `pytest tests/` 跑全部文件可能因 Qt 在同一进程内多套件交互而崩溃；逐文件运行可稳定复现基线。
 
 | 测试文件 | 主要覆盖 |
 |---|---|
-| `test_scheduler_regressions.py` | 时区时间归一（`to_naive_local`）、due_offset_days 推算与回退、编辑表单回填（偏移空值/开始时间）、scheduled_tasks 列迁移与 user_version 一次性修复、schedule_task_fields 配置合并、空固定到期日不被改写为当天 |
+| `test_scheduler_regressions.py` | 时区时间归一（`to_naive_local`）、due_offset_days 推算与回退、编辑表单回填（偏移空值/开始时间）、scheduled_tasks 列迁移与 user_version 一次性修复、schedule_task_fields 配置合并、空固定到期日不被改写为当天、各频率下次运行推算规则（daily 重置 00:02、weekly +7 天、monthly/quarterly/yearly 月末与闰年钳制、跨年、未知频率回退） |
+| `test_config_manager.py` | 配置 JSON 深度合并（嵌套补齐、不覆盖用户值、不变异输入）、缺失配置落盘默认、损坏 JSON 回退默认、坐标→紧急/重要空间契约（右=高紧急、上=高重要、中心边界、旧 priority 字段剥离） |
+| `test_gantt_app.py` | Gantt `parse_date` 多格式与非法值、`/tasks` 路由字段映射、completed/deleted 过滤、缺失起止日期的默认推算、文案与颜色回退 |
 | `test_database_manager_remote.py` | 启动不抢跑同步、401 自动注册、鉴权暂停、普通/定时任务缓存先写、远程时间比较、5 分钟本地优先、冲突接受/拒绝、远程设置提交/回滚、后台 bootstrap、任务列表批量重建 |
 | `test_database_manager_history_sync.py` | 完成/删除分页排序、关键字与转义、ID 全选查询、完成/删除还原语义、历史分页、仅本地历史、远程历史合并、上传携带历史 |
 | `test_archive_task_panels.py` | 完成/删除共享基类、删除列表文案、跨页选择、批量还原、主窗口“完成/更多”菜单路由 |
@@ -54,16 +57,13 @@
 | `test_task_label_shadow.py` | 标签轻阴影、notes 换行、详情字段、重复打开详情后删除、状态切换保存 |
 | `test_fluent_date_picker_migration.py` | 日期读写、日历弹层去壳和禁动画、ComboBox 弹层补丁、核心对话框统一 helper |
 | `test_notifications.py` | 顶层宿主解析、活动窗口 InfoBar、无宿主 QMessageBox 回退 |
-| `test_panel_form_styles.py` | 共享表单 QSS、按钮 token/角色/尺寸、作用域、设置/详情样式、无旧绿色硬编码 |
-| `test_remove_drop_shadow.py` | 旧公共 `apply_drop_shadow` 已移除，UI 模块不依赖旧 API |
-| `test_ui_dialog_transparency.py` | 核心弹窗不再使用 `WA_TranslucentBackground` |
+| `test_panel_form_styles.py` | 共享表单 QSS、按钮 token/角色/尺寸（结构断言）、作用域、设置/详情样式、无旧绿色硬编码；`LegacyUiContractTests` 合并覆盖旧 `apply_drop_shadow` API 已移除、弹窗不再使用 `WA_TranslucentBackground` |
 
 ### 明显测试缺口
 
-- `TaskScheduler.calculate_next_run_time()` 仅有时区归一回归测试（`test_scheduler_regressions.py`），各频率推算规则和每日自动刷新仍没有专门行为测试。
-- 坐标中心线/标签左上角偏移没有契约测试。
+- 每日自动刷新触发链路（定时器→刷新→检查定时任务）没有专门行为测试（频率推算规则本身已由 `FrequencyRuleTests` 覆盖）。
+- 标签左上角偏移没有契约测试（坐标中心线→紧急/重要的判定已由 `test_config_manager.py` 覆盖）。
 - `SummaryWorker` 的历史键映射、线程池和 LLM 多事件循环没有测试。
-- Gantt Flask 路由、日期解析、CDN/离线行为没有测试。
+- Gantt 前端 CDN/离线行为没有测试（后端路由与日期解析已由 `test_gantt_app.py` 覆盖）。
 - 托盘进程识别、正常关闭与强杀数据安全没有自动化测试。
 - 维护脚本没有测试。
-- 配置 JSON 深度合并和损坏恢复没有测试。

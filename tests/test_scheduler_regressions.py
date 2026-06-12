@@ -361,5 +361,49 @@ class EmptyDueDateDialogTests(unittest.TestCase):
         self.assertEqual(dialog.get_data()["due_date"], "")
 
 
+class FrequencyRuleTests(unittest.TestCase):
+    """各频率下次运行时间推算规则（含月末/闰年/跨年边界）"""
+
+    def test_daily_advances_one_day_and_resets_to_00_02(self):
+        base = datetime(2026, 6, 12, 15, 30, 45)
+        result = TaskScheduler.calculate_next_run_time('daily', base)
+        self.assertEqual(result, datetime(2026, 6, 13, 0, 2, 0))
+
+    def test_weekly_advances_seven_days_keeping_time(self):
+        base = datetime(2026, 6, 12, 15, 30, 45)
+        result = TaskScheduler.calculate_next_run_time('weekly', base)
+        self.assertEqual(result, datetime(2026, 6, 19, 15, 30, 45))
+
+    def test_monthly_clamps_to_month_end(self):
+        base = datetime(2026, 1, 31, 9, 0)
+        result = TaskScheduler.calculate_next_run_time('monthly', base)
+        self.assertEqual(result, datetime(2026, 2, 28, 9, 0), '2026年2月只有28天，应钳制到月末')
+
+    def test_monthly_keeps_leap_february_29(self):
+        base = datetime(2024, 1, 31, 9, 0)
+        result = TaskScheduler.calculate_next_run_time('monthly', base)
+        self.assertEqual(result, datetime(2024, 2, 29, 9, 0), '闰年2月应保留到29日')
+
+    def test_monthly_rolls_over_year_boundary(self):
+        base = datetime(2026, 12, 15, 9, 0)
+        result = TaskScheduler.calculate_next_run_time('monthly', base)
+        self.assertEqual(result, datetime(2027, 1, 15, 9, 0))
+
+    def test_quarterly_rolls_over_year_and_clamps_day(self):
+        base = datetime(2026, 11, 30, 9, 0)
+        result = TaskScheduler.calculate_next_run_time('quarterly', base)
+        self.assertEqual(result, datetime(2027, 2, 28, 9, 0), '11月30日+3个月应跨年并钳制到2月末')
+
+    def test_yearly_clamps_leap_day_in_common_year(self):
+        base = datetime(2024, 2, 29, 9, 0)
+        result = TaskScheduler.calculate_next_run_time('yearly', base)
+        self.assertEqual(result, datetime(2025, 2, 28, 9, 0), '闰日在平年应钳制到2月28日')
+
+    def test_unknown_frequency_falls_back_to_one_day(self):
+        base = datetime(2026, 6, 12, 15, 30)
+        result = TaskScheduler.calculate_next_run_time('hourly', base)
+        self.assertEqual(result, base + timedelta(days=1))
+
+
 if __name__ == "__main__":
     unittest.main()

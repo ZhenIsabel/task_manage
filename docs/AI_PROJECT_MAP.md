@@ -59,8 +59,8 @@
 ## 当前测试状态
 
 - 首选完整命令：`& '.\venv\Scripts\python.exe' -m unittest discover -s tests -v`
-- 2026-06-12 基线不是全绿：4 个模块共 16 个既有失败（`test_database_manager_remote` 8、`test_settings_dialog` 5、`test_panel_form_styles` 2、`test_urgency_importance_ui` 1），均为预存在问题。
-- 详细原因、测试所有权和缺口见 [07-dependencies-tests.md](ai-project-map/07-dependencies-tests.md)。
+- 2026-06-12 测试清理后基线全绿：13 个测试文件共 191 个用例（逐文件运行验证）。此前 16 个既有失败已修复；`test_remove_drop_shadow.py` 与 `test_ui_dialog_transparency.py` 已合并进 `test_panel_form_styles.py` 并删除；新增 `test_config_manager.py`、`test_gantt_app.py` 与 `FrequencyRuleTests`。
+- 测试所有权和剩余缺口见 [07-dependencies-tests.md](ai-project-map/07-dependencies-tests.md)。
 
 ## 维护入口
 

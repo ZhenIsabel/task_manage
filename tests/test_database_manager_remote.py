@@ -2,7 +2,8 @@ import os
 import tempfile
 import unittest
 from datetime import datetime
-from unittest.mock import Mock, patch
+from copy import deepcopy
+from unittest.mock import MagicMock, Mock, patch
 
 from core.quadrant_widget import QuadrantWidget
 from config.remote_config import RemoteConfigManager
@@ -1184,7 +1185,7 @@ class DatabaseManagerRemoteTests(unittest.TestCase):
         result = {'config': {'size': {'width': 900, 'height': 600}}, 'remote_config': remote}
 
         with patch('core.quadrant_widget.RemoteConfigManager') as rcm_mock, \
-                patch('core.quadrant_widget.QMessageBox.warning'):
+                patch('core.quadrant_widget.show_error'):
             rcm_mock.return_value.save_config.return_value = False
             ok = QuadrantWidget.apply_settings_commit(widget, result)
 

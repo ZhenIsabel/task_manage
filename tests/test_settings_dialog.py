@@ -3,7 +3,15 @@ import unittest
 
 from PyQt6.QtCore import QEvent, QPoint, QPointF, Qt
 from PyQt6.QtGui import QMouseEvent
-from PyQt6.QtWidgets import QApplication, QLineEdit, QSlider, QSpinBox, QTabWidget, QWidget
+from PyQt6.QtWidgets import (
+    QApplication,
+    QDoubleSpinBox,
+    QLineEdit,
+    QSlider,
+    QSpinBox,
+    QTabWidget,
+    QWidget,
+)
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -67,7 +75,7 @@ class SettingsDialogTests(unittest.TestCase):
         self.app.processEvents()
         self.assertEqual(payloads[-1]["size"]["height"], 600)
 
-        dlg.findChild(QSpinBox, "settings_border_radius_spin").setValue(20)
+        dlg.findChild(QDoubleSpinBox, "settings_border_radius_spin").setValue(20)
         self.app.processEvents()
         self.assertEqual(payloads[-1]["ui"]["border_radius"], 20)
 
@@ -103,7 +111,7 @@ class SettingsDialogTests(unittest.TestCase):
 
         dlg.findChild(QSpinBox, "settings_width_spin").setValue(900)
         dlg.findChild(QSpinBox, "settings_height_spin").setValue(700)
-        dlg.findChild(QSpinBox, "settings_border_radius_spin").setValue(8)
+        dlg.findChild(QDoubleSpinBox, "settings_border_radius_spin").setValue(8)
         self.app.processEvents()
 
         result = dlg.get_result()
@@ -142,7 +150,7 @@ class SettingsDialogTests(unittest.TestCase):
         self.assertIs(dlg.findChild(QSpinBox, "settings_width_spin").parentWidget().parentWidget(), display_card)
         self.assertIs(dlg.findChild(QSpinBox, "settings_height_spin").parentWidget().parentWidget(), display_card)
         self.assertIs(
-            dlg.findChild(QSpinBox, "settings_border_radius_spin").parentWidget().parentWidget(),
+            dlg.findChild(QDoubleSpinBox, "settings_border_radius_spin").parentWidget().parentWidget(),
             display_card,
         )
 
@@ -168,9 +176,22 @@ class SettingsDialogTests(unittest.TestCase):
 
         refresh_time = dlg.findChild(QWidget, "settings_refresh_time_field")
         self.assertIsNotNone(refresh_time)
+
+        # 切到包含这些控件的页签，否则隐藏页签内的布局不会真正计算几何
+        tabs = dlg.findChild(QTabWidget)
+        for index in range(tabs.count()):
+            if tabs.widget(index).isAncestorOf(auto_refresh_switch):
+                tabs.setCurrentIndex(index)
+                break
+        self.app.processEvents()
+
         auto_refresh_pos = auto_refresh_switch.mapTo(dlg, QPoint(0, 0))
         refresh_time_pos = refresh_time.mapTo(dlg, QPoint(0, 0))
-        self.assertEqual(auto_refresh_pos.y(), refresh_time_pos.y())
+        # 开关与“刷新时间”字段应并排在同一行：开关的垂直中心
+        # 落在带标签字段容器的高度范围内，且两者水平位置不同
+        switch_center_y = auto_refresh_pos.y() + auto_refresh_switch.height() // 2
+        self.assertGreaterEqual(switch_center_y, refresh_time_pos.y())
+        self.assertLessEqual(switch_center_y, refresh_time_pos.y() + refresh_time.height())
         self.assertNotEqual(auto_refresh_pos.x(), refresh_time_pos.x())
 
     def test_remote_config_four_fields_read_and_write(self):
@@ -211,7 +232,7 @@ class SettingsDialogTests(unittest.TestCase):
         dlg = SettingsDialog(None, initial=initial)
         self.assertEqual(dlg.findChild(QSpinBox, "settings_width_spin").value(), 1000)
         self.assertEqual(dlg.findChild(QSpinBox, "settings_height_spin").value(), 2000)
-        self.assertEqual(dlg.findChild(QSpinBox, "settings_border_radius_spin").value(), 15)
+        self.assertEqual(dlg.findChild(QDoubleSpinBox, "settings_border_radius_spin").value(), 15)
         self.assertEqual(dlg.findChild(QSlider, "settings_q1_hue_range_slider").value(), 30)
         self.assertEqual(dlg.findChild(QSlider, "settings_q1_saturation_range_slider").value(), 20)
         self.assertEqual(dlg.findChild(QSlider, "settings_q1_value_range_slider").value(), 20)

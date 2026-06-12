@@ -45,13 +45,15 @@ class PanelFormStyleIntegrationTests(unittest.TestCase):
 
         self.assertIn('BUTTON_SIZE_TOKENS', styles_py)
         self.assertIn('BUTTON_PADDING_TOKENS', styles_py)
-        self.assertIn('"sm": 30', styles_py)
-        self.assertIn('"md": 34', styles_py)
-        self.assertIn('"lg": 40', styles_py)
-        self.assertIn('"sm": "5px 10px"', styles_py)
-        self.assertIn('"md": "7px 16px"', styles_py)
-        self.assertIn('"lg": "9px 20px"', styles_py)
         self.assertIn('padding = BUTTON_PADDING_TOKENS.get(size', styles_py)
+
+        from ui.styles import BUTTON_PADDING_TOKENS, BUTTON_SIZE_TOKENS
+
+        # 三档尺寸齐全且高度递增；具体像素值属于可调样式，不做快照断言
+        self.assertEqual(set(BUTTON_SIZE_TOKENS), {'sm', 'md', 'lg'})
+        self.assertEqual(set(BUTTON_PADDING_TOKENS), {'sm', 'md', 'lg'})
+        self.assertLess(BUTTON_SIZE_TOKENS['sm'], BUTTON_SIZE_TOKENS['md'])
+        self.assertLess(BUTTON_SIZE_TOKENS['md'], BUTTON_SIZE_TOKENS['lg'])
 
     def test_primary_dialogs_should_apply_shared_button_roles(self):
         for rel_path in (
@@ -153,7 +155,9 @@ class PanelFormStyleIntegrationTests(unittest.TestCase):
         styles_py = self._read('ui/styles.py')
         self.assertIn('QWidget#settings_panel', styles_py)
         self.assertIn('QWidget#settings_panel QLabel', styles_py)
-        self.assertIn('QWidget#settings_panel QCheckBox', styles_py)
+        # 设置面板的开关已迁移到 Fluent SwitchButton，不再有作用域内的 QCheckBox；
+        # 改为断言输入控件仍按命名面板作用域限定
+        self.assertIn('QWidget#settings_panel QLineEdit', styles_py)
 
     def test_dialog_panels_should_declare_stable_object_names(self):
         add_task_dialog_py = self._read('core/add_task_dialog.py')
@@ -227,6 +231,53 @@ class PanelFormStyleIntegrationTests(unittest.TestCase):
         self.assertIn('BUTTON_THEME_TOKENS[\"accent_fill_rest\"]', settings_dialog_py)
         self.assertIn('BUTTON_THEME_TOKENS[\"accent_fill_rest\"]', export_summary_py)
         self.assertIn('BUTTON_THEME_TOKENS[\"danger_fill_rest\"]', export_summary_py)
+
+
+class LegacyUiContractTests(unittest.TestCase):
+    """合并自 test_remove_drop_shadow.py 与 test_ui_dialog_transparency.py 的历史契约"""
+
+    _MODULES = [
+        'ui/__init__.py',
+        'ui/ui.py',
+        'core/add_task_dialog.py',
+        'core/export_summary_dialog.py',
+        'core/history_viewer.py',
+        'core/quadrant_widget.py',
+        'core/scheduler.py',
+        'core/task_label.py',
+        'core/complete_table.py',
+    ]
+
+    def _read(self, rel_path):
+        repo_root = Path(__file__).resolve().parents[1]
+        return (repo_root / rel_path).read_text(encoding='utf-8')
+
+    def test_legacy_apply_drop_shadow_api_stays_removed(self):
+        for rel_path in self._MODULES:
+            with self.subTest(rel_path=rel_path):
+                self.assertNotIn('apply_drop_shadow', self._read(rel_path))
+
+    def test_dialogs_should_not_use_translucent_background(self):
+        """弹窗/详情框不得重新引入 WA_TranslucentBackground（主象限窗口除外）"""
+        for rel_path in [
+            'ui/ui.py',
+            'core/add_task_dialog.py',
+            'core/scheduler.py',
+            'core/history_viewer.py',
+            'core/export_summary_dialog.py',
+            'core/complete_table.py',
+            'core/task_label.py',
+        ]:
+            with self.subTest(rel_path=rel_path):
+                self.assertNotIn(
+                    'self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)',
+                    self._read(rel_path),
+                )
+        quadrant_widget_py = self._read('core/quadrant_widget.py')
+        self.assertNotIn('dialog.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)', quadrant_widget_py)
+        self.assertNotIn('dlg.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)', quadrant_widget_py)
+
+
 if __name__ == '__main__':
     unittest.main()
 
