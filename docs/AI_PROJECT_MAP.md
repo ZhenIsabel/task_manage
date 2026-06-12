@@ -9,7 +9,7 @@
 - `core/quadrant_widget.py` 是主 UI 与工作流协调中心。
 - `database/database_manager.py` 是 SQLite、缓存、历史、flush 和远程同步中心。
 - 任务空间契约：右侧为高紧急，上方为高重要。
-- 当前地图基线：2026-06-10，提交 `59e5548`。
+- 当前地图基线：2026-06-12，提交 `e0b8a77` + 工作区未提交的 due_offset_days（定时任务“触发后 N 天到期”）与定时任务编辑改动。
 
 ## 阅读协议
 
@@ -59,7 +59,7 @@
 ## 当前测试状态
 
 - 首选完整命令：`& '.\venv\Scripts\python.exe' -m unittest discover -s tests -v`
-- 2026-06-10 基线不是全绿：`tests.test_database_manager_remote` 有 8 个既有 error。
+- 2026-06-12 基线不是全绿：4 个模块共 16 个既有失败（`test_database_manager_remote` 8、`test_settings_dialog` 5、`test_panel_form_styles` 2、`test_urgency_importance_ui` 1），均为预存在问题。
 - 详细原因、测试所有权和缺口见 [07-dependencies-tests.md](ai-project-map/07-dependencies-tests.md)。
 
 ## 维护入口

@@ -204,6 +204,7 @@ class DatabaseManager:
                     importance TEXT DEFAULT '低',
                     notes TEXT,
                     due_date TEXT,
+                    due_offset_days INTEGER,
                     frequency TEXT NOT NULL,
                     week_day INTEGER,
                     month_day INTEGER,
@@ -220,6 +221,20 @@ class DatabaseManager:
             scheduled_columns = [col[1] for col in cursor.execute('PRAGMA table_info(scheduled_tasks)').fetchall()]
             if 'deleted' not in scheduled_columns:
                 cursor.execute('ALTER TABLE scheduled_tasks ADD COLUMN deleted BOOLEAN DEFAULT FALSE')
+            if 'due_offset_days' not in scheduled_columns:
+                # 不设置默认值：旧记录保持 NULL，表示"未配置偏移"，
+                # 生成任务时回退使用固定到期日期 due_date
+                cursor.execute('ALTER TABLE scheduled_tasks ADD COLUMN due_offset_days INTEGER')
+
+            # 一次性修复（schema 版本 1）：早期迁移曾把旧记录的 due_offset_days 回填为 0，
+            # 导致固定到期日期被解释为"触发当天到期"。将这类记录还原为 NULL。
+            schema_version = cursor.execute('PRAGMA user_version').fetchone()[0]
+            if schema_version < 1:
+                cursor.execute('''
+                    UPDATE scheduled_tasks SET due_offset_days = NULL
+                    WHERE due_offset_days = 0 AND due_date IS NOT NULL AND due_date != ''
+                ''')
+                cursor.execute('PRAGMA user_version = 1')
             
             # 创建索引以提高查询性能
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(completed)')
@@ -544,11 +559,11 @@ class DatabaseManager:
 
                 for schedule in schedules_to_write:
                     cursor.execute('''
-                        INSERT OR REPLACE INTO scheduled_tasks 
-                        (id, title, priority, urgency, importance, notes, due_date, frequency,
+                        INSERT OR REPLACE INTO scheduled_tasks
+                        (id, title, priority, urgency, importance, notes, due_date, due_offset_days, frequency,
                          week_day, month_day, quarter_day, year_month, year_day,
                          next_run_at, active, deleted, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (
                         schedule['id'],
                         schedule['title'],
@@ -557,6 +572,7 @@ class DatabaseManager:
                         schedule.get('importance', '低'),
                         schedule.get('notes', ''),
                         schedule.get('due_date', ''),
+                        schedule.get('due_offset_days'),
                         schedule['frequency'],
                         schedule.get('week_day'),
                         schedule.get('month_day'),
@@ -1712,6 +1728,17 @@ class DatabaseManager:
             logger.error(f"获取同步状态失败: {str(e)}")
             return {}
 
+    @staticmethod
+    def _coerce_due_offset_days(value: Any) -> Optional[int]:
+        """将到期天数偏移量统一为非负整数，无效或空值返回 None。"""
+        if value is None or value == '':
+            return None
+        try:
+            days = int(value)
+        except (ValueError, TypeError):
+            return None
+        return max(days, 0)
+
     def _normalize_scheduled_task_data(self, schedule_data: Dict[str, Any], existing: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """补齐定时任务字段，统一本地落库数据结构。"""
         normalized = dict(existing or {})
@@ -1722,6 +1749,7 @@ class DatabaseManager:
         normalized['importance'] = normalized.get('importance', '低')
         normalized['notes'] = normalized.get('notes', '')
         normalized['due_date'] = normalized.get('due_date', '')
+        normalized['due_offset_days'] = self._coerce_due_offset_days(normalized.get('due_offset_days'))
         normalized['active'] = normalized.get('active', True)
         normalized['deleted'] = bool(normalized.get('deleted', False))
         normalized['created_at'] = normalized.get('created_at') or (existing or {}).get('created_at') or now
@@ -1742,6 +1770,7 @@ class DatabaseManager:
             'importance': str(task_data.get('importance', '低') or '低'),
             'notes': str(task_data.get('notes', '') or ''),
             'due_date': str(task_data.get('due_date', '') or ''),
+            'due_offset_days': self._coerce_due_offset_days(task_data.get('due_offset_days')),
             'frequency': str(task_data.get('frequency', 'daily') or 'daily'),
             'week_day': task_data.get('week_day'),
             'month_day': task_data.get('month_day'),
@@ -1782,11 +1811,11 @@ class DatabaseManager:
             conn = self.get_connection()
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT OR REPLACE INTO scheduled_tasks 
-                (id, title, priority, urgency, importance, notes, due_date, frequency,
+                INSERT OR REPLACE INTO scheduled_tasks
+                (id, title, priority, urgency, importance, notes, due_date, due_offset_days, frequency,
                  week_day, month_day, quarter_day, year_month, year_day,
                  next_run_at, active, deleted, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 normalized['id'],
                 normalized['title'],
@@ -1795,6 +1824,7 @@ class DatabaseManager:
                 normalized.get('importance', '低'),
                 normalized.get('notes', ''),
                 normalized.get('due_date', ''),
+                normalized.get('due_offset_days'),
                 normalized['frequency'],
                 normalized.get('week_day'),
                 normalized.get('month_day'),

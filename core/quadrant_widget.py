@@ -1330,6 +1330,15 @@ class QuadrantWidget(QWidget):
         except (TypeError, ValueError):
             return str(value)
 
+    def _format_remote_change_offset_days(self, value):
+        """格式化"触发后到期天数"偏移量：未设置时返回 '-'，否则显示"触发后 N 天"。"""
+        if value in (None, ''):
+            return '-'
+        try:
+            return f'触发后 {int(value)} 天'
+        except (TypeError, ValueError):
+            return str(value)
+
     def _format_remote_change_position(self, record):
         if not record:
             return '-'
@@ -1348,6 +1357,7 @@ class QuadrantWidget(QWidget):
                 ('重要度', lambda record: str(record.get('importance') or '').strip() or '-'),
                 ('备注', lambda record: str(record.get('notes') or '').strip() or '-'),
                 ('截止日期', lambda record: str(record.get('due_date') or '').strip() or '-'),
+                ('到期天数', lambda record: self._format_remote_change_offset_days(record.get('due_offset_days'))),
                 ('频率', lambda record: self._format_remote_change_frequency(record.get('frequency'))),
                 ('每周', lambda record: self._format_remote_change_week_day(record.get('week_day'))),
                 ('每月', lambda record: str(record.get('month_day') or '').strip() or '-'),

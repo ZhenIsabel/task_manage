@@ -72,9 +72,13 @@
 
 #### `scheduled_tasks`
 
-`id`、`title`、旧 `priority`、`urgency`、`importance`、`notes`、`due_date`、`frequency`、`week_day`、`month_day`、`quarter_day`、`year_month`、`year_day`、`next_run_at`、`active`、`deleted`、`created_at`、`updated_at`。
+`id`、`title`、旧 `priority`、`urgency`、`importance`、`notes`、`due_date`、`due_offset_days`、`frequency`、`week_day`、`month_day`、`quarter_day`、`year_month`、`year_day`、`next_run_at`、`active`、`deleted`、`created_at`、`updated_at`。
 
-注意：表中**没有 `sync_status` 字段**；该状态只存在于定时任务内存缓存，重启后从 DB 加载时默认视为 `synced`。
+- `due_offset_days INTEGER`：触发后 N 天到期的偏移量；NULL 表示“未配置”，生成任务时回退使用固定 `due_date`。`_coerce_due_offset_days()` 把无效/空值统一为 NULL、负数钳制为 0。
+- 旧库升级：缺列时 `ALTER TABLE ... ADD COLUMN due_offset_days INTEGER`（不设默认值，旧记录保持 NULL）。
+- 一次性修复（`PRAGMA user_version` < 1 时执行后置 1）：早期迁移曾把旧记录的偏移回填为 0，导致固定到期日期被解释为“触发当天到期”；修复把 `due_offset_days = 0 且 due_date 非空` 的记录还原为 NULL。`user_version` 自此用作 schema 修复版本号，后续一次性修复应递增比较。
+
+注意：表中**没有 `sync_status` 字段**；该状态只存在于定时任务内存缓存，重启后从 DB 加载时默认视为 `synced`。定时任务远程同步的比较 payload（`_build_scheduled_task_sync_compare_payload`）和 API 序列化均包含 `due_offset_days`。
 
 ### 索引
 

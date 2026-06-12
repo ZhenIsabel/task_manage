@@ -45,8 +45,13 @@
 | `ui.desktop_mode` | 桌面窗口模式 |
 | `ui.control_panel_opacity` | 控制面板透明度 |
 | `task_fields` | 普通任务动态表单及历史字段列表 |
-| `schedule_task_fields` | 定时任务动态表单 |
+| `schedule_task_fields` | 定时任务动态表单（默认含 `due_offset_days` 数字字段，支持 `min/max/suffix/empty_text`） |
 | `auto_refresh.enabled/refresh_time` | 每日刷新和定时任务检查 |
 | `LLM_CONFIG.api_key/model/base_url` | LLM |
 
-`DEFAULT_CONFIG` 中的 `task_fields` 仍是旧的 text/due_date/priority/notes 集合；当前工作配置包含 urgency/importance 等更多字段。由于 `load_config()` 只做顶层浅合并，工作配置缺失嵌套键时不会深度补齐。
+`DEFAULT_CONFIG` 中的 `task_fields` 仍是旧的 text/due_date/priority/notes 集合；当前工作配置包含 urgency/importance 等更多字段。`load_config()` 通过 `_merge_defaults()` 递归补齐缺失的嵌套键。
+
+字段列表的合并策略刻意不对称（`config/config_manager.py`）：
+
+- `schedule_task_fields` 额外经过 `_merge_field_list()` 按字段名合并——保留用户已有字段及顺序，并把升级新增的默认字段（如 `due_offset_days`）插入到接近默认位置处，保证旧配置升级后新字段出现在表单中。
+- `task_fields` **不做**按名合并：它是用户可自定义的表单，合并会把用户已删除的默认字段（如已废弃的 `priority`）重新插回。

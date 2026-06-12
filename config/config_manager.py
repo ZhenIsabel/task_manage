@@ -44,6 +44,21 @@ DEFAULT_CONFIG = {
         {'name': 'due_date', 'label': '到期日期', 'type': 'date', 'required': False},
         {'name': 'priority', 'label': '优先级', 'type': 'text', 'required': False},
         {'name': 'notes', 'label': '备注', 'type': 'text', 'required': False}
+    ],
+    'schedule_task_fields': [
+        {'name': 'title', 'label': '任务标题', 'type': 'text', 'required': True},
+        {'name': 'frequency', 'label': '频率', 'type': 'select',
+         'options': ['daily', 'weekly', 'monthly', 'quarterly', 'yearly'],
+         'default': 'monthly', 'required': True},
+        {'name': 'urgency', 'label': '紧急程度', 'type': 'select',
+         'options': ['高', '低'], 'default': '低', 'required': False},
+        {'name': 'importance', 'label': '重要程度', 'type': 'select',
+         'options': ['高', '低'], 'default': '低', 'required': False},
+        {'name': 'notes', 'label': '备注', 'type': 'multiline', 'required': False},
+        {'name': 'due_offset_days', 'label': '到期天数（触发后）', 'type': 'number',
+         'min': 0, 'max': 3650, 'suffix': ' 天',
+         'empty_text': '不设置（沿用固定到期日期）', 'required': False},
+        {'name': 'start_time', 'label': '开始时间', 'type': 'date', 'required': False}
     ]
 }
 
@@ -58,6 +73,25 @@ def _merge_defaults(defaults, config):
     return merged
 
 
+def _merge_field_list(default_fields, user_fields):
+    """按字段名补齐用户字段列表中缺失的默认字段。
+
+    旧版本配置中已存在的字段列表会整体覆盖默认值，导致升级新增的字段
+    （如 due_offset_days）不会出现在表单中。这里保留用户已有字段及其顺序，
+    并把缺失的默认字段插入到接近其默认位置处。
+    """
+    if not isinstance(user_fields, list):
+        return [dict(field) for field in default_fields]
+    merged = list(user_fields)
+    existing_names = {
+        field.get('name') for field in merged if isinstance(field, dict)
+    }
+    for index, field in enumerate(default_fields):
+        if field.get('name') not in existing_names:
+            merged.insert(min(index, len(merged)), dict(field))
+    return merged
+
+
 def load_config():
     """从文件加载配置"""
     if not os.path.exists(CONFIG_FILE):
@@ -68,7 +102,15 @@ def load_config():
         with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
             config = json.load(f)
             # 合并默认配置确保完整性（含嵌套键）
-            return _merge_defaults(DEFAULT_CONFIG, config)
+            merged = _merge_defaults(DEFAULT_CONFIG, config)
+            # 仅对定时任务字段列表按字段名合并，补齐升级新增的字段（如 due_offset_days）
+            # 注意：不要合并 task_fields——它是用户可自定义的表单，
+            # 合并会把用户已删除的默认字段（如已废弃的 priority）重新插回。
+            merged['schedule_task_fields'] = _merge_field_list(
+                DEFAULT_CONFIG['schedule_task_fields'],
+                merged.get('schedule_task_fields'),
+            )
+            return merged
     except Exception as e:
         logger.error(f"加载配置失败: {str(e)}")
         return DEFAULT_CONFIG

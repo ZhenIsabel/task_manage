@@ -9,10 +9,25 @@
 
 ### 创建与存储
 
-- 配置字段：`title`、`frequency`、`urgency`、`importance`、`notes`、`due_date`、`start_time`。
+- 默认配置字段：`title`、`frequency`、`urgency`、`importance`、`notes`、`due_offset_days`、`start_time`；旧配置中的固定 `due_date` 字段仍被表单和保存路径兼容。
+- `due_offset_days`（触发后 N 天到期）：非负整数，`None`/空串表示“未配置”，此时生成任务回退使用固定 `due_date`（见下文“触发”）。规范化入口有三处且语义一致：`TaskScheduler.add_scheduled_task()`、`ScheduledTaskDialog._normalize_offset_days()`、`DatabaseManager._coerce_due_offset_days()`。
+- 表单中 `due_offset_days` 用 `qfluentwidgets.SpinBox` 渲染，以 `最小值-1` 作为“未设置”哨兵值显示 `empty_text`，与“偏移 0 天（触发当天到期）”明确区分；`get_data()` 在哨兵值时返回空串。
 - 支持频率：`daily`、`weekly`、`monthly`、`quarterly`、`yearly`。
 - ID 形如 `sched_<时间戳>`，冲突时最多尝试 100 个后缀。
 - 创建/修改/删除只先写缓存并标记 `modified`，不立即远程上传。
+
+### 编辑已有定时任务
+
+`ScheduledTaskDialog.edit_task()`（“编辑”按钮，要求恰好选中一条）：
+
+- 复用 `AddScheduleDialog`，通过 `dialog_title`/`submit_label` 参数切换为“编辑定时任务/保存”。
+- `_extract_field_default()` 把已有记录回填为表单默认值：`start_time` 取 `created_at` 的日期部分；未配置的 `due_offset_days` 回填为空（显示“未设置”），不会被静默改写为 0。
+- 仅当频率或开始日期实际变化时才重算 `next_run_at`（`_resolve_edit_base_time()` 判断），并把结果滚动推进到当前时间之后，避免仅改备注就把 `next_run_at` 重置到过去导致立即重复触发。
+- 日期控件默认值为空时保持“未选择”状态，不再预填当天，避免编辑无固定到期日的旧任务时日期被静默改成当天。
+
+### 时区处理
+
+`core/scheduler.py` 顶层的 `to_naive_local()` 把带时区的 datetime 转为无时区本地时间。`calculate_next_run_time()` 入口和 `created_at` 解析处统一调用，修复外部导入的带时区时间与 `datetime.now()` 比较抛 `TypeError` 的问题。
 
 ### 下次运行计算
 
@@ -39,9 +54,10 @@
 - 到点后 `TaskScheduler.check_and_spawn_scheduled_tasks()`：
   1. 取 `active=True`、`deleted=False`、`next_run_at <= now` 的定时任务。
   2. 每个到期计划生成一个普通任务，ID 为 `scheduled_<schedule_id>_<当前时间>`。
-  3. 普通任务初始位置固定 `{x:100,y:100}`，颜色固定默认青色。
-  4. 下次运行从本次检查的 `now` 计算，而不是从原计划时间连续追赶。
-  5. 批量生成后立即 flush。
+  3. 生成任务的 `due_date` 由 `_resolve_spawned_due_date()` 决定：配置了 `due_offset_days` 时为 `触发时间 + N 天`；未配置（NULL/空）或值无效时回退到计划上保存的固定 `due_date`。
+  4. 普通任务初始位置固定 `{x:100,y:100}`，颜色固定默认青色。
+  5. 下次运行从本次检查的 `now` 计算，而不是从原计划时间连续追赶。
+  6. 批量生成后立即 flush。
 
 因此，运行中的短暂定时器延迟不会再漏掉当天触发；但应用若在目标时间之后才启动，
 当天仍不会补执行。长期停机后恢复时也只为每个到期计划生成一条，不补齐所有漏期。

@@ -31,15 +31,20 @@
 & '.\venv\Scripts\python.exe' -m unittest discover -s tests -v
 ```
 
-### 当前测试基线（2026-06-10）
+### 当前测试基线（2026-06-12）
 
-- 本地图验收时运行完整测试命令，进程退出码为 1；失败集中在 `tests/test_database_manager_remote.py` 的设置对话框相关测试。
-- 单独运行该模块得到：`Ran 52 tests`，`FAILED (errors=8)`。
-- 其中 7 个 error 是测试文件缺少 `deepcopy` 或 `MagicMock` 导入导致的 `NameError`；另 1 个 error 是测试仍 patch `core.quadrant_widget.QMessageBox.warning`，但该模块当前没有 `QMessageBox` 属性。
-- 本次地图工作只新增 Markdown 文件，没有修改业务代码或测试。后续 AI 不应把这 8 个既有 error 自动归因于自己的改动，也不应声称当前全套测试为绿色；修复它们时应作为独立任务重新验证。
+- 基线不是全绿。2026-06-12 在沙盒（Linux、PyQt6 offscreen、pytest）逐文件验证的既有失败共 4 个模块、16 个用例，均为预存在问题，与 due_offset_days 改动无关：
+  - `test_database_manager_remote.py`：8 failed（设置对话框相关；测试文件缺少 `deepcopy`/`MagicMock` 导入导致 `NameError`，以及 patch `core.quadrant_widget.QMessageBox` 不存在的属性）。
+  - `test_settings_dialog.py`：5 failed。
+  - `test_panel_form_styles.py`：2 failed。
+  - `test_urgency_importance_ui.py`：1 failed。
+- 其余测试文件（含新增 `test_scheduler_regressions.py` 的 23 个用例）全部通过。
+- 后续 AI 不应把上述既有失败自动归因于自己的改动，也不应声称当前全套测试为绿色；修复它们时应作为独立任务重新验证。
+- 注意：一次性 `pytest tests/` 跑全部文件可能因 Qt 在同一进程内多套件交互而崩溃；逐文件运行可稳定复现上述基线。
 
 | 测试文件 | 主要覆盖 |
 |---|---|
+| `test_scheduler_regressions.py` | 时区时间归一（`to_naive_local`）、due_offset_days 推算与回退、编辑表单回填（偏移空值/开始时间）、scheduled_tasks 列迁移与 user_version 一次性修复、schedule_task_fields 配置合并、空固定到期日不被改写为当天 |
 | `test_database_manager_remote.py` | 启动不抢跑同步、401 自动注册、鉴权暂停、普通/定时任务缓存先写、远程时间比较、5 分钟本地优先、冲突接受/拒绝、远程设置提交/回滚、后台 bootstrap、任务列表批量重建 |
 | `test_database_manager_history_sync.py` | 完成/删除分页排序、关键字与转义、ID 全选查询、完成/删除还原语义、历史分页、仅本地历史、远程历史合并、上传携带历史 |
 | `test_archive_task_panels.py` | 完成/删除共享基类、删除列表文案、跨页选择、批量还原、主窗口“完成/更多”菜单路由 |
@@ -55,7 +60,7 @@
 
 ### 明显测试缺口
 
-- `TaskScheduler.calculate_next_run_time()` 和每日自动刷新没有专门行为测试。
+- `TaskScheduler.calculate_next_run_time()` 仅有时区归一回归测试（`test_scheduler_regressions.py`），各频率推算规则和每日自动刷新仍没有专门行为测试。
 - 坐标中心线/标签左上角偏移没有契约测试。
 - `SummaryWorker` 的历史键映射、线程池和 LLM 多事件循环没有测试。
 - Gantt Flask 路由、日期解析、CDN/离线行为没有测试。
